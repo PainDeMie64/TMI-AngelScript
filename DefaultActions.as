@@ -22,9 +22,9 @@ void OnRunStep(SimulationManager@ simManager)
         if(time==0){
             newrun=true;
             simManager.SetSpeed(GetVariableDouble("skycrafter_defaultactions_fastforwardspeed"));
-            if(!GetVariableBool("skycrafter_defaultactions_graphics")){
-                SetVariable("draw_game", false);
-            }
+            
+            SetVariable("draw_game", GetVariableBool("skycrafter_defaultactions_graphics"));
+            
         }else if(newrun and time >= GetVariableDouble("skycrafter_defaultactions_endtime")){
             newrun=false;
             simManager.SetSpeed(GetVariableDouble("skycrafter_defaultactions_normalspeed"));
