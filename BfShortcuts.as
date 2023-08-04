@@ -227,7 +227,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bf settings shortcuts";
     info.Author = "Skycrafter";
-    info.Version = "v1.0.0";
+    info.Version = "v1.1.0";
     info.Description = "A faster way of setting bruteforce settings";
     return info;
 }
