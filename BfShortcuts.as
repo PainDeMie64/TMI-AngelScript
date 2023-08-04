@@ -62,15 +62,7 @@ string findClosestPointTime(dictionary &in dict, Point &in refPoint) {
     return closestKey;
 }
 
-void OnMenuCommand(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
-    SetVariable("skycrafter_defaultactions_display", true);
-}
 
-void Main()
-{
-    log("Plugin started.");
-    RegisterVariable("skycrafter_bfsettingsshortcut_auto",false);
-}
 
 void OnRunStep(SimulationManager@ simManager)
 {
@@ -163,9 +155,70 @@ void Render()
             }
             UI::EndTabItem();
         }
+        if(UI::BeginTabItem("Commands list")){
+            UI::TextWrapped("Type help to get a detailed description of every command listed here:\n\napply_pointframe_suggestion\nmake_point_frame_calculation\nset_bfpointmin_current\nset_bfpointmax_current\nset_inputmin_current\nset_inputmax_current\nset_stoptime_current");
+            UI::EndTabItem();
+        }
         UI::EndTabBar();
     }
     UI::End();
+}
+
+void OnApply(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    SetVariable("bf_eval_min_time", timeminsuggestion);
+    SetVariable("bf_eval_max_time", timemaxsuggestion);
+}
+
+void OnPointFrameCalculation(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    Point currentPoint = StringToPoint(GetVariableString("bf_target_point"));
+    lastBfPoint=currentPoint;
+    newstuff=false;
+    int timeMid = Text::ParseInt(findClosestPointTime(points, currentPoint));
+    timeminsuggestion=timeMid-500;
+    timemaxsuggestion=timeMid+500;
+}
+
+void setVariableToCurrentRaceTime(const string&in varName) {
+    SimulationManager@ simManager = GetSimulationManager();
+    if(simManager.get_InRace()){
+        SetVariable(varName, simManager.get_RaceTime());
+    }else{
+        log("You must be in a race for this command", Severity::Error);
+    }
+}
+
+void OnBfPointMin(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    setVariableToCurrentRaceTime("bf_eval_min_time");
+}
+
+void OnBfPointMax(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    setVariableToCurrentRaceTime("bf_eval_max_time");
+}
+
+void OnBfInputMin(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    setVariableToCurrentRaceTime("bf_inputs_min_time");
+}
+
+void OnBfInputMax(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    setVariableToCurrentRaceTime("bf_inputs_max_time");
+}
+
+void OnBfStopTime(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    setVariableToCurrentRaceTime("bf_override_stop_time");
+}
+
+
+void Main()
+{
+    log("Plugin started.");
+    RegisterVariable("skycrafter_bfsettingsshortcut_auto",false);
+    RegisterCustomCommand("apply_pointframe_suggestion", "Apply the suggested time frame to the bruteforce settings", OnApply);
+    RegisterCustomCommand("make_point_frame_calculation", "Make the calculation for the time frame for the point bruteforce", OnPointFrameCalculation);
+    RegisterCustomCommand("set_bfpointmin_current", "Set the bruteforce point min time to the current race time", OnBfPointMin);
+    RegisterCustomCommand("set_bfpointmax_current", "Set the bruteforce point max time to the current race time", OnBfPointMax);
+    RegisterCustomCommand("set_inputmin_current", "Set the bruteforce input min time to the current race time", OnBfInputMin);
+    RegisterCustomCommand("set_inputmax_current", "Set the bruteforce input max time to the current race time", OnBfInputMax);
+    RegisterCustomCommand("set_stoptime_current", "Set the bruteforce custom stop time to the current race time", OnBfStopTime);
 }
 
 
