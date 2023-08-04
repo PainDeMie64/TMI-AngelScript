@@ -1,11 +1,3 @@
-dictionary points;
-bool newstuff = false;
-int timeminsuggestion = 0;
-int timemaxsuggestion = 0;
-string previousChallenge="";
-
-
-Point lastBfPoint;
 class Point {
     float x, y, z;
     
@@ -42,13 +34,20 @@ float distanceSquared(vec3 p1, Point &in p2) {
     return dx*dx + dy*dy + dz*dz;
 }
 
+
+
+bool newstuff = false;
+int timeminsuggestion = 0;
+int timemaxsuggestion = 0;
+string previousChallenge="";
+
+
+Point lastBfPoint;
+
 Point closest;
 float minDistance=Math::INT_MAX;
 int minDistancetime;
-float speed=1;
 bool notAccurate=false;
-
-uint64 previousTime=0;
 
 void Render()
 {
@@ -133,7 +132,7 @@ void Render()
             string curr=GetCurrentChallenge().get_Uid();
             if(curr!=previousChallenge){
                 previousChallenge=curr;
-                points.DeleteAll();
+                minDistancetime=0;
             }
             notAccurate=false;
         }else{
