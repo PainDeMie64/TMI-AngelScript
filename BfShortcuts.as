@@ -20,12 +20,10 @@ class Point {
     bool equals(Point p){
         return p.x==x && p.y==y && p.z==z;
     }
-}
 
-void SetPoint(SimulationManager@ simManager) {
-    vec3 pos = simManager.Dyna.CurrentState.Location.Position;
-    Point p(pos);
-    points[""+simManager.get_RaceTime()]=p;
+    vec3 toVec(){
+        return vec3(x,y,z);
+    }
 }
 
 Point StringToPoint(string s){
@@ -37,61 +35,28 @@ Point StringToPoint(string s){
     return p;
 }
 
-float distanceSquared(Point &in p1, Point &in p2) {
+float distanceSquared(vec3 p1, Point &in p2) {
     float dx = p2.x - p1.x;
     float dy = p2.y - p1.y;
     float dz = p2.z - p1.z;
     return dx*dx + dy*dy + dz*dz;
 }
 
-string findClosestPointTime(dictionary &in dict, Point &in refPoint) {
-    float minDistance = Math::INT_MAX;
-    string closestKey;
-    array<string>@ keys = dict.GetKeys();
+Point closest;
+float minDistance=Math::INT_MAX;
+int minDistancetime;
+float speed=1;
+bool notAccurate=false;
 
-    for(uint i = 0; i < keys.Length; i++) {
-        Point@ p;
-        dict.Get(keys[i], @p);
-        float dist = distanceSquared(refPoint, p);
-        if(dist < minDistance) {
-            minDistance = dist;
-            closestKey = keys[i];
-        }
-    }
-
-    return closestKey;
-}
-
-
-
-void OnRunStep(SimulationManager@ simManager)
-{
-    int time = simManager.get_RaceTime();
-    if(time==0){
-        string curr=GetCurrentChallenge().get_Uid();
-        if(curr!=previousChallenge){
-            previousChallenge=curr;
-            points.DeleteAll();
-        }  
-    }
-    if(time>=0 && time%100==0){
-        SetPoint(simManager);
-        if(time%1000==0){
-            newstuff=true;
-        }
-    }
-    
-}
-
-
+uint64 previousTime=0;
 
 void Render()
 {
+    SimulationManager@ simManager = GetSimulationManager();
     if(UI::Begin("Bf settings shortcut")){
         UI::BeginTabBar("Tabs");
-        if(UI::BeginTabItem("Time setters")){
+        if(UI::BeginTabItem("Time setters ")){
             UI::TextWrapped("Click any of these buttons to set the corresponding bruteforce setting to the current race time");
-            SimulationManager@ simManager = GetSimulationManager();
             bool works = simManager.get_InRace();
             if(works){
                 int time = simManager.get_RaceTime();
@@ -132,50 +97,63 @@ void Render()
             }
             UI::EndTabItem();
         }
-        if (UI::BeginTabItem("Auto time frame")){
+        if (UI::BeginTabItem("Auto time frame ")){
             if(GetVariableString("bf_target")!="point"){
                 UI::TextDimmed("Make sure to select point bruteforce first");
             }
-            UI::CheckboxVar("Make calculation automatically","skycrafter_bfsettingsshortcut_auto");
+            UI::CheckboxVar("Enable","skycrafter_bfsettingsshortcut_auto");
+            if(notAccurate) UI::TextDimmed("Due to high speed fast forwarding, the suggestion may not be as accurate as intended");
             Point currentPoint = StringToPoint(GetVariableString("bf_target_point"));
-            bool calculation = UI::Button("Make calculation");
-            if((GetVariableBool("skycrafter_bfsettingsshortcut_auto")||calculation)&&(!currentPoint.equals(lastBfPoint) || newstuff)){
+            if(!currentPoint.equals(lastBfPoint) || newstuff){
                 lastBfPoint=currentPoint;
                 newstuff=false;
-                int timeMid = Text::ParseInt(findClosestPointTime(points, currentPoint));
-                timeminsuggestion=timeMid-500;
-                timemaxsuggestion=timeMid+500;
+                timeminsuggestion=minDistancetime-500;
+                timemaxsuggestion=minDistancetime+500;
             }
             int timemin = UI::InputTime("Time min", timeminsuggestion);
             int timemax = UI::InputTime("Time max", timemaxsuggestion);
-            bool btn = UI::Button("Set time frame");
+            bool btn = UI::Button("Apply time frame ");
             if(btn){
                 SetVariable("bf_eval_min_time", timeminsuggestion);
                 SetVariable("bf_eval_max_time", timemaxsuggestion);
             }
             UI::EndTabItem();
         }
-        if(UI::BeginTabItem("Commands list")){
+        if(UI::BeginTabItem("Commands list ")){
             UI::TextWrapped("Type help to get a detailed description of every command listed here:\n\napply_pointframe_suggestion\nmake_point_frame_calculation\nset_bfpointmin_current\nset_bfpointmax_current\nset_inputmin_current\nset_inputmax_current\nset_stoptime_current");
             UI::EndTabItem();
         }
         UI::EndTabBar();
     }
     UI::End();
+
+    if(GetVariableBool("skycrafter_bfsettingsshortcut_auto")&&simManager.get_InRace()){
+        int time = simManager.get_RaceTime();
+        if(time<=0){
+            string curr=GetCurrentChallenge().get_Uid();
+            if(curr!=previousChallenge){
+                previousChallenge=curr;
+                points.DeleteAll();
+            }
+            notAccurate=false;
+        }else{
+            if(GetVariableDouble("speed")>5) notAccurate=true;
+            vec3 pos = simManager.Dyna.CurrentState.Location.Position;
+            Point currentPoint = StringToPoint(GetVariableString("bf_target_point"));
+            float d=distanceSquared(pos, currentPoint);
+            if(d<minDistance||time==minDistancetime){
+                newstuff=true;
+                minDistance=d;
+                minDistancetime=time;
+            }
+        }
+    }
+
 }
 
 void OnApply(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
     SetVariable("bf_eval_min_time", timeminsuggestion);
     SetVariable("bf_eval_max_time", timemaxsuggestion);
-}
-
-void OnPointFrameCalculation(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
-    Point currentPoint = StringToPoint(GetVariableString("bf_target_point"));
-    lastBfPoint=currentPoint;
-    newstuff=false;
-    int timeMid = Text::ParseInt(findClosestPointTime(points, currentPoint));
-    timeminsuggestion=timeMid-500;
-    timemaxsuggestion=timeMid+500;
 }
 
 void setVariableToCurrentRaceTime(const string&in varName) {
@@ -213,7 +191,6 @@ void Main()
     log("Plugin started.");
     RegisterVariable("skycrafter_bfsettingsshortcut_auto",false);
     RegisterCustomCommand("apply_pointframe_suggestion", "Apply the suggested time frame to the bruteforce settings", OnApply);
-    RegisterCustomCommand("make_point_frame_calculation", "Make the calculation for the time frame for the point bruteforce", OnPointFrameCalculation);
     RegisterCustomCommand("set_bfpointmin_current", "Set the bruteforce point min time to the current race time", OnBfPointMin);
     RegisterCustomCommand("set_bfpointmax_current", "Set the bruteforce point max time to the current race time", OnBfPointMax);
     RegisterCustomCommand("set_inputmin_current", "Set the bruteforce input min time to the current race time", OnBfInputMin);
@@ -227,7 +204,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bf settings shortcuts";
     info.Author = "Skycrafter";
-    info.Version = "v1.1.0";
+    info.Version = "v2.0.0";
     info.Description = "A faster way of setting bruteforce settings";
     return info;
 }
