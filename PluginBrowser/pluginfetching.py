@@ -22,6 +22,7 @@ C_PLUGINS_LIST = 0
 C_SHUTDOWN = 1
 C_INSTALL = 2
 C_UNINSTALL = 3
+C_DEBUG = 4
 
 sock = None
 
@@ -132,27 +133,31 @@ def request_processs(sock):
                 print(f"Download and extraction completed: {file_name}")
             except Exception as e:
                 print(f"An error occurred: {str(e)}")
+        elif(message_type==C_DEBUG):
+            length = struct.unpack('i', sock.recv(4))[0]
+            msg = sock.recv(length).decode()
+            print("Debug message from client: " + msg)
 
             
             
 
 
 def main():
+    local_data = load_local_data(local_json)
+    if local_data is None:
+        save_local_data(fetch_json_data(json_url), local_json)
     global sock
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((HOST, PORT))
     print('Connected')
 
-    local_data = load_local_data(local_json)
-    if local_data is None:
-        save_local_data(fetch_json_data(json_url), local_json)
 
-    data_process = Process(target=fetch_and_process_data, args=(sock,))
     request_process = Process(target=request_processs, args=(sock,))
+    data_process = Process(target=fetch_and_process_data, args=(sock,))
 
-    data_process.start()
     request_process.start()
+    data_process.start()
 
     data_process.join()
     request_process.join()
