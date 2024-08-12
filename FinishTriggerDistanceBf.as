@@ -263,8 +263,6 @@ float calculateShortestDistanceToAnyFinish(){
     const GmIso4@ carLocation = simManager.Dyna.CurrentState.Location;
     GmIso4 ellipsoidLocation;
 
-    //Precompute polyhedron faces since they are the same for all
-
     for (uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++) {
         GetCarEllipsoidLocationByIndex(simManager, carLocation, ellipsoidId, ellipsoidLocation);
         Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),we[ellipsoidId].size);
