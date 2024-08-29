@@ -124,22 +124,33 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         }
             
     } else {
-        if (simManager.PlayerInfo.CurCheckpointCount==targetCpCount) {
-            print("Reached the target at time " + raceTime + ", congrats!",Severity::Success);
-            print("Reached the target at time " + raceTime + ", congrats!",Severity::Warning);
-            print("Reached the target at time " + raceTime + ", congrats!",Severity::Error);
-            print("Reached the target at time " + raceTime + ", congrats!",Severity::Warning);
-            print("Reached the target at time " + raceTime + ", congrats!",Severity::Success);
-            resp.Decision = BFEvaluationDecision::Accept;
-            return resp;
-        }
+        
         if (GetVariableBool("skycrafter_bf_eval_timeframe")) {
-            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax") && simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1) {
+            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax") && simManager.PlayerInfo.CurCheckpointCount >= targetCpCount-1) {
+                if (simManager.PlayerInfo.CurCheckpointCount==targetCpCount) {
+                    print("Reached the target at time " + raceTime + ", congrats!",Severity::Success);
+                    print("Reached the target at time " + raceTime + ", congrats!",Severity::Warning);
+                    print("Reached the target at time " + raceTime + ", congrats!",Severity::Error);
+                    print("Reached the target at time " + raceTime + ", congrats!",Severity::Warning);
+                    print("Reached the target at time " + raceTime + ", congrats!",Severity::Success);
+                    resp.Decision = BFEvaluationDecision::Accept;
+                    return resp;
+                }
                 eval(simManager, resp);
+                
             }else if(raceTime > GetVariableDouble("skycrafter_bf_eval_timemax")){
                 resp.Decision=BFEvaluationDecision::Reject;
             }
         }else {
+            if (simManager.PlayerInfo.CurCheckpointCount==targetCpCount) {
+                print("Reached the target at time " + raceTime + ", congrats!",Severity::Success);
+                print("Reached the target at time " + raceTime + ", congrats!",Severity::Warning);
+                print("Reached the target at time " + raceTime + ", congrats!",Severity::Error);
+                print("Reached the target at time " + raceTime + ", congrats!",Severity::Warning);
+                print("Reached the target at time " + raceTime + ", congrats!",Severity::Success);
+                resp.Decision = BFEvaluationDecision::Accept;
+                return resp;
+            }
             TM::PlayerInfo@ playerInfo = simManager.get_PlayerInfo();
             if(simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1){
                 eval(simManager, resp);
