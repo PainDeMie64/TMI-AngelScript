@@ -92,19 +92,21 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
             checkpointNotTakenBlocks = checkpointBlocks;
             f.CaptureCurrentState(simManager, true);
         }
-        if (simManager.PlayerInfo.RaceFinished||(targetCpCount!=0&&simManager.PlayerInfo.CurCheckpointCount==targetCpCount)) {
+        if (targetCpCount!=0&&simManager.PlayerInfo.CurCheckpointCount==targetCpCount) {
             print("Base run already reached target, cancelling bruteforce.",Severity::Error);
             resp.Decision = BFEvaluationDecision::Stop;
             return resp;
         }
         if (GetVariableBool("skycrafter_bf_eval_timeframe")) {
-            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax")) {
+            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax")&&simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1) {
                 initial(simManager);
             }else if(raceTime > GetVariableDouble("skycrafter_bf_eval_timemax")){
-                resp.Decision=BFEvaluationDecision::Accept;
-                print("Current best distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, iteration " + info.Iterations + " (Run time: " + (Time::get_Now()-startTime)/1000 + "s)",Severity::Success);
                 if(targetCpCount==0){
-                    targetCpCount = simManager.PlayerInfo.CurCheckpointCount+1;
+                    targetCpCount = current=="Finish Distance" ? checkpointCount+1 : simManager.PlayerInfo.CurCheckpointCount+1;
+                    simManager.RewindToState(f);
+                }else{
+                    print("Current best distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, iteration " + info.Iterations + " (Run time: " + (Time::get_Now()-startTime)/1000 + "s)",Severity::Success);
+                    resp.Decision=BFEvaluationDecision::Accept;
                 }
             }
         }else {
@@ -113,7 +115,7 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
             }
             if(raceTime>int(simManager.get_EventsDuration())){
                 if(targetCpCount==0){
-                    targetCpCount = simManager.PlayerInfo.CurCheckpointCount+1;
+                    targetCpCount = current=="Finish Distance" ? checkpointCount+1 : simManager.PlayerInfo.CurCheckpointCount+1;
                     simManager.RewindToState(f);
                 }else{
                     print("Current best distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, iteration " + info.Iterations + " (Run time: " + (Time::get_Now()-startTime)/1000 + "s)",Severity::Success);
@@ -122,7 +124,7 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         }
             
     } else {
-        if (simManager.PlayerInfo.RaceFinished||(targetCpCount!=0&&simManager.PlayerInfo.CurCheckpointCount==targetCpCount)) {
+        if (simManager.PlayerInfo.CurCheckpointCount==targetCpCount) {
             print("Reached the target at time " + raceTime + ", congrats!",Severity::Success);
             print("Reached the target at time " + raceTime + ", congrats!",Severity::Warning);
             print("Reached the target at time " + raceTime + ", congrats!",Severity::Error);
@@ -132,7 +134,7 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
             return resp;
         }
         if (GetVariableBool("skycrafter_bf_eval_timeframe")) {
-            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax")) {
+            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax") && simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1) {
                 eval(simManager, resp);
             }else if(raceTime > GetVariableDouble("skycrafter_bf_eval_timemax")){
                 resp.Decision=BFEvaluationDecision::Reject;
@@ -273,11 +275,11 @@ void RenderEvalSettings()
         eval_timeframe=UI::CheckboxVar("Custom Time frame", "skycrafter_bf_eval_timeframe");
         UI::TextDimmed("If not ticked, the evaluation will start after picking up the last checkpoint.");
         if(eval_timeframe){
-            eval_timemin=UI::InputTimeVar("Time min", "skycrafter_bf_eval_timemin", 1000, 0);
+            eval_timemin=UI::InputTimeVar("Time min", "skycrafter_bf_eval_timemin", 100, 0);
             if(GetVariableDouble("skycrafter_bf_eval_timemax") < GetVariableDouble("skycrafter_bf_eval_timemin")){
                 SetVariable("skycrafter_bf_eval_timemax", GetVariableDouble("skycrafter_bf_eval_timemin"));
             }
-            eval_timemax=UI::InputTimeVar("Time max", "skycrafter_bf_eval_timemax", 1000, 0);
+            eval_timemax=UI::InputTimeVar("Time max", "skycrafter_bf_eval_timemax", 100, 0);
         }
     }
 
