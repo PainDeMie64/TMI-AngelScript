@@ -357,7 +357,7 @@ void Main()
     we.Add(Ellipsoid(vec3(-0.885002, 0.352504, -1.205502),vec3(0.182, 0.364, 0.364))); //Back right wheel
 
     RegisterBruteforceEvaluation("distancetofintrigger", "Skycrafter's targets", OnEvaluate, RenderEvalSettings);
-    RegisterVariable("skycrafter_bf_eval_timeframe", true);
+    RegisterVariable("skycrafter_bf_eval_timeframe", false);
     RegisterVariable("skycrafter_bf_eval_timemin", 0.0);
     RegisterVariable("skycrafter_bf_eval_timemax", 0.0);
     RegisterVariable("skycrafter_bf_mode", "Finish Distance");
