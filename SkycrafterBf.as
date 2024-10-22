@@ -1,6 +1,589 @@
 // Documentation available at https://donadigo.com/tminterface/plugins/api
 // Huge thanks to bigbang1112 for providing a lot of the missing triggers I needed
 
+array<BruteforceEval@> bruteforceEvals = array<BruteforceEval@>();
+
+interface BruteforceEval{
+    string get_Name();
+    string get_Prefix();
+    string toLocalVarName(string var);
+    BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info);
+    void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target);
+    void OnSimulationBegin(SimulationManager@ simManager);
+    void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result);
+    void RenderAdditionalSettings();
+}
+
+const string PLUGIN_PREFIX="skycrafter_bf_";
+
+
+
+class HitboxDistanceBF : BruteforceEval{
+    string Name="Hitbox Based Distance";
+    string prefix="hitboxdistancebf";
+    string target="Finish Distance";
+    
+    array<GameBlock@> finishBlocks = array<GameBlock@>();
+    array<GameBlock@> checkpointBlocks = array<GameBlock@>();
+    array<GameBlock@> checkpointNotTakenBlocks = array<GameBlock@>();
+    array<array<int>> triggerFaceIndices = array<array<int>>();
+    array<vec3> triggerVertices = array<vec3>();
+    float triggerHalfDiagonal = 0;
+    vec3 triggerCenter = vec3(0,0,0);
+
+    uint checkpointCount = 0;
+    uint targetCpCount = 0;
+
+    string info ="";
+    float bestDist = -1;
+    int bestDistTime = -1;
+    BFPhase phase = BFPhase::Initial;
+    bool bruting = false;
+    int raceTime = 0;
+
+    float bestExageratedDist = -1;
+    float exageration = 2.5+15; //Car half diagonal + trigger half diagonal
+
+    
+    bool eval_timeframe = true;
+    float eval_timemin = 0.0;
+    float eval_timemax = 0.0;
+    float threshold=0.01;
+
+    array<GmIso4> initialData = array<GmIso4>();
+    array<int> initialDataTimes = array<int>();
+    int lastCpTaken=0;
+
+    HitboxDistanceBF(){
+        RegisterVariable(toLocalVarName("eval_timeframe"), false);
+        RegisterVariable(toLocalVarName("eval_timemin"), 0.0);
+        RegisterVariable(toLocalVarName("eval_timemax"), 0.0);
+        RegisterVariable(toLocalVarName("trigger_id"), 1);
+        RegisterVariable(toLocalVarName("target"), target);
+        RegisterVariable(toLocalVarName("threshold"), 0.01);
+        target=GetVariableString(toLocalVarName("target"));
+    }
+    
+    string get_Name(){
+        return Name;
+    }
+    string get_Prefix(){
+        return prefix;
+    }
+
+    string toLocalVarName(string var){
+        return PLUGIN_PREFIX+prefix+"_"+var;
+    }
+    
+    void OnSimulationBegin(SimulationManager@ simManager){
+        if(target!="Trigger Distance") findFBVertices();
+        bruting=false;
+        bestDist = -1;
+        bestDistTime = -1;
+        bestExageratedDist = -1;
+        checkpointCount = GetSimulationManager().PlayerInfo.CheckpointStates.Length-1;
+        targetCpCount = 0;
+        startTime = Time::get_Now();
+        // Trigger3D trigger = GetTriggerByIndex(int(GetVariableDouble(toLocalVarName("trigger_id")))-1);
+        // vec3 pos=trigger.Position;
+        // print("Trigger position: "+pos.x+" "+pos.y+" "+pos.z);
+        // vec3 size=trigger.Size;
+        // triggerHalfDiagonal=Math::Sqrt(size.x*size.x+size.y*size.y+size.z*size.z)/2;
+        // triggerCenter=vec3(pos.x+size.x/2,pos.y+size.y/2,pos.z+size.z/2);
+
+        // triggerVertices.Clear();
+        // triggerFaceIndices.Clear();
+        // triggerVertices.Add(vec3(pos.x, pos.y, pos.z));                   // V1
+        // triggerVertices.Add(vec3(pos.x + size.x, pos.y, pos.z));          // V2
+        // triggerVertices.Add(vec3(pos.x + size.x, pos.y + size.y, pos.z)); // V3
+        // triggerVertices.Add(vec3(pos.x, pos.y + size.y, pos.z));          // V4
+        // triggerVertices.Add(vec3(pos.x, pos.y, pos.z + size.z));          // V5
+        // triggerVertices.Add(vec3(pos.x + size.x, pos.y, pos.z + size.z)); // V6
+        // triggerVertices.Add(vec3(pos.x + size.x, pos.y + size.y, pos.z + size.z)); // V7
+        // triggerVertices.Add(vec3(pos.x, pos.y + size.y, pos.z + size.z)); // V8
+
+        // // Front face (z = pos.z)
+        // triggerFaceIndices.Add({0, 1, 2});
+        // triggerFaceIndices.Add({0, 2, 3});
+
+        // // Back face (z = pos.z + size.z)
+        // triggerFaceIndices.Add({4, 5, 6});
+        // triggerFaceIndices.Add({4, 6, 7});
+
+        // // Left face (x = pos.x)
+        // triggerFaceIndices.Add({0, 3, 7});
+        // triggerFaceIndices.Add({0, 7, 4});
+
+        // // Right face (x = pos.x + size.x)
+        // triggerFaceIndices.Add({1, 5, 6});
+        // triggerFaceIndices.Add({1, 6, 2});
+
+        // // Top face (y = pos.y + size.y)
+        // triggerFaceIndices.Add({3, 2, 6});
+        // triggerFaceIndices.Add({3, 6, 7});
+
+        // // Bottom face (y = pos.y)
+        // triggerFaceIndices.Add({0, 1, 5});
+        // triggerFaceIndices.Add({0, 5, 4});
+
+    }
+    void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result){
+        phase=BFPhase::Search;
+        bruting=false;
+    }
+
+    
+    void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target){
+        if(phase==BFPhase::Initial&&bruting){
+            if(targetCpCount==0){
+                lastCpTaken=simManager.RaceTime;
+                auto lowest=1e9;
+                auto lowestId=-1;
+                for(uint i = 0; i < checkpointNotTakenBlocks.Length; i++){
+                    GameBlock@ block = checkpointNotTakenBlocks[i];
+                    vec3 center=vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32)+vec3(16,4,16);
+                    float dist = Math::Distance(simManager.Dyna.CurrentState.Location.Position,center);
+                    if(dist<lowest){
+                        lowest=dist;
+                        lowestId=i;
+                    }
+                }
+                if(lowestId!=-1){
+                    checkpointNotTakenBlocks.RemoveAt(lowestId);
+                }
+            }
+        }
+    }
+
+    BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info){
+        raceTime = simManager.RaceTime;
+        phase=info.Phase;
+        auto resp = BFEvaluationResponse();
+
+        if (info.Phase == BFPhase::Initial) {
+            bruting = true;
+            if(targetCpCount==0){
+                if(raceTime==0){
+                    checkpointNotTakenBlocks = checkpointBlocks;
+                }
+                GmIso4 state = simManager.Dyna.CurrentState.Location;
+                initialData.Add(state);
+                initialDataTimes.Add(raceTime);
+            }
+            if (targetCpCount!=0&&((simManager.PlayerInfo.CurCheckpointCount==targetCpCount))) {
+                if(bestDist==-1){
+                    print("Base run already reached target, cancelling bruteforce.",Severity::Error);
+                }else{
+                    print("Reached at " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, congrats!",Severity::Info);
+                    print("Reached at " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, congrats!",Severity::Success);
+                    print("Reached at " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, congrats!",Severity::Info);
+                }
+                resp.Decision = BFEvaluationDecision::Stop;
+                CommandList list;
+                list.Content = simManager.InputEvents.ToCommandsText();
+                string newfile = GetVariableString("bf_result_filename").Substr(0,GetVariableString("bf_result_filename").FindLast(".txt"))+"_alt.txt";
+                print("In case something went wrong, inputs have been saved to " + newfile,Severity::Warning);
+                list.Save(newfile);
+                return resp;
+            }
+            if (GetVariableBool(toLocalVarName("eval_timeframe"))) {
+                if (raceTime >= GetVariableDouble(toLocalVarName("eval_timemin")) && raceTime <= GetVariableDouble(toLocalVarName("eval_timemax"))&&simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1) {
+                    initial(simManager);
+                }else if(raceTime > GetVariableDouble(toLocalVarName("eval_timemax"))){
+                    if(targetCpCount==0){
+                        bestDist=1e9;
+                        if(target=="Finish Distance"){
+                            targetCpCount = checkpointCount+1;
+                            for(uint i = 0; i < initialData.Length; i++){
+                                int time=initialDataTimes[i];
+                                if(time<lastCpTaken||time>GetVariableDouble(toLocalVarName("eval_timemax"))||time<GetVariableDouble(toLocalVarName("eval_timemin"))) continue;
+                                GmIso4 state=initialData[i];
+                                for(uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++){
+                                    vec3 size=we[ellipsoidId].size;
+                                    GmIso4 ellipsoidLocation;
+                                    GetCarEllipsoidLocationByIndex(simManager, state, ellipsoidId, ellipsoidLocation);
+                                    Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),size);
+                                    ellipsoid.rotation = state.m_Rotation;
+                                    for(uint j = 0; j < finishBlocks.Length; j++){
+                                        Polyhedron polyhedron = Polyhedron(finishBlocks[j].trigger.vertices,finishBlocks[j].trigger.faceIndices);
+                                        float d = findDist(ellipsoid,polyhedron);
+                                        if(d<bestDist){
+                                            bestDist=d;
+                                            bestDistTime=time;
+                                            bestExageratedDist=calculateCenterToCenterDistanceToAnyFinish()+exageration;
+                                        }
+                                    }
+                                }
+                            }
+                        }else if(target=="Checkpoint Distance"){
+                            targetCpCount = simManager.PlayerInfo.CurCheckpointCount+1;
+                            for(uint i = 0; i < initialData.Length; i++){
+                                int time=initialDataTimes[i];
+                                if(time<lastCpTaken||time>GetVariableDouble(toLocalVarName("eval_timemax"))||time<GetVariableDouble(toLocalVarName("eval_timemin"))) continue;
+                                GmIso4 state=initialData[i];
+                                for(uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++){
+                                    vec3 size=we[ellipsoidId].size;
+                                    GmIso4 ellipsoidLocation;
+                                    GetCarEllipsoidLocationByIndex(simManager, state, ellipsoidId, ellipsoidLocation);
+                                    Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),size);
+                                    ellipsoid.rotation = state.m_Rotation;
+                                    for(uint j = 0; j < checkpointNotTakenBlocks.Length; j++){
+                                        Polyhedron polyhedron = Polyhedron(checkpointNotTakenBlocks[j].trigger.vertices,checkpointNotTakenBlocks[j].trigger.faceIndices);
+                                        float d = findDist(ellipsoid,polyhedron);
+                                        if(d<bestDist){
+                                            bestDist=d;
+                                            bestDistTime=time;
+                                            bestExageratedDist=calculateCenterToCenterDistanceToAnyUnreachedCheckpoint()+exageration;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        print("Base distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s",Severity::Success);
+                        resp.Decision=BFEvaluationDecision::Accept;
+                        initialData.Clear();
+                        initialDataTimes.Clear();
+                    }else{
+                        print("Current best distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, iteration " + info.Iterations + " (Run time: " + (Time::get_Now()-startTime)/1000 + "s)",Severity::Success);
+                        resp.Decision=BFEvaluationDecision::Accept;
+                    }
+                }
+            }else {
+                if(simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1){
+                    initial(simManager);
+                }
+                if(raceTime>int(simManager.get_EventsDuration())){
+                    if(targetCpCount==0){
+                        bestDist=1e9;
+                        if(target=="Finish Distance"){
+                            targetCpCount = checkpointCount+1;
+                            for(uint i = 0; i < initialData.Length; i++){
+                                int time=initialDataTimes[i];
+                                if(time<lastCpTaken||time>GetVariableDouble(toLocalVarName("eval_timemax"))) continue;
+                                GmIso4 state=initialData[i];
+                                for(uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++){
+                                    vec3 size=we[ellipsoidId].size;
+                                    GmIso4 ellipsoidLocation;
+                                    GetCarEllipsoidLocationByIndex(simManager, state, ellipsoidId, ellipsoidLocation);
+                                    Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),size);
+                                    ellipsoid.rotation = state.m_Rotation;
+                                    for(uint j = 0; j < finishBlocks.Length; j++){
+                                        Polyhedron polyhedron = Polyhedron(finishBlocks[j].trigger.vertices,finishBlocks[j].trigger.faceIndices);
+                                        float d = findDist(ellipsoid,polyhedron);
+                                        if(d<bestDist){
+                                            bestDist=d;
+                                            bestDistTime=time;
+                                            bestExageratedDist=calculateCenterToCenterDistanceToAnyFinish()+exageration;
+                                        }
+                                    }
+                                }
+                            }
+                        }else if(target=="Checkpoint Distance"){
+                            targetCpCount = simManager.PlayerInfo.CurCheckpointCount+1;
+                            for(uint i = 0; i < initialData.Length; i++){
+                                int time=initialDataTimes[i];
+                                if(time<lastCpTaken||time>GetVariableDouble(toLocalVarName("eval_timemax"))) continue;
+                                GmIso4 state=initialData[i];
+                                for(uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++){
+                                    vec3 size=we[ellipsoidId].size;
+                                    GmIso4 ellipsoidLocation;
+                                    GetCarEllipsoidLocationByIndex(simManager, state, ellipsoidId, ellipsoidLocation);
+                                    Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),size);
+                                    ellipsoid.rotation = state.m_Rotation;
+                                    for(uint j = 0; j < checkpointNotTakenBlocks.Length; j++){
+                                        Polyhedron polyhedron = Polyhedron(checkpointNotTakenBlocks[j].trigger.vertices,checkpointNotTakenBlocks[j].trigger.faceIndices);
+                                        float d = findDist(ellipsoid,polyhedron);
+                                        if(d<bestDist){
+                                            bestDist=d;
+                                            bestDistTime=time;
+                                            bestExageratedDist=calculateCenterToCenterDistanceToAnyUnreachedCheckpoint()+exageration;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        print("Base distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s",Severity::Success);
+                        resp.Decision=BFEvaluationDecision::Accept;
+                        initialData.Clear();
+                        initialDataTimes.Clear();
+                    }else{
+                        print("Current best distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, iteration " + info.Iterations + " (Run time: " + (Time::get_Now()-startTime)/1000 + "s)",Severity::Success);
+                        resp.Decision=BFEvaluationDecision::Accept;
+                    }
+                }
+            }
+                
+        } else {
+            if (GetVariableBool(toLocalVarName("eval_timeframe"))) {
+                if (raceTime >= GetVariableDouble(toLocalVarName("eval_timemin")) && raceTime <= GetVariableDouble(toLocalVarName("eval_timemax")) && simManager.PlayerInfo.CurCheckpointCount >= targetCpCount-1) {
+                    
+                    eval(simManager, resp);
+                    
+                }else if(raceTime > GetVariableDouble(toLocalVarName("eval_timemax"))){
+                    resp.Decision=BFEvaluationDecision::Reject;
+                }
+            }else {
+                TM::PlayerInfo@ playerInfo = simManager.get_PlayerInfo();
+                if(simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1){
+                    eval(simManager, resp);
+                }
+                if(raceTime>int(simManager.get_EventsDuration())){
+                    resp.Decision=BFEvaluationDecision::Reject;
+                }
+            }
+        }
+
+        return resp;
+    }
+
+    void initial(SimulationManager@ simManager){
+        if(target=="Finish Distance"){
+            float currentDistWithExageration = calculateCenterToCenterDistanceToAnyFinish()+exageration;
+            if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
+                return;
+            }
+            float dist = calculateShortestDistanceToAnyFinish();
+            if (dist < bestDist || bestDist == -1) {
+                bestDist = dist;
+                bestDistTime = raceTime;
+                bestExageratedDist = currentDistWithExageration;
+            }
+        }else if(target=="Checkpoint Distance"){
+            float currentDistWithExageration = calculateCenterToCenterDistanceToAnyUnreachedCheckpoint()+exageration;
+            if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
+                return;
+            }
+            float dist = calculateShortestDistanceToAnyUnreachedCheckpoint();
+            if (dist < bestDist || bestDist == -1) {
+                bestDist = dist;
+                bestDistTime = raceTime;
+                bestExageratedDist = currentDistWithExageration;
+            }
+        }
+
+        
+    }
+
+
+    void eval(SimulationManager@ simManager, BFEvaluationResponse&out resp){
+        if(target=="Finish Distance"){    
+            float currentDistWithExageration = calculateCenterToCenterDistanceToAnyFinish()+exageration;
+            if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
+                return;
+            }
+            float dist = calculateShortestDistanceToAnyFinish();
+            if (dist < bestDist || bestDist == -1) {
+                bestDist = dist;
+                bestDistTime = raceTime;
+                resp.Decision=BFEvaluationDecision::Accept;
+            }
+        }else if(target=="Checkpoint Distance"){
+            float currentDistWithExageration = calculateCenterToCenterDistanceToAnyUnreachedCheckpoint()+exageration;
+            if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
+                return;
+            }
+            float dist = calculateShortestDistanceToAnyUnreachedCheckpoint();
+            if (dist < bestDist || bestDist == -1) {
+                bestDist = dist;
+                bestDistTime = raceTime;
+                resp.Decision=BFEvaluationDecision::Accept;
+            }
+        }
+    }
+    
+    float calculateCenterToCenterDistanceToAnyUnreachedCheckpoint(){
+        SimulationManager@ simManager = GetSimulationManager();
+        float calculated_distance = 1e9;
+        const vec3 carLocation = simManager.Dyna.CurrentState.Location.Position;
+        vec3 relativeCenter;
+        const vec3 offset=vec3(16,4,16);
+        for(uint i = 0; i < checkpointNotTakenBlocks.Length; i++){
+            GameBlock@ block = checkpointNotTakenBlocks[i];
+            vec3 centerLocation = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32)+offset;//+relativeCenter;
+            if(block.Name.Substr(0,block.Name.FindFirst("Checkpoint")).Length!=block.Name.Length-10){
+                centerLocation+=vec3(0,4,0);
+            }
+            vec3 size=vec3(1,1,1);
+            float dist = Math::Distance(carLocation,centerLocation);
+            if(dist<calculated_distance){
+                calculated_distance = dist;
+            }
+        }
+        return calculated_distance;
+    }
+
+    float calculateShortestDistanceToAnyUnreachedCheckpoint(){
+        SimulationManager@ simManager = GetSimulationManager();
+        float calculated_distance = 1e9;
+        const GmIso4@ carLocation = simManager.Dyna.CurrentState.Location;
+        GmIso4 ellipsoidLocation;
+
+        for (uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++) {
+            vec3 size=we[ellipsoidId].size;
+            GetCarEllipsoidLocationByIndex(simManager, carLocation, ellipsoidId, ellipsoidLocation);
+            Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),size);
+            ellipsoid.rotation = carLocation.m_Rotation;
+            for(uint i = 0; i < checkpointNotTakenBlocks.Length;i++){
+                Polyhedron polyhedron = Polyhedron(checkpointNotTakenBlocks[i].trigger.vertices,checkpointNotTakenBlocks[i].trigger.faceIndices);
+                float dist = findDist(ellipsoid,polyhedron);
+                if(dist<calculated_distance){
+                    calculated_distance = dist;
+                }
+            }
+        }
+        return calculated_distance;
+    }
+
+    void findFBVertices(){ //Find finish block vertices
+        TM::GameCtnChallenge@ challenge = GetCurrentChallenge();
+        array<GameBlock@> blocks=array<GameBlock@>();
+        array<TM::GameCtnBlock@> blocks2 = challenge.Blocks;
+        for(uint i = 0; i < blocks2.Length; i++){
+            if(blocks2[i].WayPointType!=TM::WayPointType::None){
+                blocks.Add(blocks2[i]);
+            }
+        }
+        finishBlocks.Clear();
+        checkpointBlocks.Clear();
+        for(uint i = 0; i < blocks.Length; i++){
+            GameBlock block = blocks[i];
+            if(block.WayPointType==1){
+                block.trigger = finishTrigger;
+                array<vec3>@ vertices = block.trigger.vertices;
+                array<vec3>@ finishTriggerVertices=finishTrigger.vertices;
+                vertices.Clear();
+                vec3 location = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32);
+                for(uint j = 0; j < finishTriggerVertices.Length; j++){
+                    vec3 v = finishTriggerVertices[j]-vec3(16,4,16);
+                    vec3 newv;
+                    if(block.Dir == 0){
+                        newv = vec3(v.x+location.x,v.y+location.y,v.z+location.z);
+                    }else if(block.Dir == 1){
+                        newv = vec3(-v.z+location.x,v.y+location.y,v.x+location.z);
+                    }else if(block.Dir == 2){
+                        newv = vec3(-v.x+location.x,v.y+location.y,-v.z+location.z);
+                    }else{
+                        newv = vec3(v.z+location.x,v.y+location.y,-v.x+location.z);
+                    }
+                    vertices.Add(newv+vec3(16,4,16));
+                }
+                finishBlocks.Add(block);
+            }else if(block.WayPointType==2){
+                BlockTrigger@ correctTrigger=cast<BlockTrigger@>(blocksTriggers[block.Name]);
+                block.trigger = correctTrigger;
+                array<vec3>@ vertices = block.trigger.vertices;
+                array<vec3>@ cpTriggerVertices=correctTrigger.vertices;
+                vertices.Clear();
+                vec3 location = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32);
+                for(uint j = 0; j < cpTriggerVertices.Length; j++){
+                    vec3 v = cpTriggerVertices[j]-vec3(16,4,16);
+                    vec3 newv;
+                    if(block.Dir == 0){
+                        newv = vec3(v.x+location.x,v.y+location.y,v.z+location.z);
+                    }else if(block.Dir == 1){
+                        newv = vec3(-v.z+location.x,v.y+location.y,v.x+location.z);
+                    }else if(block.Dir == 2){
+                        newv = vec3(-v.x+location.x,v.y+location.y,-v.z+location.z);
+                    }else{
+                        newv = vec3(v.z+location.x,v.y+location.y,-v.x+location.z);
+                    }
+                    vertices.Add(newv+vec3(16,4,16));
+                }
+                checkpointBlocks.Add(block);
+            }
+        }
+        return;
+    }
+
+    float calculateCenterToCenterDistanceToAnyFinish(){
+        SimulationManager@ simManager = GetSimulationManager();
+        float calculated_distance = 1e9;
+        const vec3 carLocation = simManager.Dyna.CurrentState.Location.Position;
+        vec3 relativeCenter;
+        const vec3 offset=vec3(16,4,16);
+        for(uint i = 0; i < finishBlocks.Length; i++){
+            GameBlock@ block = finishBlocks[i];
+            if(block.Dir == 0){
+                relativeCenter=vec3(0,0.5,-4)+offset;
+            }else if(block.Dir == 1){
+                relativeCenter=vec3(4,0.5,0)+offset;
+            }else if(block.Dir == 2){
+                relativeCenter=vec3(0,0.5,4)+offset;
+            }else{
+                relativeCenter=vec3(-4,0.5,0)+offset;
+            }
+            vec3 centerLocation = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32)+relativeCenter;
+            float dist = Math::Distance(carLocation,centerLocation);
+            if(dist<calculated_distance){
+                calculated_distance = dist;
+            }
+        }
+        return calculated_distance;
+    }
+
+    float calculateShortestDistanceToAnyFinish(){
+        
+        SimulationManager@ simManager = GetSimulationManager();
+        float calculated_distance = 1e9;
+        const GmIso4@ carLocation = simManager.Dyna.CurrentState.Location;
+        GmIso4 ellipsoidLocation;
+
+        for (uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++) {
+            vec3 size=we[ellipsoidId].size;
+            GetCarEllipsoidLocationByIndex(simManager, carLocation, ellipsoidId, ellipsoidLocation);
+            Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),size);
+            ellipsoid.rotation = carLocation.m_Rotation;
+            for(uint i = 0; i < finishBlocks.Length;i++){
+                
+                Polyhedron polyhedron = Polyhedron(finishBlocks[i].trigger.vertices,finishBlocks[i].trigger.faceIndices);
+                float dist = findDist(ellipsoid,polyhedron);
+                if(dist<calculated_distance){
+                    calculated_distance = dist;
+                }
+            }
+        }
+        return calculated_distance;
+    }
+
+
+    void RenderAdditionalSettings(){
+        if(UI::BeginCombo("Target", target)){
+            if(UI::Selectable("Finish Distance", false)){
+                target="Finish Distance";
+            }
+            if(UI::Selectable("Checkpoint Distance", false)){
+                target="Checkpoint Distance";
+            }
+            UI::BeginDisabled();
+            if(UI::Selectable("Trigger Distance", false)){
+                target="Trigger Distance";
+            }
+            UI::EndDisabled();
+            
+            SetVariable(toLocalVarName("target"), target);
+            UI::EndCombo();
+        }
+        if(target=="Trigger Distance"){
+            UI::InputIntVar("Trigger id: ", toLocalVarName("trigger_id"), 1);
+            threshold=UI::InputFloatVar("Threshold: ", toLocalVarName("threshold"), 0.1);
+        }
+        UI::BeginDisabled();
+        UI::Checkbox("Only wheels", true);
+        UI::SameLine();
+        UI::TextWrapped("(Unchangeable: Work In Progress)");
+        UI::EndDisabled();
+        eval_timeframe=UI::CheckboxVar("Custom Time frame", toLocalVarName("eval_timeframe"));
+        UI::TextDimmed("If not ticked, the evaluation will start after picking up the last checkpoint.");
+        if(eval_timeframe){
+            eval_timemin=UI::InputTimeVar("Time min", toLocalVarName("eval_timemin"), 100, 0);
+            if(GetVariableDouble(toLocalVarName("eval_timemax")) < GetVariableDouble(toLocalVarName("eval_timemin"))){
+                SetVariable(toLocalVarName("eval_timemax"), GetVariableDouble(toLocalVarName("eval_timemin")));
+            }
+            eval_timemax=UI::InputTimeVar("Time max", toLocalVarName("eval_timemax"), 100, 0);
+        }
+    }
+
+}
 
 BlockTrigger@ finishTrigger = BlockTrigger();
 BlockTrigger@ roadCheckpointTrigger = BlockTrigger();
@@ -23,260 +606,49 @@ BlockTrigger@ ringVCheckpointTrigger = BlockTrigger();
 
 dictionary blocksTriggers = dictionary();
 
+
 array<Ellipsoid> we = array<Ellipsoid>(); //Wheels ellipsoids
 
-array<GameBlock@> finishBlocks = array<GameBlock@>();
-array<GameBlock@> checkpointBlocks = array<GameBlock@>();
-array<GameBlock@> checkpointNotTakenBlocks = array<GameBlock@>();
-uint checkpointCount = 0;
-uint targetCpCount = 0;
 
-string current = "Finish Distance";
-
-string info ="";
-array<Ellipsoid> nwe = array<Ellipsoid>();
-float bestDist = -1;
-int bestDistTime = -1;
-BFPhase phase = BFPhase::Initial;
-bool bruting = false;
-int raceTime = 0;
-
-SimulationStateFile f;
-
-
-float bestExageratedDist = -1;
-const float exageration = 2.5+15; //Car half diagonal + trigger half diagonal
-
-bool eval_timeframe = true;
-float eval_timemin = 0.0;
-float eval_timemax = 0.0;
+string current = "Hitbox Based Distance";
+int currentId = 0;
+int subcurrentId = 0;
 
 int64 startTime = 0;
 
-void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target){
-    if(phase==BFPhase::Initial&&bruting){
-        if(targetCpCount==0){
-            f.CaptureCurrentState(simManager, true);
-        }
-        auto lowest=1e9;
-        auto lowestId=-1;
-        for(uint i = 0; i < checkpointNotTakenBlocks.Length; i++){
-            GameBlock@ block = checkpointNotTakenBlocks[i];
-            vec3 center=vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32)+vec3(16,4,16);
-            float dist = Math::Distance(simManager.Dyna.CurrentState.Location.Position,center);
-            if(dist<lowest){
-                lowest=dist;
-                lowestId=i;
-            }
-        }
-        if(lowestId!=-1){
-            checkpointNotTakenBlocks.RemoveAt(lowestId);
-        }
-    }
+void OnSimulationBegin(SimulationManager@ simManager){
+    bruteforceEvals[subcurrentId].OnSimulationBegin(simManager);
 }
 
 void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result){
-    phase=BFPhase::Search;
-    bruting=false;
+    bruteforceEvals[subcurrentId].OnSimulationEnd(simManager,result);
 }
 
-dictionary temp=dictionary();
+void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target){
+    bruteforceEvals[subcurrentId].OnCheckpointCountChanged(simManager,current,target);
+}
 
 BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
 {
-    raceTime = simManager.RaceTime;
-    phase=info.Phase;
-
-    auto resp = BFEvaluationResponse();
-    if (info.Phase == BFPhase::Initial) {
-        bruting = true;
-        if(raceTime==10){
-            checkpointNotTakenBlocks = checkpointBlocks;
-            f.CaptureCurrentState(simManager, true);
-        }
-        if (targetCpCount!=0&&simManager.PlayerInfo.CurCheckpointCount==targetCpCount) {
-            print("Base run already reached target, cancelling bruteforce.",Severity::Error);
-            resp.Decision = BFEvaluationDecision::Stop;
-            return resp;
-        }
-        if (GetVariableBool("skycrafter_bf_eval_timeframe")) {
-            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax")&&simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1) {
-                initial(simManager);
-            }else if(raceTime > GetVariableDouble("skycrafter_bf_eval_timemax")){
-                if(targetCpCount==0){
-                    targetCpCount = current=="Finish Distance" ? checkpointCount+1 : simManager.PlayerInfo.CurCheckpointCount+1;
-                    simManager.RewindToState(f);
-                }else{
-                    print("Current best distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, iteration " + info.Iterations + " (Run time: " + (Time::get_Now()-startTime)/1000 + "s)",Severity::Success);
-                    resp.Decision=BFEvaluationDecision::Accept;
-                }
-            }
-        }else {
-            if(simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1){
-                initial(simManager);
-            }
-            if(raceTime>int(simManager.get_EventsDuration())){
-                if(targetCpCount==0){
-                    targetCpCount = current=="Finish Distance" ? checkpointCount+1 : simManager.PlayerInfo.CurCheckpointCount+1;
-                    simManager.RewindToState(f);
-                }else{
-                    print("Current best distance: " + Text::FormatFloat(bestDist,"",0,5) + "m at time " + Text::FormatFloat(bestDistTime/1000.0,"",0,2) + "s, iteration " + info.Iterations + " (Run time: " + (Time::get_Now()-startTime)/1000 + "s)",Severity::Success);
-                }
-            }
-        }
-            
-    } else {
-        
-        if (GetVariableBool("skycrafter_bf_eval_timeframe")) {
-            if (raceTime >= GetVariableDouble("skycrafter_bf_eval_timemin") && raceTime <= GetVariableDouble("skycrafter_bf_eval_timemax") && simManager.PlayerInfo.CurCheckpointCount >= targetCpCount-1) {
-                eval(simManager, resp);
-                
-            }else if(raceTime > GetVariableDouble("skycrafter_bf_eval_timemax")){
-                resp.Decision=BFEvaluationDecision::Reject;
-            }
-        }else {
-            TM::PlayerInfo@ playerInfo = simManager.get_PlayerInfo();
-            if(simManager.PlayerInfo.CurCheckpointCount == targetCpCount-1){
-                eval(simManager, resp);
-            }
-            if(raceTime>int(simManager.get_EventsDuration())){
-                resp.Decision=BFEvaluationDecision::Reject;
-            }
-        }
-    }
-
-    return resp;
-}
-
-void initial(SimulationManager@ simManager){
-    if(current=="Finish Distance"){    
-        float currentDistWithExageration = calculateCenterToCenterDistanceToAnyFinish()+exageration;
-        if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
-            return;
-        }
-        float dist = calculateShortestDistanceToAnyFinish();
-        if (dist < bestDist || bestDist == -1) {
-            bestDist = dist;
-            bestDistTime = raceTime;
-            bestExageratedDist = currentDistWithExageration;
-        }
-    }else if(current=="Checkpoint Distance"){
-        float currentDistWithExageration = calculateCenterToCenterDistanceToAnyUnreachedCheckpoint()+exageration;
-        if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
-            return;
-        }
-        float dist = calculateShortestDistanceToAnyUnreachedCheckpoint();
-        if (dist < bestDist || bestDist == -1) {
-            bestDist = dist;
-            bestDistTime = raceTime;
-            bestExageratedDist = currentDistWithExageration;
-        }
-    }
-
-    
-}
-
-
-void eval(SimulationManager@ simManager, BFEvaluationResponse&out resp){
-    if(current=="Finish Distance"){    
-        float currentDistWithExageration = calculateCenterToCenterDistanceToAnyFinish()+exageration;
-        if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
-            return;
-        }
-        float dist = calculateShortestDistanceToAnyFinish();
-        if (dist < bestDist || bestDist == -1) {
-            bestDist = dist;
-            bestDistTime = raceTime;
-            resp.Decision=BFEvaluationDecision::Accept;
-        }
-    }else if(current=="Checkpoint Distance"){
-        float currentDistWithExageration = calculateCenterToCenterDistanceToAnyUnreachedCheckpoint()+exageration;
-        if(bestExageratedDist!=-1&&currentDistWithExageration>bestExageratedDist){
-            return;
-        }
-        float dist = calculateShortestDistanceToAnyUnreachedCheckpoint();
-        if (dist < bestDist || bestDist == -1) {
-            bestDist = dist;
-            bestDistTime = raceTime;
-            resp.Decision=BFEvaluationDecision::Accept;
-        }
-    }
-}
-
-float calculateCenterToCenterDistanceToAnyUnreachedCheckpoint(){
-    SimulationManager@ simManager = GetSimulationManager();
-    float calculated_distance = 1e9;
-    const vec3 carLocation = simManager.Dyna.CurrentState.Location.Position;
-    vec3 relativeCenter;
-    const vec3 offset=vec3(16,4,16);
-    for(uint i = 0; i < checkpointBlocks.Length; i++){
-        GameBlock@ block = checkpointBlocks[i];
-        vec3 centerLocation = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32)+offset;//+relativeCenter;
-        if(block.Name.Substr(0,block.Name.FindFirst("Checkpoint")).Length!=block.Name.Length-10){
-            centerLocation+=vec3(0,4,0);
-        }
-        vec3 size=vec3(1,1,1);
-        float dist = Math::Distance(carLocation,centerLocation);
-        if(dist<calculated_distance){
-            calculated_distance = dist;
-        }
-    }
-    return calculated_distance;
-}
-
-float calculateShortestDistanceToAnyUnreachedCheckpoint(){
-    SimulationManager@ simManager = GetSimulationManager();
-    float calculated_distance = 1e9;
-    const GmIso4@ carLocation = simManager.Dyna.CurrentState.Location;
-    GmIso4 ellipsoidLocation;
-
-
-    for (uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++) {
-        GetCarEllipsoidLocationByIndex(simManager, carLocation, ellipsoidId, ellipsoidLocation);
-        Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),we[ellipsoidId].size);
-
-        for(uint i = 0; i < checkpointNotTakenBlocks.Length;i++){
-            bool rightCp = checkpointNotTakenBlocks[i].Name.FindFirst("Right")!=-1;
-            Polyhedron polyhedron = Polyhedron(checkpointNotTakenBlocks[i].trigger.vertices,checkpointNotTakenBlocks[i].trigger.faceIndices);
-            float dist = findDist(ellipsoid,polyhedron);
-            if(dist<calculated_distance){
-                calculated_distance = dist;
-            }
-        }
-    }
-    return calculated_distance;
+    return bruteforceEvals[subcurrentId].OnEvaluate(simManager,info);
 }
 
 void RenderEvalSettings()
 {
     UI::TextWrapped("This plugin allows you to bruteforce different targets implemented by Skycrafter.");
-    if(UI::BeginCombo("Label", current)){
-        if(UI::Selectable("Finish Distance", false)){
-            current="Finish Distance";
-        }
-        if(UI::Selectable("Checkpoint Distance", false)){
-            current="Checkpoint Distance";
+    if(UI::BeginCombo("Mode", current)){
+        for(uint i = 0; i<bruteforceEvals.Length; i++){
+            if(UI::Selectable(bruteforceEvals[i].get_Name(), false)){
+                current=bruteforceEvals[i].get_Name();
+                currentId=i;
+                subcurrentId=i;
+            }
         }
         SetVariable("skycrafter_bf_mode", current);
         UI::EndCombo();
     }
-
-    if(current=="Finish Distance"||current=="Checkpoint Distance"){
-        UI::BeginDisabled();
-        UI::Checkbox("Only wheels", true);
-        UI::SameLine();
-        UI::TextWrapped("(Unchangeable: Work In Progress)");
-        UI::EndDisabled();
-        eval_timeframe=UI::CheckboxVar("Custom Time frame", "skycrafter_bf_eval_timeframe");
-        UI::TextDimmed("If not ticked, the evaluation will start after picking up the last checkpoint.");
-        if(eval_timeframe){
-            eval_timemin=UI::InputTimeVar("Time min", "skycrafter_bf_eval_timemin", 100, 0);
-            if(GetVariableDouble("skycrafter_bf_eval_timemax") < GetVariableDouble("skycrafter_bf_eval_timemin")){
-                SetVariable("skycrafter_bf_eval_timemax", GetVariableDouble("skycrafter_bf_eval_timemin"));
-            }
-            eval_timemax=UI::InputTimeVar("Time max", "skycrafter_bf_eval_timemax", 100, 0);
-        }
-    }
+    
+    bruteforceEvals[currentId].RenderAdditionalSettings();
 
 }
 
@@ -330,9 +702,6 @@ void Main()
     ringVCheckpointTrigger.vertices={vec3(26.156471, 24.522285, 16.09842), vec3(22.629168, 27.482046, 16.09842), vec3(18.302288, 29.056904, 16.09842), vec3(13.697719, 29.056904, 16.09842), vec3(9.370839, 27.48205, 16.09842), vec3(5.8435335, 24.522291, 16.09842), vec3(3.5412483, 20.534618, 16.09842), vec3(2.7416725, 16.000002, 16.09842), vec3(3.5412464, 11.465387, 16.09842), vec3(5.8435307, 7.4777126, 16.09842), vec3(9.370834, 4.517952, 16.09842), vec3(13.697714, 2.9430962, 16.09842), vec3(18.302284, 2.9430962, 16.09842), vec3(22.629164, 4.517951, 16.09842), vec3(26.156467, 7.4777107, 16.09842), vec3(28.458752, 11.4653845, 16.09842), vec3(29.258327, 16.0, 16.09842), vec3(28.458754, 20.53461, 16.09842), vec3(28.458752, 11.4653845, 15.658419), vec3(29.258327, 16.0, 15.658419), vec3(26.156467, 7.4777107, 15.658419), vec3(22.629164, 4.517951, 15.658419), vec3(18.302284, 2.9430962, 15.658419), vec3(13.697714, 2.9430962, 15.658419), vec3(9.370834, 4.517952, 15.658419), vec3(5.8435307, 7.4777126, 15.658419), vec3(3.5412464, 11.465387, 15.658419), vec3(2.7416725, 16.000002, 15.658419), vec3(3.5412483, 20.534618, 15.65842), vec3(5.8435335, 24.522291, 15.65842), vec3(9.370839, 27.48205, 15.65842), vec3(13.697719, 29.056904, 15.65842), vec3(18.302288, 29.056904, 15.65842), vec3(22.629168, 27.482046, 15.65842), vec3(26.156471, 24.522285, 15.65842), vec3(28.458754, 20.53461, 15.65842)};
     ringVCheckpointTrigger.faceIndices={{0,1,2}, {2,3,4}, {4,5,6}, {2,4,6}, {6,7,8}, {8,9,10}, {6,8,10}, {10,11,12}, {12,13,14}, {10,12,14}, {6,10,14}, {2,6,14}, {14,15,16}, {2,14,16}, {0,2,16}, {17,0,16}, {16,15,18}, {18,19,16}, {15,14,20}, {20,18,15}, {14,13,21}, {21,20,14}, {13,12,22}, {22,21,13}, {12,11,23}, {23,22,12}, {11,10,24}, {24,23,11}, {10,9,25}, {25,24,10}, {9,8,26}, {26,25,9}, {8,7,27}, {27,26,8}, {7,6,28}, {28,27,7}, {6,5,29}, {29,28,6}, {5,4,30}, {30,29,5}, {4,3,31}, {31,30,4}, {3,2,32}, {32,31,3}, {2,1,33}, {33,32,2}, {1,0,34}, {34,33,1}, {0,17,35}, {35,34,0}, {17,16,19}, {19,35,17}, {19,18,20}, {20,21,22}, {22,23,24}, {20,22,24}, {24,25,26}, {26,27,28}, {24,26,28}, {28,29,30}, {30,31,32}, {28,30,32}, {24,28,32}, {20,24,32}, {32,33,34}, {20,32,34}, {19,20,34}, {35,19,34}};
 
-
-    //StadiumRoadMainCheckpoint, StadiumGrassCheckpoint, StadiumRoadMainCheckpointUp, StadiumRoadMainCheckpointDown, StadiumRoadMainCheckpointLeft, StadiumRoadMainCheckpointRight, StadiumCheckpointRingV, StadiumCheckpointRingHRoad, StadiumPlatformCheckpoint, StadiumPlatformCheckpointUp, StadiumPlatformCheckpointDown, StadiumPlatformCheckpointLeft, StadiumPlatformCheckpointRight, StadiumRoadDirtHighCheckpoint, StadiumRoadDirtCheckpoint, StadiumRoadMainFinishLine
-
     blocksTriggers["StadiumRoadMainCheckpoint"]=@roadCheckpointTrigger;
     blocksTriggers["StadiumGrassCheckpoint"]=@grassCheckpointTrigger;
     blocksTriggers["StadiumRoadMainCheckpointUp"]=@roadCheckpointUpTrigger;
@@ -350,18 +719,21 @@ void Main()
     blocksTriggers["StadiumRoadDirtCheckpoint"]=@roadDirtCheckpointTrigger;
     blocksTriggers["StadiumRoadMainFinishLine"]=@finishTrigger;
 
-
     we.Add(Ellipsoid(vec3(0.863012, 0.3525, 1.782089),vec3(0.182, 0.364, 0.364))); //Front left wheel
     we.Add(Ellipsoid(vec3(-0.863012, 0.3525, 1.782089),vec3(0.182, 0.364, 0.364))); //Front right wheel
     we.Add(Ellipsoid(vec3(0.885002, 0.352504, -1.205502),vec3(0.182, 0.364, 0.364))); //Back left wheel
     we.Add(Ellipsoid(vec3(-0.885002, 0.352504, -1.205502),vec3(0.182, 0.364, 0.364))); //Back right wheel
 
-    RegisterBruteforceEvaluation("distancetofintrigger", "Skycrafter's targets", OnEvaluate, RenderEvalSettings);
-    RegisterVariable("skycrafter_bf_eval_timeframe", false);
-    RegisterVariable("skycrafter_bf_eval_timemin", 0.0);
-    RegisterVariable("skycrafter_bf_eval_timemax", 0.0);
-    RegisterVariable("skycrafter_bf_mode", "Finish Distance");
+    
+    HitboxDistanceBF@ hitboxDistanceBF = HitboxDistanceBF();
+    bruteforceEvals.Add(hitboxDistanceBF);
+    
+
+    RegisterBruteforceEvaluation("skycraftertargets", "Skycrafter's targets", OnEvaluate, RenderEvalSettings);
+    RegisterVariable("skycrafter_bf_mode", bruteforceEvals[0].get_Name());
     current=GetVariableString("skycrafter_bf_mode");
+
+    
 }
 
 PluginInfo@ GetPluginInfo()
@@ -375,115 +747,6 @@ PluginInfo@ GetPluginInfo()
 }
 
 
-void findFBVertices(){ //Find finish block vertices
-    TM::GameCtnChallenge@ challenge = GetCurrentChallenge();
-    array<GameBlock@> blocks=array<GameBlock@>();
-    array<TM::GameCtnBlock@> blocks2 = challenge.Blocks;
-    for(uint i = 0; i < blocks2.Length; i++){
-        if(blocks2[i].WayPointType!=TM::WayPointType::None){
-            blocks.Add(blocks2[i]);
-        }
-    }
-    finishBlocks.Clear();
-    checkpointBlocks.Clear();
-    for(uint i = 0; i < blocks.Length; i++){
-        GameBlock block = blocks[i];
-        if(block.WayPointType==1){
-            block.trigger = finishTrigger;
-            array<vec3>@ vertices = block.trigger.vertices;
-            array<vec3>@ finishTriggerVertices=finishTrigger.vertices;
-            vertices.Clear();
-            vec3 location = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32);
-            for(uint j = 0; j < finishTriggerVertices.Length; j++){
-                vec3 v = finishTriggerVertices[j]-vec3(16,4,16);
-                vec3 newv;
-                if(block.Dir == 0){
-                    newv = vec3(v.x+location.x,v.y+location.y,v.z+location.z);
-                }else if(block.Dir == 1){
-                    newv = vec3(-v.z+location.x,v.y+location.y,v.x+location.z);
-                }else if(block.Dir == 2){
-                    newv = vec3(-v.x+location.x,v.y+location.y,-v.z+location.z);
-                }else{
-                    newv = vec3(v.z+location.x,v.y+location.y,-v.x+location.z);
-                }
-                vertices.Add(newv+vec3(16,4,16));
-            }
-            finishBlocks.Add(block);
-        }else if(block.WayPointType==2){
-            BlockTrigger@ correctTrigger=cast<BlockTrigger@>(blocksTriggers[block.Name]);
-            block.trigger = correctTrigger;
-            array<vec3>@ vertices = block.trigger.vertices;
-            array<vec3>@ cpTriggerVertices=correctTrigger.vertices;
-            vertices.Clear();
-            vec3 location = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32);
-            for(uint j = 0; j < cpTriggerVertices.Length; j++){
-                vec3 v = cpTriggerVertices[j]-vec3(16,4,16);
-                vec3 newv;
-                if(block.Dir == 0){
-                    newv = vec3(v.x+location.x,v.y+location.y,v.z+location.z);
-                }else if(block.Dir == 1){
-                    newv = vec3(-v.z+location.x,v.y+location.y,v.x+location.z);
-                }else if(block.Dir == 2){
-                    newv = vec3(-v.x+location.x,v.y+location.y,-v.z+location.z);
-                }else{
-                    newv = vec3(v.z+location.x,v.y+location.y,-v.x+location.z);
-                }
-                vertices.Add(newv+vec3(16,4,16));
-            }
-            checkpointBlocks.Add(block);
-        }
-    }
-    return;
-}
-
-float calculateCenterToCenterDistanceToAnyFinish(){
-    SimulationManager@ simManager = GetSimulationManager();
-    float calculated_distance = 1e9;
-    const vec3 carLocation = simManager.Dyna.CurrentState.Location.Position;
-    vec3 relativeCenter;
-    const vec3 offset=vec3(16,4,16);
-    for(uint i = 0; i < finishBlocks.Length; i++){
-        GameBlock@ block = finishBlocks[i];
-        if(block.Dir == 0){
-            relativeCenter=vec3(0,0.5,-4)+offset;
-        }else if(block.Dir == 1){
-            relativeCenter=vec3(4,0.5,0)+offset;
-        }else if(block.Dir == 2){
-            relativeCenter=vec3(0,0.5,4)+offset;
-        }else{
-            relativeCenter=vec3(-4,0.5,0)+offset;
-        }
-        vec3 centerLocation = vec3(block.Coord.x*32,block.Coord.y*8,block.Coord.z*32)+relativeCenter;
-        float dist = Math::Distance(carLocation,centerLocation);
-        if(dist<calculated_distance){
-            calculated_distance = dist;
-        }
-    }
-    return calculated_distance;
-}
-
-float calculateShortestDistanceToAnyFinish(){
-    SimulationManager@ simManager = GetSimulationManager();
-    float calculated_distance = 1e9;
-    const GmIso4@ carLocation = simManager.Dyna.CurrentState.Location;
-    GmIso4 ellipsoidLocation;
-
-    for (uint ellipsoidId = 0; ellipsoidId < 4; ellipsoidId++) {
-        GetCarEllipsoidLocationByIndex(simManager, carLocation, ellipsoidId, ellipsoidLocation);
-        Ellipsoid ellipsoid = Ellipsoid(vec3(ellipsoidLocation.m_Position.x,ellipsoidLocation.m_Position.y,ellipsoidLocation.m_Position.z),we[ellipsoidId].size);
-
-        for(uint i = 0; i < finishBlocks.Length;i++){
-            
-            Polyhedron polyhedron = Polyhedron(finishBlocks[i].trigger.vertices,finishBlocks[i].trigger.faceIndices);
-            float dist = findDist(ellipsoid,polyhedron);
-            if(dist<calculated_distance){
-                calculated_distance = dist;
-            }
-        }
-    }
-    return calculated_distance;
-}
-
 class Polyhedron{
     array<vec3> vertices;
     array<array<int>> faces;
@@ -494,61 +757,32 @@ class Polyhedron{
     Polyhedron(){
         this.vertices = array<vec3>();
     }
-    void mult(vec3 v){
-        for(uint i = 0; i < vertices.Length; i++){
-            vertices[i] = vec3(vertices[i][0]*v[0],vertices[i][1]*v[1],vertices[i][2]*v[2]);
-        }
-    }
-
-    void divide(vec3 v){
-        for(uint i = 0; i < vertices.Length; i++){
-            vertices[i] = vec3(vertices[i][0]/v[0],vertices[i][1]/v[1],vertices[i][2]/v[2]);
-        }
-    }
 }
 
 
 class Ellipsoid{
     vec3 center;
     vec3 size;
+    GmMat3 rotation;
+    Ellipsoid(vec3 center,vec3 size, GmMat3 rotation){
+        this.center = center;
+        this.size = size;
+        this.rotation = rotation;
+    }
     Ellipsoid(vec3 center,vec3 size){
         this.center = center;
         this.size = size;
+        this.rotation = GmMat3();
+        rotation.SetIdentity();
     }
     Ellipsoid(){
         this.center = vec3(0,0,0);
         this.size = vec3(0,0,0);
-    }
-    void mult(vec3 v){
-        center = vec3(center[0]*v[0],center[1]*v[1],center[2]*v[2]);
-        size = vec3(size[0]*v[0],size[1]*v[1],size[2]*v[2]);
-    }
-    void divide(vec3 v){
-        center = vec3(center[0]/v[0],center[1]/v[1],center[2]/v[2]);
-        size = vec3(size[0]/v[0],size[1]/v[1],size[2]/v[2]);
+        this.rotation = GmMat3();
+        rotation.SetIdentity();
     }
 }
 
-class Sphere{
-    vec3 center;
-    float radius;
-    Sphere(vec3 center,float radius){
-        this.center = center;
-        this.radius = radius;
-    }
-    Sphere(){
-        this.center = vec3(0,0,0);
-        this.radius = 0;
-    }
-    void mult(vec3 v){
-        center = vec3(center[0]*v[0],center[1]*v[1],center[2]*v[2]);
-        radius = radius*v[0];
-    }
-    void divide(vec3 v){
-        center = vec3(center[0]/v[0],center[1]/v[1],center[2]/v[2]);
-        radius = radius/v[0];
-    }
-}
 
 float pointToSegmentDistance(vec3 p, vec3 a, vec3 b, vec3&out projection) {
     vec3 ab = b - a;
@@ -575,31 +809,49 @@ bool isPointInsideFace(vec3 point, array<vec3>@ faceVertices, vec3 planeNormal) 
     return true;
 }
 
-
 float findDist(Ellipsoid ellipsoid, Polyhedron polyhedron) {
+    
     // Simplify the problem by turning the ellipsoid into a sphere
     vec3 coeff = ellipsoid.size;
-    ellipsoid.divide(coeff);
-    Sphere sphere = Sphere(ellipsoid.center, 1);
-    polyhedron.divide(coeff);
+    GmMat3 rotation = ellipsoid.rotation;
+    GmMat3 invRotation = rotation.Inverse();
 
-    // Find the closest point on the polyhedron to the sphere
+    Polyhedron transformedPolyhedron = polyhedron;
+
+    // Transform the polyhedron vertices into the ellipsoid's coordinate frame
+    for (uint i = 0; i < transformedPolyhedron.vertices.Length; ++i) {
+        vec3 v = transformedPolyhedron.vertices[i];
+        v = v - ellipsoid.center;    // Translate
+        v = invRotation * v;         // Rotate
+        v = v / coeff;               // Scale
+        transformedPolyhedron.vertices[i] = v;
+    }
+
+    // In the transformed space, the ellipsoid becomes a unit sphere at the origin
+    vec3 sphereCenter = vec3(0, 0, 0);
+    float sphereRadius = 1;
+
+    // Initialize variables to find the closest point
     vec3 closestPolyPoint = vec3(0, 0, 0);
     float minDistance = 1e9;
 
-    for (uint i = 0; i < polyhedron.faces.Length; ++i) {
-        array<int>@ faceIndices = polyhedron.faces[i];
+    // Iterate over each face of the transformed polyhedron
+    for (uint i = 0; i < transformedPolyhedron.faces.Length; ++i) {
+        array<int>@ faceIndices = transformedPolyhedron.faces[i];
         array<vec3> faceVertices;
         for (uint j = 0; j < faceIndices.Length; ++j) {
-            faceVertices.Add(polyhedron.vertices[faceIndices[j]]);
+            faceVertices.Add(transformedPolyhedron.vertices[faceIndices[j]]);
         }
 
+        // Compute the plane normal
         vec3 planeNormal = normalize(cross(faceVertices[1] - faceVertices[0], faceVertices[2] - faceVertices[0]));
-        vec3 projectedPoint = projectPointOnPlane(sphere.center, planeNormal, faceVertices[0]);
+
+        // Project the sphere center onto the plane of the face
+        vec3 projectedPoint = projectPointOnPlane(sphereCenter, planeNormal, faceVertices[0]);
 
         // Check if the projected point is inside the face
         if (isPointInsideFace(projectedPoint, faceVertices, planeNormal)) {
-            float distance = Math::Distance(projectedPoint, sphere.center);
+            float distance = Math::Distance(projectedPoint, sphereCenter);
             if (distance < minDistance) {
                 minDistance = distance;
                 closestPolyPoint = projectedPoint;
@@ -609,7 +861,7 @@ float findDist(Ellipsoid ellipsoid, Polyhedron polyhedron) {
             for (uint j = 0; j < faceVertices.Length; ++j) {
                 vec3 a = faceVertices[j];
                 vec3 b = faceVertices[(j + 1) % faceVertices.Length];
-                float distance = pointToSegmentDistance(sphere.center, a, b, projectedPoint);
+                float distance = pointToSegmentDistance(sphereCenter, a, b, projectedPoint);
                 if (distance < minDistance) {
                     minDistance = distance;
                     closestPolyPoint = projectedPoint;
@@ -619,14 +871,25 @@ float findDist(Ellipsoid ellipsoid, Polyhedron polyhedron) {
     }
 
     //Find the point closest on the sphere's surface
-    vec3 vect = closestPolyPoint-sphere.center;
-    vec3 closestCirclePoint = sphere.center + normalize(vect);
+    vec3 vect = closestPolyPoint-sphereCenter;
+    vec3 closestSpherePoint = sphereCenter + normalize(vect) * sphereRadius;
 
-    vec3 realClosestCirclePoint = closestCirclePoint*coeff;
-    vec3 realClosestPolyPoint = closestPolyPoint*coeff;
-    float realDistance = Math::Distance(realClosestPolyPoint,realClosestCirclePoint);
+    // Transform the closest points back to the original coordinate frame
+    vec3 transformedClosestPolyPoint = closestPolyPoint * coeff; // Scale
+    transformedClosestPolyPoint = rotation * transformedClosestPolyPoint; // Rotate
+    transformedClosestPolyPoint += ellipsoid.center; // Translate
+
+    vec3 transformedClosestSpherePoint = closestSpherePoint * coeff; // Scale
+    transformedClosestSpherePoint = rotation * transformedClosestSpherePoint; // Rotate
+    transformedClosestSpherePoint += ellipsoid.center; // Translate
+
+    // Calculate the real distance between the closest points
+    float realDistance = Math::Distance(transformedClosestPolyPoint, transformedClosestSpherePoint);
+
     return realDistance;
 }
+
+
 vec3 normalize(vec3 v) {
     float magnitude = v.Length();
     if (magnitude != 0) {
@@ -637,20 +900,6 @@ vec3 normalize(vec3 v) {
 
 vec3 cross(vec3 a,vec3 b){
     return vec3(a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]);
-}
-
-vec3 neg(vec3 v){
-    return v-v-v;
-}
-
-void OnSimulationBegin(SimulationManager@ simManager){
-    findFBVertices();
-    bestDist = -1;
-    bestDistTime = -1;
-    bestExageratedDist = -1;
-    checkpointCount = GetSimulationManager().PlayerInfo.CheckpointStates.Length-1;
-    targetCpCount = 0;
-    startTime = Time::get_Now();
 }
 
 void GetCarEllipsoidLocationByIndex(SimulationManager@ simManager, const GmIso4&in carLocation, uint index, GmIso4&out location) {
@@ -892,6 +1141,10 @@ class GmMat3 {
         y.z = _yz;
     }
 
+    vec3 Mult(vec3 v) {
+        return vec3(x.x * v.x + y.x * v.y + z.x * v.z, x.y * v.x + y.y * v.y + z.y * v.z, x.z * v.x + y.z * v.y + z.z * v.z);
+    }
+
     void MultTranspose(const GmMat3&in other) {
         float _xx = x.x * other.x.x + y.x * other.y.x + z.x * other.z.x;
         float _xy = x.y * other.x.x + y.y * other.y.x + z.y * other.z.x;
@@ -953,6 +1206,36 @@ class GmMat3 {
         y.x = y.x * cos_pos + x_temp.x * sin_pos;
         y.y = y.y * cos_pos + x_temp.y * sin_pos;
         y.z = y.z * cos_pos + x_temp.z * sin_pos;
+    }
+
+    float Determinant() {
+        return x.x * (y.y * z.z - y.z * z.y) - y.x * (x.y * z.z - x.z * z.y) + z.x * (x.y * y.z - x.z * y.y);
+    }
+
+    GmMat3 Inverse(){
+        GmMat3 inv;
+        float det = Determinant();
+        if (det == 0) {
+            return inv; // Return identity matrix if singular
+        }
+        inv.x.x = (y.y * z.z - y.z * z.y) / det;
+        inv.x.y = (x.z * z.y - x.y * z.z) / det;
+        inv.x.z = (x.y * y.z - x.z * y.y) / det;
+        inv.y.x = (y.z * z.x - y.x * z.z) / det;
+        inv.y.y = (x.x * z.z - x.z * z.x) / det;
+        inv.y.z = (x.z * y.x - x.x * y.z) / det;
+        inv.z.x = (y.x * z.y - y.y * z.x) / det;
+        inv.z.y = (x.y * z.x - x.x * z.y) / det;
+        inv.z.z = (x.x * y.y - x.y * y.x) / det;
+        return inv;
+    }
+
+    vec3 Transform(vec3 v) {
+        return vec3(x.x * v.x + x.y * v.y + x.z * v.z, y.x * v.x + y.y * v.y + y.z * v.z, z.x * v.x + z.y * v.y + z.z * v.z);
+    }
+
+    vec3 opMul(const vec3&in v) {
+        return Transform(v);
     }
 }
 
