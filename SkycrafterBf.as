@@ -1318,7 +1318,7 @@ Polyhedron ClipPolyhedronByAABB(const Polyhedron& in poly, const AABB& in box)
 
 
 void OnSimulationBegin(SimulationManager@ simManager) {
-    if(GetVariableString("bf_target")!=g_bruteforceDistanceTargetIdentifier && GetVariableString("controller")!="bruteforce"){
+    if(!(GetVariableString("bf_target")==g_bruteforceDistanceTargetIdentifier && GetVariableString("controller")=="bruteforce")){
         g_bfConfigIsValid = false;
         return;
     }
