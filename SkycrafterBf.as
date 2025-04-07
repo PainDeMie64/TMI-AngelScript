@@ -1691,7 +1691,7 @@ void Main()
 
     RegisterVariable(g_pluginPrefix + "_target_type", 0);
     RegisterVariable(g_pluginPrefix + "_target_cp_index", 0);
-    RegisterVariable(g_pluginPrefix + "_show_cp_numbers", true);
+    RegisterVariable(g_pluginPrefix + "_show_cp_numbers", false);
     RegisterVariable(g_pluginPrefix + "_cached_triggers", "");
     RegisterVariable(g_pluginPrefix + "_bf_time_from", 0);
     RegisterVariable(g_pluginPrefix + "_bf_time_to", 0);
