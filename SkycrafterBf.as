@@ -1595,15 +1595,6 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
     float currentTickDistance = 1e18f;
 
     if (shouldCalculateDistance) {
-        if(g_bfTargetType == 1 && playerInfo.RaceFinished){
-            g_isEarlyStop = true;
-        }
-        if (g_isEarlyStop) {
-            g_earlyStopCommandList.Content = simManager.InputEvents.ToCommandsText();
-            resp.Decision = BFEvaluationDecision::Stop;
-            g_bfPrinter.PrintTargetAchieved();
-            return resp;
-        }
         g_windowResultProcessed = false;
         GmIso4 carWorldTransform = GmIso4(simManager.Dyna.CurrentState.Location);
 
@@ -1640,6 +1631,15 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
 
     if (isDecisionTime && !g_windowResultProcessed) {
         g_windowResultProcessed = true;
+        if(g_bfTargetType == 1 && playerInfo.RaceFinished){
+            g_isEarlyStop = true;
+        }
+        if (g_isEarlyStop) {
+            g_earlyStopCommandList.Content = simManager.InputEvents.ToCommandsText();
+            resp.Decision = BFEvaluationDecision::Stop;
+            g_bfPrinter.PrintTargetAchieved();
+            return resp;
+        }
 
         float finalMinDistance = g_currentWindowMinDistance;
 
