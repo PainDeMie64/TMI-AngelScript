@@ -1599,8 +1599,15 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         GmIso4 carWorldTransform = GmIso4(simManager.Dyna.CurrentState.Location);
 
         if (g_bfTargetType == 0) {
-            const Polyhedron@ targetPoly = g_targetCpPoly;
+            const Polyhedron@ targetPoly;
             const AABB targetAABB = g_targetCpAABB;
+            int constraintTriggerIndex = int(GetVariableDouble(g_pluginPrefix + "_constraint_trigger_index"));
+            bool constraintIsActive = (constraintTriggerIndex > 0);
+            if (constraintIsActive) {
+                @targetPoly = g_clippedtargetCpPoly;
+            } else {
+                @targetPoly = g_targetCpPoly;
+            }
 
             bool needsAccurateDistance = targetAABB.Contains(carWorldTransform.m_Position.ToVec3(), 15);
             if (needsAccurateDistance) {
