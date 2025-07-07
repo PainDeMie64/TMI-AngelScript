@@ -94,7 +94,7 @@ void OnRunStep(SimulationManager@ simManager){
                 CommandList bestList;
                 bestList.Content = simManager.InputEvents.ToCommandsText();
                 bestList.Process(CommandListProcessOption::OnlyParse);
-                bestList.Save("tmp.txt");
+                bestList.Save(GetVariableString("bf_result_filename"));
 
                 if(bestSpeed >= targetSpeedKmh) {
                     mainPhase = Phase::SimEnd;
