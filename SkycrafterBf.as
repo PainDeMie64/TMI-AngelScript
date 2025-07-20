@@ -1,590 +1,3 @@
-class GmVec3 {
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-    GmVec3() {}
-    GmVec3(float num) {
-        this.x = num;
-        this.y = num;
-        this.z = num;
-    }
-    GmVec3(float x, float y, float z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-    GmVec3(const GmVec3&in other) {
-        this.x = other.x;
-        this.y = other.y;
-        this.z = other.z;
-    }
-    GmVec3(const vec3&in other) {
-        this.x = other.x;
-        this.y = other.y;
-        this.z = other.z;
-    }
-    vec3 ToVec3() const {
-        return vec3(x, y, z);
-    }
-    void Mult(const GmMat3&in M) {
-        float _x = x * M.x.x + y * M.x.y + z * M.x.z;
-        float _y = x * M.y.x + y * M.y.y + z * M.y.z;
-        float _z = x * M.z.x + y * M.z.y + z * M.z.z;
-        x = _x;
-        y = _y;
-        z = _z;
-    }
-    void Mult(const GmIso4&in T) {
-        Mult(T.m_Rotation);
-        x += T.m_Position.x;
-        y += T.m_Position.y;
-        z += T.m_Position.z;
-    }
-    void MultTranspose(const GmMat3&in M) {
-        float _x = x * M.x.x + y * M.y.x + z * M.z.x;
-        float _y = x * M.x.y + y * M.y.y + z * M.z.y;
-        float _z = x * M.x.z + y * M.y.z + z * M.z.z;
-        x = _x;
-        y = _y;
-        z = _z;
-    }
-    float LengthSquared() const {
-        return x*x + y*y + z*z;
-    }
-    float Length() const {
-        return Math::Sqrt(LengthSquared());
-    }
-    void Normalize() {
-        float len = Length();
-        if (len > 1e-6f) {
-            x /= len;
-            y /= len;
-            z /= len;
-        }
-    }
-    GmVec3 Normalized() const {
-        GmVec3 result = this;
-        result.Normalize();
-        return result;
-    }
-    GmVec3 opAdd(const GmVec3&in other) const {
-        return GmVec3(x + other.x, y + other.y, z + other.z);
-    }
-    GmVec3 opSub(const GmVec3&in other) const {
-        return GmVec3(x - other.x, y - other.y, z - other.z);
-    }
-    GmVec3 opMul(float scalar) const {
-        return GmVec3(x * scalar, y * scalar, z * scalar);
-    }
-    GmVec3 opDiv(float scalar) const {
-        return GmVec3(x / scalar, y / scalar, z / scalar);
-    }
-    GmVec3 opNeg() const {
-        return GmVec3(-x, -y, -z);
-    }
-    void opAddAssign(const GmVec3&in other) {
-        x += other.x; y += other.y; z += other.z;
-    }
-    void opSubAssign(const GmVec3&in other) {
-        x -= other.x; y -= other.y; z -= other.z;
-    }
-    void opMulAssign(float scalar) {
-        x *= scalar; y *= scalar; z *= scalar;
-    }
-    void opDivAssign(float scalar) {
-        x /= scalar; y /= scalar; z /= scalar;
-    }
-    GmVec3 opMul_Elementwise(const GmVec3&in other) const {
-        return GmVec3(x * other.x, y * other.y, z * other.z);
-    }
-    GmVec3 opDiv_Elementwise(const GmVec3&in other) const {
-        return GmVec3(x / other.x, y / other.y, z / other.z);
-    }
-}
-GmVec3 Cross(const GmVec3&in a, const GmVec3&in b) {
-    return GmVec3(
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    );
-}
-class GmMat3 {
-    GmVec3 x;
-    GmVec3 y;
-    GmVec3 z;
-    GmMat3() { SetIdentity(); }
-    GmMat3(const GmMat3&in other) {
-        this.x = other.x;
-        this.y = other.y;
-        this.z = other.z;
-    }
-    GmMat3(const GmVec3&in x, const GmVec3&in y, const GmVec3&in z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-    GmMat3(const mat3&in other) {
-        this.x.x = other.x.x;
-        this.x.y = other.y.x;
-        this.x.z = other.z.x;
-        this.y.x = other.x.y;
-        this.y.y = other.y.y;
-        this.y.z = other.z.y;
-        this.z.x = other.x.z;
-        this.z.y = other.y.z;
-        this.z.z = other.z.z;
-    }
-    mat3 ToMat3() const {
-        mat3 m;
-        m.x.x = this.x.x; m.x.y = this.y.x; m.x.z = this.z.x;
-        m.y.x = this.x.y; m.y.y = this.y.y; m.y.z = this.z.y;
-        m.z.x = this.x.z; m.z.y = this.y.z; m.z.z = this.z.z;
-        return m;
-    }
-    void SetIdentity() {
-        x = GmVec3(1.0f, 0.0f, 0.0f);
-        y = GmVec3(0.0f, 1.0f, 0.0f);
-        z = GmVec3(0.0f, 0.0f, 1.0f);
-    }
-    void Mult(const GmMat3&in other) {
-        GmMat3 result;
-        result.x.x = x.x * other.x.x + y.x * other.x.y + z.x * other.x.z;
-        result.x.y = x.y * other.x.x + y.y * other.x.y + z.y * other.x.z;
-        result.x.z = x.z * other.x.x + y.z * other.x.y + z.z * other.x.z;
-        result.y.x = x.x * other.y.x + y.x * other.y.y + z.x * other.y.z;
-        result.y.y = x.y * other.y.x + y.y * other.y.y + z.y * other.y.z;
-        result.y.z = x.z * other.y.x + y.z * other.y.y + z.z * other.y.z;
-        result.z.x = x.x * other.z.x + y.x * other.z.y + z.x * other.z.z;
-        result.z.y = x.y * other.z.x + y.y * other.z.y + z.y * other.z.z;
-        result.z.z = x.z * other.z.x + y.z * other.z.y + z.z * other.z.z;
-        this = result;
-    }
-    GmMat3 opMul(const GmMat3&in other) const {
-        GmMat3 result = this;
-        result.Mult(other);
-        return result;
-    }
-    GmVec3 Transform(const GmVec3&in v) const {
-        return GmVec3(
-            x.x * v.x + y.x * v.y + z.x * v.z,
-            x.y * v.x + y.y * v.y + z.y * v.z,
-            x.z * v.x + y.z * v.y + z.z * v.z
-        );
-    }
-    GmVec3 opMul(const GmVec3&in v) const {
-        return Transform(v);
-    }
-     GmVec3 TransformTranspose(const GmVec3&in v) const {
-        return GmVec3(
-            x.x * v.x + x.y * v.y + x.z * v.z,
-            y.x * v.x + y.y * v.y + y.z * v.z,
-            z.x * v.x + z.y * v.y + z.z * v.z
-        );
-    }
-    void RotateX(float rad) {
-        float s = Math::Sin(rad);
-        float c = Math::Cos(rad);
-        GmMat3 rotMat(
-            GmVec3(1, 0, 0),
-            GmVec3(0, c, s),
-            GmVec3(0,-s, c)
-        );
-        Mult(rotMat);
-    }
-    void RotateY(float rad) {
-        float s = Math::Sin(rad);
-        float c = Math::Cos(rad);
-         GmMat3 rotMat(
-            GmVec3(c, 0,-s),
-            GmVec3(0, 1, 0),
-            GmVec3(s, 0, c)
-        );
-        Mult(rotMat);
-    }
-    void RotateZ(float rad) {
-        float s = Math::Sin(rad);
-        float c = Math::Cos(rad);
-         GmMat3 rotMat(
-            GmVec3(c, s, 0),
-            GmVec3(-s,c, 0),
-            GmVec3(0, 0, 1)
-        );
-        Mult(rotMat);
-    }
-    float Determinant() const {
-        return x.x * (y.y * z.z - y.z * z.y)
-             - y.x * (x.y * z.z - x.z * z.y)
-             + z.x * (x.y * y.z - x.z * y.y);
-    }
-    GmMat3 Inverse() const {
-        GmMat3 inv;
-        float det = Determinant();
-        if (Math::Abs(det) < 1e-6f) {
-            print("Warning: GmMat3::Inverse() called on singular matrix. Returning identity.", Severity::Warning);
-            return inv;
-        }
-        float invDet = 1.0f / det;
-        inv.x.x = (y.y * z.z - y.z * z.y) * invDet;
-        inv.y.x = (y.z * z.x - y.x * z.z) * invDet;
-        inv.z.x = (y.x * z.y - y.y * z.x) * invDet;
-        inv.x.y = (x.z * z.y - x.y * z.z) * invDet;
-        inv.y.y = (x.x * z.z - x.z * z.x) * invDet;
-        inv.z.y = (x.y * z.x - x.x * z.y) * invDet;
-        inv.x.z = (x.y * y.z - x.z * y.y) * invDet;
-        inv.y.z = (x.z * y.x - x.x * y.z) * invDet;
-        inv.z.z = (x.x * y.y - x.y * y.x) * invDet;
-        return inv;
-    }
-    GmMat3 Transposed() const {
-        GmMat3 result;
-        result.x.x = x.x; result.y.x = x.y; result.z.x = x.z;
-        result.x.y = y.x; result.y.y = y.y; result.z.y = y.z;
-        result.x.z = z.x; result.y.z = z.y; result.z.z = z.z;
-        return result;
-    }
-}
-class GmIso4 {
-    GmMat3 m_Rotation;
-    GmVec3 m_Position;
-    GmIso4() {}
-    GmIso4(const GmIso4&in other) {
-        this.m_Rotation = other.m_Rotation;
-        this.m_Position = other.m_Position;
-    }
-    GmIso4(const GmMat3&in rotation, const GmVec3&in position) {
-        this.m_Rotation = rotation;
-        this.m_Position = position;
-    }
-    GmIso4(const iso4&in other) {
-        this.m_Rotation = GmMat3(other.Rotation);
-        this.m_Position = GmVec3(other.Position);
-    }
-    iso4 ToIso4() const {
-        iso4 result;
-        result.Rotation = m_Rotation.ToMat3();
-        result.Position = m_Position.ToVec3();
-        return result;
-    }
-    void Mult(const GmIso4&in other) {
-        m_Position = m_Rotation.Transform(other.m_Position) + m_Position;
-        m_Rotation.Mult(other.m_Rotation);
-    }
-    GmIso4 opMul(const GmIso4&in other) const {
-        GmIso4 result = this;
-        result.Mult(other);
-        return result;
-    }
-    GmVec3 Transform(const GmVec3&in p) const {
-        return m_Rotation.Transform(p) + m_Position;
-    }
-    GmVec3 opMul(const GmVec3&in p) const {
-        return Transform(p);
-    }
-    GmVec3 TransformDirection(const GmVec3&in d) const {
-        return m_Rotation.Transform(d);
-    }
-    GmIso4 Inverse() const {
-        GmMat3 invRot = m_Rotation.Inverse();
-        GmVec3 invPos = invRot.Transform(-m_Position);
-        return GmIso4(invRot, invPos);
-    }
-}
-class AABB {
-    vec3 min = vec3(1e9, 1e9, 1e9);
-    vec3 max = vec3(-1e9, -1e9, -1e9);
-    AABB() {}
-    AABB(const vec3&in min, const vec3&in max) {
-        this.min = min;
-        this.max = max;
-    }
-    void Add(const vec3&in p) {
-        min.x = Math::Min(min.x, p.x);
-        min.y = Math::Min(min.y, p.y);
-        min.z = Math::Min(min.z, p.z);
-        max.x = Math::Max(max.x, p.x);
-        max.y = Math::Max(max.y, p.y);
-        max.z = Math::Max(max.z, p.z);
-    }
-    void Add(const AABB&in other) {
-        Add(other.min);
-        Add(other.max);
-    }
-    vec3 Center() const {
-        return (min + max) * 0.5f;
-    }
-    vec3 Size() const {
-        return max - min;
-    }
-    bool Contains(const vec3&in p, float margin = 1e-6f) const {
-        return (p.x >= min.x - margin && p.x <= max.x + margin &&
-                p.y >= min.y - margin && p.y <= max.y + margin &&
-                p.z >= min.z - margin && p.z <= max.z + margin);
-    }
-    float DistanceToPoint(const vec3&in p) const {
-        float dx = Math::Max(min.x - p.x, 0.0f) + Math::Max(p.x - max.x, 0.0f);
-        float dy = Math::Max(min.y - p.y, 0.0f) + Math::Max(p.y - max.y, 0.0f);
-        float dz = Math::Max(min.z - p.z, 0.0f) + Math::Max(p.z - max.z, 0.0f);
-        return Math::Sqrt(dx*dx + dy*dy + dz*dz);
-    }
-    AABB Intersect(const AABB& other) const {
-        vec3 intersectMin = vec3(
-            Math::Max(min.x, other.min.x),
-            Math::Max(min.y, other.min.y),
-            Math::Max(min.z, other.min.z)
-        );
-        vec3 intersectMax = vec3(
-            Math::Min(max.x, other.max.x),
-            Math::Min(max.y, other.max.y),
-            Math::Min(max.z, other.max.z)
-        );
-        return AABB(intersectMin, intersectMax);
-    }
-    bool IsValid() const {
-        return min.x <= max.x && min.y <= max.y && min.z <= max.z;
-    }
-    bool intersectsSegment(const vec3&in p0, const vec3&in p1) const {
-        vec3 d = p1 - p0;
-        float tmin = 0.0f;
-        float tmax = 1.0f;
-        for (int i = 0; i < 3; ++i) {
-            if (Math::Abs(d[i]) < 1e-6f) {
-                if (p0[i] < min[i] || p0[i] > max[i]) return false;
-            } else {
-                float ood = 1.0f / d[i];
-                float t1 = (min[i] - p0[i]) * ood;
-                float t2 = (max[i] - p0[i]) * ood;
-                if (t1 > t2) {
-                    float temp = t1;
-                    t1 = t2;
-                    t2 = temp;
-                }
-                tmin = Math::Max(tmin, t1);
-                tmax = Math::Min(tmax, t2);
-                if (tmin > tmax) return false;
-            }
-        }
-        return true;
-    }
-    bool testAxis(const vec3&in v0, const vec3&in v1, const vec3&in v2, const vec3&in edge, const vec3&in boxHalf, const int axis) {
-        float p, minTri, maxTri, rad;
-        if (axis == 0) {
-            p = v0.z * edge.y - v0.y * edge.z;
-            minTri = p; maxTri = p;
-            p = v1.z * edge.y - v1.y * edge.z;
-            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
-            p = v2.z * edge.y - v2.y * edge.z;
-            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
-            rad = Math::Abs(edge.y) * boxHalf.z + Math::Abs(edge.z) * boxHalf.y;
-        } else if (axis == 1) {
-            p = v0.x * edge.z - v0.z * edge.x;
-            minTri = p; maxTri = p;
-            p = v1.x * edge.z - v1.z * edge.x;
-            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
-            p = v2.x * edge.z - v2.z * edge.x;
-            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
-            rad = Math::Abs(edge.x) * boxHalf.z + Math::Abs(edge.z) * boxHalf.x;
-        } else {
-            p = v0.y * edge.x - v0.x * edge.y;
-            minTri = p; maxTri = p;
-            p = v1.y * edge.x - v1.x * edge.y;
-            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
-            p = v2.y * edge.x - v2.x * edge.y;
-            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
-            rad = Math::Abs(edge.x) * boxHalf.y + Math::Abs(edge.y) * boxHalf.x;
-        }
-        return !(minTri > rad || maxTri < -rad);
-    }
-    bool intersectsTriangle(const vec3&in p0, const vec3&in p1, const vec3&in p2) const {
-
-        vec3 boxCenter = (min + max) * 0.5f;
-        vec3 boxHalf = (max - min) * 0.5f;
-
-        vec3 v0 = p0 - boxCenter;
-        vec3 v1 = p1 - boxCenter;
-        vec3 v2 = p2 - boxCenter;
-
-        vec3 e0 = v1 - v0;
-        vec3 e1 = v2 - v1;
-        vec3 e2 = v0 - v2;
-
-        if (!testAxis(v0, v1, v2, e0, boxHalf, 0)) return false;
-        if (!testAxis(v0, v1, v2, e0, boxHalf, 1)) return false;
-        if (!testAxis(v0, v1, v2, e0, boxHalf, 2)) return false;
-        if (!testAxis(v0, v1, v2, e1, boxHalf, 0)) return false;
-        if (!testAxis(v0, v1, v2, e1, boxHalf, 1)) return false;
-        if (!testAxis(v0, v1, v2, e1, boxHalf, 2)) return false;
-        if (!testAxis(v0, v1, v2, e2, boxHalf, 0)) return false;
-        if (!testAxis(v0, v1, v2, e2, boxHalf, 1)) return false;
-        if (!testAxis(v0, v1, v2, e2, boxHalf, 2)) return false;
-
-        for (int i = 0; i < 3; i++) {
-            float triMin = Math::Min(v0[i], Math::Min(v1[i], v2[i]));
-            float triMax = Math::Max(v0[i], Math::Max(v1[i], v2[i]));
-            if (triMin > boxHalf[i] || triMax < -boxHalf[i])
-                return false;
-        }
-
-        vec3 normal = Cross(e0, e1);
-
-        float rad = boxHalf.x * Math::Abs(normal.x) + boxHalf.y * Math::Abs(normal.y) + boxHalf.z * Math::Abs(normal.z);
-
-        float triProj0 = Math::Dot(normal, v0);
-        float triProj1 = Math::Dot(normal, v1);
-        float triProj2 = Math::Dot(normal, v2);
-        float triMin = Math::Min(triProj0, Math::Min(triProj1, triProj2));
-        float triMax = Math::Max(triProj0, Math::Max(triProj1, triProj2));
-        if (triMin > rad || triMax < -rad)
-            return false;
-
-        return true;
-    }
-}
-class Edge {
-    int v0;
-    int v1;
-    Edge() {
-        v0 = -1;
-        v1 = -1;
-    }
-    Edge(int i0 = -1, int i1 = -1) {
-
-
-        if (i0 < i1) {
-            v0 = i0;
-            v1 = i1;
-        } else {
-            v0 = i1;
-            v1 = i0;
-        }
-    }
-    bool opEquals(const Edge&in other) const {
-        return v0 == other.v0 && v1 == other.v1;
-    }
-    bool opLess(const Edge&in other) const {
-        if (v0 < other.v0) return true;
-        if (v0 > other.v0) return false;
-        return v1 < other.v1;
-    }
-}
-class Polyhedron {
-    array<vec3> vertices;
-    array<array<int>> faces;
-    array<Edge> uniqueEdges;
-    Polyhedron() {}
-    Polyhedron(const array<vec3>&in vertices, const array<array<int>>&in faces) {
-        this.vertices = vertices;
-        this.faces = faces;
-        if (vertices.IsEmpty() || faces.IsEmpty()) return;
-        uint numFaces = faces.Length;
-        array<Edge> allEdgesTemp;
-        for (uint i = 0; i < numFaces; ++i) {
-            const array<int>@ faceIndices = faces[i];
-            uint faceVertCount = faceIndices.Length;
-            if (faceVertCount < 2) continue;
-            for(uint v_idx = 0; v_idx < faceVertCount; ++v_idx) {
-                int i0 = faceIndices[v_idx];
-                int i1 = faceIndices[(v_idx + 1) % faceVertCount];
-
-                if (i0 < 0 || i0 >= int(vertices.Length) || i1 < 0 || i1 >= int(vertices.Length)) {
-                     print("Error: Invalid vertex index in face " + i + " while extracting edges.", Severity::Error);
-
-                     continue;
-                }
-
-                allEdgesTemp.Add(Edge(i0, i1));
-            }
-        }
-
-        if (!allEdgesTemp.IsEmpty()) {
-            allEdgesTemp.SortAsc();
-            uniqueEdges.Add(allEdgesTemp[0]);
-            for (uint i = 1; i < allEdgesTemp.Length; ++i) {
-
-                if (! (allEdgesTemp[i] == uniqueEdges[uniqueEdges.Length - 1])) {
-                     uniqueEdges.Add(allEdgesTemp[i]);
-                }
-            }
-        }
-
-    }
-    bool GetFaceVertices(uint faceIndex, array<vec3>&out faceVerts) const {
-        if (faceIndex >= faces.Length) return false;
-        const array<int>@ indices = faces[faceIndex];
-        faceVerts.Resize(indices.Length);
-        for(uint i = 0; i < indices.Length; ++i) {
-            int vertexIndex = indices[i];
-            if (vertexIndex < 0 || vertexIndex >= int(vertices.Length)) return false;
-            faceVerts[i] = vertices[vertexIndex];
-        }
-        return true;
-    }
-}
-class Ellipsoid {
-    GmVec3 center;
-    GmVec3 radii;
-    GmMat3 rotation;
-    Ellipsoid() {
-        center = GmVec3(0,0,0);
-        radii = GmVec3(1,1,1);
-    }
-    Ellipsoid(const GmVec3&in center, const GmVec3&in radii, const GmMat3&in rotation) {
-        this.center = center;
-        this.radii = radii;
-        this.rotation = rotation;
-    }
-     Ellipsoid(const vec3&in center, const vec3&in radii, const mat3&in rotation) {
-        this.center = GmVec3(center);
-        this.radii = GmVec3(radii);
-        this.rotation = GmMat3(rotation);
-    }
-}
-vec3 Normalize(vec3 v) {
-    float magnitude = v.Length();
-    if (magnitude > 1e-6f) {
-        return v / magnitude;
-    }
-    return vec3(0,0,0);
-}
-vec3 Cross(vec3 a, vec3 b) {
-    return vec3(a.y * b.z - a.z * b.y,
-                a.z * b.x - a.x * b.z,
-                a.x * b.y - a.y * b.x);
-}
-GmIso4 GetCarEllipsoidLocationByIndex(SimulationManager@ simM, const GmIso4&in carLocation, uint index) {
-    if (index >= 8) {
-        print("Error: Invalid ellipsoid index requested: " + index + ". Must be 0-7.", Severity::Error);
-        return GmIso4();
-    }
-     if (index >= 4 && g_carEllipsoids.Length <= index) {
-         print("Error: g_carEllipsoids array not initialized correctly for index " + index, Severity::Error);
-         return GmIso4();
-    }
-    auto simManager = GetSimulationManager();
-    GmIso4 worldTransform;
-    if (index <= 3) {
-        GmVec3 wheelSurfaceLocalPos;
-        switch(index) {
-            case 0: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontLeft.SurfaceHandler.Location.Position); break;
-            case 1: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontRight.SurfaceHandler.Location.Position); break;
-            case 2: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackLeft.SurfaceHandler.Location.Position); break;
-            case 3: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackRight.SurfaceHandler.Location.Position); break;
-            default:
-                 print("Error: Unexpected index in wheel section: " + index, Severity::Error);
-                 return GmIso4();
-        }
-        worldTransform.m_Rotation = carLocation.m_Rotation;
-        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(wheelSurfaceLocalPos);
-        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
-    }
-    else {
-        const GmVec3@ localPositionOffset = g_carEllipsoids[index].center;
-        const GmMat3@ localRotation = g_carEllipsoids[index].rotation;
-        worldTransform.m_Rotation = carLocation.m_Rotation * localRotation;
-        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(localPositionOffset);
-        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
-    }
-    return worldTransform;
-}
 Polyhedron g_finishPoly;
 Polyhedron g_roadCheckpointPoly;
 Polyhedron g_roadCheckpointUpPoly;
@@ -686,41 +99,6 @@ void InitializeTriggerData() {
 
 }
 array<Ellipsoid> g_carEllipsoids;
-void InitializeCarEllipsoids() {
-    g_carEllipsoids.Clear();
-    const array<GmVec3> radii = {
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.439118f, 0.362f, 1.901528f),
-        GmVec3(0.968297f, 0.362741f, 1.682276f),
-        GmVec3(1.020922f, 0.515218f, 1.038007f),
-        GmVec3(0.384841f, 0.905323f, 0.283418f)
-    };
-    const array<GmVec3> localPositions = {
-        GmVec3(0.863012f, 0.3525f, 1.782089f),
-        GmVec3(-0.863012f, 0.3525f, 1.782089f),
-        GmVec3(0.885002f, 0.352504f, -1.205502f),
-        GmVec3(-0.885002f, 0.352504f, -1.205502f),
-        GmVec3(0.0f, 0.471253f, 0.219106f),
-        GmVec3(0.0f, 0.448782f, -0.20792f),
-        GmVec3(0.0f, 0.652812f, -0.89763f),
-        GmVec3(-0.015532f, 0.363252f, 1.75357f)
-    };
-    array<GmMat3> localRotations;
-    localRotations.Resize(8);
-    localRotations[4].RotateX(Math::ToRad(3.4160502f));
-    localRotations[5].RotateX(Math::ToRad(2.6202483f));
-    localRotations[6].RotateX(Math::ToRad(2.6874702f));
-    localRotations[7].RotateY(Math::ToRad(90.0f));
-    localRotations[7].RotateX(Math::ToRad(90.0f));
-    localRotations[7].RotateZ(Math::ToRad(-180.0f));
-    for (uint i = 0; i < 8; ++i) {
-        g_carEllipsoids.Add(Ellipsoid(localPositions[i], radii[i], localRotations[i]));
-    }
-
-}
 array<Polyhedron@> g_worldCheckpointPolys;
 array<AABB> g_worldCheckpointAABBs;
 array<string> g_worldCheckpointNames;
@@ -995,21 +373,10 @@ Polyhedron TransformPolyhedronToWorld(const Polyhedron&in basePoly, const TM::Ga
     }
     return worldPoly;
 }
-int count = 0;
-uint64 totalTime = 0;
-uint64 expensiveCallTime = 0;
 
 float g_currentWindowMinDistance = 1e18f;
 bool g_windowResultProcessed = false;
 int g_lastProcessedRaceTime = -1;
-int g_evaluateCallCount = 0;
-uint64 g_totalDuration_FullEval = 0;
-uint64 g_totalDuration_CacheCheck = 0;
-uint64 g_totalDuration_AABBContains = 0;
-uint64 g_totalDuration_AABBDist = 0;
-uint64 g_totalDuration_MinCarDist = 0;
-int g_timingSamples = 0;
-const int TIMING_PRINT_INTERVAL = 5000;
 int bfTimeFrom = 0;
 int bfTimeTo = 0;
 AABB triggerIdToAABB(int id) {
@@ -1026,156 +393,6 @@ AABB triggerIdToAABB(int id) {
     Trigger3D trigger = GetTriggerByIndex(index);
     return AABB(trigger.Position, trigger.Position + trigger.Size);;
 }
-float CalculateMinCarDistanceToPoly(const GmIso4&in carWorldTransform, const Polyhedron@ targetPoly, const AABB&in targetAABB) {
-    if (targetPoly is null || targetPoly.vertices.IsEmpty()) {
-        print("Warning: CalculateMinCarDistanceToPoly called with null or empty target polyhedron.", Severity::Warning);
-        return 1e18f;
-    }
-    count++;
-    uint64 startTime = Time::get_Now();
-    float minDistanceToTarget = 1e18f;
-    for (uint ellipsoidIndex = 0; ellipsoidIndex < g_carEllipsoids.Length ; ++ellipsoidIndex) {
-        const Ellipsoid@ baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
-        GmIso4 ellipsoidWorldTransform = GetCarEllipsoidLocationByIndex(null, carWorldTransform, ellipsoidIndex);
-        Ellipsoid worldEllipsoid(ellipsoidWorldTransform.m_Position, baseEllipsoid.radii, ellipsoidWorldTransform.m_Rotation);
-        float biggestRadius = Math::Max(worldEllipsoid.radii.x, Math::Max(worldEllipsoid.radii.y, worldEllipsoid.radii.z));
-        float distCenterToAABB = targetAABB.DistanceToPoint(worldEllipsoid.center.ToVec3());
-        float lowerBoundDistance = Math::Max(0.0f, distCenterToAABB - biggestRadius);
-        if (lowerBoundDistance < minDistanceToTarget) {
-            uint64 startTimeExpensive = Time::get_Now();
-            float actualDist = CalculateDistanceEllipsoidPolyhedron(worldEllipsoid, targetPoly);
-            minDistanceToTarget = Math::Min(minDistanceToTarget, actualDist);
-            uint64 endTimeExpensive = Time::get_Now();
-            expensiveCallTime += endTimeExpensive - startTimeExpensive;
-        }
-    }
-    return minDistanceToTarget;
-}
-float CalculateDistanceEllipsoidPolyhedron(const Ellipsoid&in ellipsoid, const Polyhedron&in polyhedron) {
-    if (polyhedron.vertices.IsEmpty()) {
-        print("Warning: CalculateDistanceEllipsoidPolyhedron called with empty polyhedron vertices.", Severity::Warning);
-        return 1e18f;
-    }
-    GmMat3 invRotation = ellipsoid.rotation.Inverse();
-    GmVec3 invRadii;
-    invRadii.x = (Math::Abs(ellipsoid.radii.x) > 1e-9f) ? 1.0f / ellipsoid.radii.x : 0.0f;
-    invRadii.y = (Math::Abs(ellipsoid.radii.y) > 1e-9f) ? 1.0f / ellipsoid.radii.y : 0.0f;
-    invRadii.z = (Math::Abs(ellipsoid.radii.z) > 1e-9f) ? 1.0f / ellipsoid.radii.z : 0.0f;
-    array<vec3> transformedVertices(polyhedron.vertices.Length);
-    for (uint i = 0; i < polyhedron.vertices.Length; ++i) {
-        GmVec3 v = GmVec3(polyhedron.vertices[i]);
-        v = v - ellipsoid.center;
-        v = invRotation.Transform(v);
-        v = v.opMul_Elementwise(invRadii);
-        transformedVertices[i] = v.ToVec3();
-    }
-    vec3 sphereCenter = vec3(0, 0, 0);
-    vec3 closestPolyPointTransformed = transformedVertices[0];
-    float minDistanceSqTransformed = DistanceSq(closestPolyPointTransformed, sphereCenter);
-    bool foundPoint = true;
-    vec3 projectedPoint, closestPointOnEdge;
-    float distSq, edgeDistSq;
-    for (uint i = 0; i < polyhedron.faces.Length; ++i) {
-        const array<int>@ faceIndices = polyhedron.faces[i];
-
-        if (faceIndices.Length != 3) continue;
-
-        int i0 = faceIndices[0]; int i1 = faceIndices[1]; int i2 = faceIndices[2];
-        if (i0 < 0 || i0 >= int(transformedVertices.Length) ||
-            i1 < 0 || i1 >= int(transformedVertices.Length) ||
-            i2 < 0 || i2 >= int(transformedVertices.Length))
-        {
-            continue;
-        }
-        const vec3 v0 = transformedVertices[i0];
-        const vec3 v1 = transformedVertices[i1];
-        const vec3 v2 = transformedVertices[i2];
-
-        vec3 edge10 = v1 - v0;
-        vec3 edge20 = v2 - v0;
-
-        vec3 crossProd = Cross(edge10, edge20);
-        if(crossProd.LengthSquared() < 1e-12f) {
-
-            continue;
-        }
-        vec3 planeNormal = Normalize(crossProd);
-
-        projectedPoint = ProjectPointOnPlane(sphereCenter, planeNormal, v0);
-
-        if (IsPointInsideTriangle(projectedPoint, v0, v1, v2, planeNormal)) {
-            distSq = DistanceSq(projectedPoint, sphereCenter);
-            if (distSq < minDistanceSqTransformed) {
-                minDistanceSqTransformed = distSq;
-                closestPolyPointTransformed = projectedPoint;
-                foundPoint = true;
-            }
-        }
-
-    }
-    for (uint j = 0; j < polyhedron.uniqueEdges.Length; ++j) {
-        const Edge@ edge = polyhedron.uniqueEdges[j];
-
-        int i0 = edge.v0; int i1 = edge.v1;
-         if (i0 < 0 || i0 >= int(transformedVertices.Length) ||
-             i1 < 0 || i1 >= int(transformedVertices.Length))
-         {
-
-             continue;
-         }
-        const vec3 ta = transformedVertices[i0];
-        const vec3 tb = transformedVertices[i1];
-
-        edgeDistSq = PointToSegmentDistanceSq(sphereCenter, ta, tb, closestPointOnEdge);
-        if (edgeDistSq < minDistanceSqTransformed) {
-            minDistanceSqTransformed = edgeDistSq;
-            closestPolyPointTransformed = closestPointOnEdge;
-            foundPoint = true;
-        }
-    }
-    if (!foundPoint) {
-         print("Error: Could not find any valid closest point on polyhedron features.", Severity::Error);
-         return 1e18f;
-    }
-    GmVec3 closestPolyPointWorld = GmVec3(closestPolyPointTransformed);
-    closestPolyPointWorld = closestPolyPointWorld.opMul_Elementwise(ellipsoid.radii);
-    closestPolyPointWorld = ellipsoid.rotation.Transform(closestPolyPointWorld);
-    closestPolyPointWorld = closestPolyPointWorld + ellipsoid.center;
-    GmVec3 centerToPolyWorld = closestPolyPointWorld - ellipsoid.center;
-    GmVec3 centerToPolyLocal = invRotation.Transform(centerToPolyWorld);
-    GmVec3 d_prime = centerToPolyLocal.opMul_Elementwise(invRadii);
-    float d_prime_len_sq = d_prime.LengthSquared();
-    if (d_prime_len_sq < 1e-12f) {
-
-
-
-         if (minDistanceSqTransformed < (1.0f - 1e-6f)) {
-             return 0.0f;
-         }
-
-
-
-
-
-         print("Warning: Closest polyhedron point maps near ellipsoid center. Calculating distance to arbitrary surface point.", Severity::Warning);
-         GmVec3 arbitrarySurfaceDirLocal = GmVec3(1,0,0);
-         GmVec3 closestEllipsoidPointLocal = arbitrarySurfaceDirLocal.Normalized().opMul_Elementwise(ellipsoid.radii);
-         GmVec3 closestEllipsoidPointWorld = ellipsoid.rotation.Transform(closestEllipsoidPointLocal) + ellipsoid.center;
-
-         return Math::Distance(closestPolyPointWorld.ToVec3(), closestEllipsoidPointWorld.ToVec3());
-    }
-    float d_prime_len = Math::Sqrt(d_prime_len_sq);
-    GmVec3 surfaceNormalUnitSphere = d_prime / d_prime_len;
-    GmVec3 closestEllipsoidPointLocal = surfaceNormalUnitSphere.opMul_Elementwise(ellipsoid.radii);
-    GmVec3 closestEllipsoidPointWorld = ellipsoid.rotation.Transform(closestEllipsoidPointLocal) + ellipsoid.center;
-    float finalDistance = Math::Distance(closestPolyPointWorld.ToVec3(), closestEllipsoidPointWorld.ToVec3());
-    if (minDistanceSqTransformed < (1.0f - 1e-6f)) {
-        return 0.0f;
-    } else {
-
-        return finalDistance;
-    }
-}
 Polyhedron g_targetCpPoly;
 AABB g_targetCpAABB;
 bool g_bfConfigIsValid = false;
@@ -1185,137 +402,6 @@ Polyhedron g_clippedtargetCpPoly;
 AABB@ g_clippedtargetCpAABB;
 array<Polyhedron@> g_worldClippedFinishPolys;
 array<AABB> g_worldClippedFinishAABBs;
-
-
-const float EPSILON = 1e-6f;
-
-
-bool isApproximatelyEqual(const vec3& in a, const vec3& in b, float tol = EPSILON) {
-    return Math::Abs(a.x - b.x) < tol &&
-           Math::Abs(a.y - b.y) < tol &&
-           Math::Abs(a.z - b.z) < tol;
-}
-
-Polyhedron ClipPolyhedronByPlane(const Polyhedron& in poly, const vec3& in clipPlaneNormal, const vec3& in clipPlanePoint)
-{
-    if (poly.vertices.IsEmpty()) return poly;
-
-    array<vec3> newVertices;
-    array<array<int>> newFaces;
-    dictionary vertexMap;
-
-
-    array<float> vertexDists(poly.vertices.Length);
-    for (uint i = 0; i < poly.vertices.Length; i++) {
-        vertexDists[i] = Math::Dot(poly.vertices[i] - clipPlanePoint, clipPlaneNormal);
-    }
-
-
-    for (uint faceIdx = 0; faceIdx < poly.faces.Length; faceIdx++) {
-        const array<int>@ face = poly.faces[faceIdx];
-        if (face.Length < 3) continue;
-
-        array<int> insideVertices;
-        array<vec3> intersectionPoints;
-
-
-        for (uint i = 0; i < face.Length; i++) {
-            int currIdx = face[i];
-            int nextIdx = face[(i + 1) % face.Length];
-
-            float currDist = vertexDists[currIdx];
-            float nextDist = vertexDists[nextIdx];
-
-
-            if (currDist <= EPSILON) {
-
-                string key = "" + currIdx;
-                int newIdx;
-                if (!vertexMap.Get(key, newIdx)) {
-                    newIdx = newVertices.Length;
-                    vertexMap.Set(key, newIdx);
-                    newVertices.Add(poly.vertices[currIdx]);
-                }
-                insideVertices.Add(newIdx);
-            }
-
-
-            if ((currDist < 0 && nextDist > 0) || (currDist > 0 && nextDist < 0)) {
-                float t = currDist / (currDist - nextDist);
-                vec3 intersectionPoint = poly.vertices[currIdx] +
-                    (poly.vertices[nextIdx] - poly.vertices[currIdx]) * t;
-
-
-                int newIdx = newVertices.Length;
-                newVertices.Add(intersectionPoint);
-                insideVertices.Add(newIdx);
-            }
-        }
-
-
-        if (insideVertices.Length >= 3) {
-
-            for (uint i = 1; i < insideVertices.Length - 1; i++) {
-                array<int> newFace = {
-                    insideVertices[0],
-                    insideVertices[i],
-                    insideVertices[i + 1]
-                };
-                newFaces.Add(newFace);
-            }
-        }
-    }
-
-
-    Polyhedron clippedPoly(newVertices, newFaces);
-
-
-    array<Edge> newEdges;
-    for (uint i = 0; i < newFaces.Length; i++) {
-        const array<int>@ face = newFaces[i];
-        for (uint j = 0; j < face.Length; j++) {
-            int v0 = face[j];
-            int v1 = face[(j + 1) % face.Length];
-            newEdges.Add(Edge(v0, v1));
-        }
-    }
-
-
-    if (!newEdges.IsEmpty()) {
-        newEdges.SortAsc();
-        array<Edge> uniqueEdges = {newEdges[0]};
-        for (uint i = 1; i < newEdges.Length; i++) {
-            if (!(newEdges[i] == uniqueEdges[uniqueEdges.Length - 1])) {
-                uniqueEdges.Add(newEdges[i]);
-            }
-        }
-        clippedPoly.uniqueEdges = uniqueEdges;
-    }
-
-    return clippedPoly;
-}
-
-Polyhedron ClipPolyhedronByAABB(const Polyhedron& in poly, const AABB& in box)
-{
-    Polyhedron clippedPoly = poly;
-
-
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(-1, 0, 0), box.min);
-
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(1, 0, 0), box.max);
-
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, -1, 0), box.min);
-
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, 1, 0), box.max);
-
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, 0, -1), box.min);
-
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, 0, 1), box.max);
-
-    return clippedPoly;
-}
-
-
 
 void OnSimulationBegin(SimulationManager@ simManager) {
     if(!(GetVariableString("bf_target")==g_bruteforceDistanceTargetIdentifier && GetVariableString("controller")=="bruteforce")){
@@ -1373,7 +459,6 @@ void OnSimulationBegin(SimulationManager@ simManager) {
         g_windowResultProcessed = true;
         g_lastProcessedRaceTime = -1;
 
-
         AABB triggerAABB = triggerIdToAABB(int(GetVariableDouble(g_pluginPrefix + "_constraint_trigger_index")));
         if (g_bfTargetType == 0) {
             g_clippedtargetCpPoly = ClipPolyhedronByAABB(g_targetCpPoly, triggerAABB);
@@ -1385,6 +470,7 @@ void OnSimulationBegin(SimulationManager@ simManager) {
                 const Polyhedron@ targetPoly = g_worldFinishPolys[i];
                 if (targetPoly is null) continue;
                 const AABB targetAABB = g_worldFinishAABBs[i];
+                log("Trigger AABB: " + triggerAABB.ToString());
                 Polyhedron clippedPoly = ClipPolyhedronByAABB(targetPoly, triggerAABB);
                 g_worldClippedFinishPolys.Add(clippedPoly);
                 g_worldClippedFinishAABBs.Add(targetAABB);
@@ -1409,10 +495,7 @@ void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result){
     }
 }
 
-
-
 class BFResultPrinter {
-
 
     int COL_ITER     = 10;
     int COL_PHASE    = 12;
@@ -1423,7 +506,6 @@ class BFResultPrinter {
     int precision = 8;
 
     bool headerPrinted = false;
-
 
     private string PadString(const string &in str, int width, bool alignRight = false) {
         int len = str.Length;
@@ -1443,14 +525,12 @@ class BFResultPrinter {
         }
     }
 
-
     void PrintHeader(const string &in targetDesc, int timeFrom, int timeTo) {
         string title = "Bruteforce Evaluation Results";
         string targetInfo = "Target: " + targetDesc + " | Window: [" + timeFrom + "-" + timeTo + "] ms";
 
         string header = PadString("Iteration", COL_ITER) + " | " +
                         PadString("Phase", COL_PHASE) + " | " +
-
 
                         PadString("Min Distance", COL_DIST, true) + " | " +
                         PadString("Improvement", COL_IMPROVE, true);
@@ -1470,10 +550,7 @@ class BFResultPrinter {
         headerPrinted = true;
     }
 
-
     void PrintRow(int iteration, const string &in phase, float distance, float improvement = -1.0f) {
-
-
 
         string iterStr = Text::FormatInt(iteration);
         string phaseStr = phase;
@@ -1483,13 +560,11 @@ class BFResultPrinter {
         string row = PadString(iterStr, COL_ITER, true) + " | " +
                      PadString(phaseStr, COL_PHASE) + " | " +
 
-
                      PadString(distStr, COL_DIST, true) + " | " +
                      PadString(improveStr, COL_IMPROVE, true);
 
         print(row);
     }
-
 
     void PrintInitialResult(int iteration, const string &in targetDesc, int timeFrom, int timeTo, float distance) {
 
@@ -1499,14 +574,11 @@ class BFResultPrinter {
         PrintRow(iteration, "Initial", distance, -1.0f);
     }
 
-
     void PrintImprovedResult(int iteration, float newDistance, float improvement) {
 
         if (!headerPrinted) {
 
-
              print("BFResultPrinter Warning: Header not printed before improved result!", Severity::Warning);
-
 
         }
         PrintRow(iteration, "Improvement", newDistance, improvement);
@@ -1545,16 +617,12 @@ class BFResultPrinter {
         print("\n");
     }
 
-
     void Reset() {
         headerPrinted = false;
     }
 }
 
-
 BFResultPrinter g_bfPrinter;
-
-
 bool g_isNewBFEvaluationRun = false;
 CommandList g_earlyStopCommandList;
 bool g_isEarlyStop = false;
@@ -1611,7 +679,7 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
 
             bool needsAccurateDistance = targetAABB.Contains(carWorldTransform.m_Position.ToVec3(), 15);
             if (needsAccurateDistance) {
-                currentTickDistance = CalculateMinCarDistanceToPoly(carWorldTransform, targetPoly, targetAABB);
+                currentTickDistance = CalculateMinCarDistanceToPoly(carWorldTransform, targetPoly);
             } else {
                 currentTickDistance = Math::Max(0.0f, targetAABB.DistanceToPoint(carWorldTransform.m_Position.ToVec3()));
             }
@@ -1619,13 +687,13 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
             float minDistToAnyFinish = 1e18f;
             for (uint i = 0; i < g_worldClippedFinishPolys.Length; ++i) {
                const Polyhedron@ targetPoly = g_worldClippedFinishPolys[i];
-                if (targetPoly is null) continue;
+                if (targetPoly is null || targetPoly.faces.Length == 0) continue;
                 const AABB targetAABB = g_worldClippedFinishAABBs[i];
 
                 bool needsAccurateDistance = targetAABB.Contains(carWorldTransform.m_Position.ToVec3(), 15);
                 float distToThisFinish = 1e18f;
                 if (needsAccurateDistance) {
-                    distToThisFinish = CalculateMinCarDistanceToPoly(carWorldTransform, targetPoly, targetAABB);
+                    distToThisFinish = CalculateMinCarDistanceToPoly(carWorldTransform, targetPoly);
                 } else {
                     distToThisFinish = Math::Max(0.0f, targetAABB.DistanceToPoint(carWorldTransform.m_Position.ToVec3()));
                 }
@@ -1730,7 +798,6 @@ PluginInfo@ GetPluginInfo()
     info.Description = "Bruteforce for skycrafter's targets. Currently available: Distance to CP/Finish.";
     return info;
 }
-
 
 array<array<vec2>> initDigitFont()
 {
@@ -1930,4 +997,1129 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
             SetVariable(g_pluginPrefix + "_cached_triggers", triggerIds);
         }
     }
+}
+
+class GmVec3 {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    GmVec3() {}
+    GmVec3(float num) {
+        this.x = num;
+        this.y = num;
+        this.z = num;
+    }
+    GmVec3(float x, float y, float z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    GmVec3(const GmVec3&in other) {
+        this.x = other.x;
+        this.y = other.y;
+        this.z = other.z;
+    }
+    GmVec3(const vec3&in other) {
+        this.x = other.x;
+        this.y = other.y;
+        this.z = other.z;
+    }
+    vec3 ToVec3() const {
+        return vec3(x, y, z);
+    }
+    void Mult(const GmMat3&in M) {
+        float _x = x * M.x.x + y * M.x.y + z * M.x.z;
+        float _y = x * M.y.x + y * M.y.y + z * M.y.z;
+        float _z = x * M.z.x + y * M.z.y + z * M.z.z;
+        x = _x;
+        y = _y;
+        z = _z;
+    }
+    void Mult(const GmIso4&in T) {
+        Mult(T.m_Rotation);
+        x += T.m_Position.x;
+        y += T.m_Position.y;
+        z += T.m_Position.z;
+    }
+    void MultTranspose(const GmMat3&in M) {
+        float _x = x * M.x.x + y * M.y.x + z * M.z.x;
+        float _y = x * M.x.y + y * M.y.y + z * M.z.y;
+        float _z = x * M.x.z + y * M.y.z + z * M.z.z;
+        x = _x;
+        y = _y;
+        z = _z;
+    }
+    float LengthSquared() const {
+        return x*x + y*y + z*z;
+    }
+    float Length() const {
+        return Math::Sqrt(LengthSquared());
+    }
+    void Normalize() {
+        float len = Length();
+        if (len > 1e-6f) {
+            x /= len;
+            y /= len;
+            z /= len;
+        }
+    }
+    GmVec3 Normalized() const {
+        GmVec3 result = this;
+        result.Normalize();
+        return result;
+    }
+    GmVec3 opAdd(const GmVec3&in other) const {
+        return GmVec3(x + other.x, y + other.y, z + other.z);
+    }
+    GmVec3 opSub(const GmVec3&in other) const {
+        return GmVec3(x - other.x, y - other.y, z - other.z);
+    }
+    GmVec3 opMul(float scalar) const {
+        return GmVec3(x * scalar, y * scalar, z * scalar);
+    }
+    GmVec3 opDiv(float scalar) const {
+        return GmVec3(x / scalar, y / scalar, z / scalar);
+    }
+    GmVec3 opNeg() const {
+        return GmVec3(-x, -y, -z);
+    }
+    void opAddAssign(const GmVec3&in other) {
+        x += other.x; y += other.y; z += other.z;
+    }
+    void opSubAssign(const GmVec3&in other) {
+        x -= other.x; y -= other.y; z -= other.z;
+    }
+    void opMulAssign(float scalar) {
+        x *= scalar; y *= scalar; z *= scalar;
+    }
+    void opDivAssign(float scalar) {
+        x /= scalar; y /= scalar; z /= scalar;
+    }
+    GmVec3 opMul_Elementwise(const GmVec3&in other) const {
+        return GmVec3(x * other.x, y * other.y, z * other.z);
+    }
+    GmVec3 opDiv_Elementwise(const GmVec3&in other) const {
+        return GmVec3(x / other.x, y / other.y, z / other.z);
+    }
+}
+class GmMat3 {
+    GmVec3 x;
+    GmVec3 y;
+    GmVec3 z;
+    GmMat3() { SetIdentity(); }
+    GmMat3(const GmMat3&in other) {
+        this.x = other.x;
+        this.y = other.y;
+        this.z = other.z;
+    }
+    GmMat3(const GmVec3&in x, const GmVec3&in y, const GmVec3&in z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    GmMat3(const mat3&in other) {
+        this.x.x = other.x.x;
+        this.x.y = other.y.x;
+        this.x.z = other.z.x;
+        this.y.x = other.x.y;
+        this.y.y = other.y.y;
+        this.y.z = other.z.y;
+        this.z.x = other.x.z;
+        this.z.y = other.y.z;
+        this.z.z = other.z.z;
+    }
+    mat3 ToMat3() const {
+        mat3 m;
+        m.x.x = this.x.x; m.x.y = this.y.x; m.x.z = this.z.x;
+        m.y.x = this.x.y; m.y.y = this.y.y; m.y.z = this.z.y;
+        m.z.x = this.x.z; m.z.y = this.y.z; m.z.z = this.z.z;
+        return m;
+    }
+    void SetIdentity() {
+        x = GmVec3(1.0f, 0.0f, 0.0f);
+        y = GmVec3(0.0f, 1.0f, 0.0f);
+        z = GmVec3(0.0f, 0.0f, 1.0f);
+    }
+    void Mult(const GmMat3&in other) {
+        GmMat3 result;
+        result.x.x = x.x * other.x.x + y.x * other.x.y + z.x * other.x.z;
+        result.x.y = x.y * other.x.x + y.y * other.x.y + z.y * other.x.z;
+        result.x.z = x.z * other.x.x + y.z * other.x.y + z.z * other.x.z;
+        result.y.x = x.x * other.y.x + y.x * other.y.y + z.x * other.y.z;
+        result.y.y = x.y * other.y.x + y.y * other.y.y + z.y * other.y.z;
+        result.y.z = x.z * other.y.x + y.z * other.y.y + z.z * other.y.z;
+        result.z.x = x.x * other.z.x + y.x * other.z.y + z.x * other.z.z;
+        result.z.y = x.y * other.z.x + y.y * other.z.y + z.y * other.z.z;
+        result.z.z = x.z * other.z.x + y.z * other.z.y + z.z * other.z.z;
+        this = result;
+    }
+    GmMat3 opMul(const GmMat3&in other) const {
+        GmMat3 result = this;
+        result.Mult(other);
+        return result;
+    }
+    GmVec3 Transform(const GmVec3&in v) const {
+        return GmVec3(
+            x.x * v.x + y.x * v.y + z.x * v.z,
+            x.y * v.x + y.y * v.y + z.y * v.z,
+            x.z * v.x + y.z * v.y + z.z * v.z
+        );
+    }
+    GmVec3 opMul(const GmVec3&in v) const {
+        return Transform(v);
+    }
+     GmVec3 TransformTranspose(const GmVec3&in v) const {
+        return GmVec3(
+            x.x * v.x + x.y * v.y + x.z * v.z,
+            y.x * v.x + y.y * v.y + y.z * v.z,
+            z.x * v.x + z.y * v.y + z.z * v.z
+        );
+    }
+    void RotateX(float rad) {
+        float s = Math::Sin(rad);
+        float c = Math::Cos(rad);
+        GmMat3 rotMat(
+            GmVec3(1, 0, 0),
+            GmVec3(0, c, s),
+            GmVec3(0,-s, c)
+        );
+        Mult(rotMat);
+    }
+    void RotateY(float rad) {
+        float s = Math::Sin(rad);
+        float c = Math::Cos(rad);
+         GmMat3 rotMat(
+            GmVec3(c, 0,-s),
+            GmVec3(0, 1, 0),
+            GmVec3(s, 0, c)
+        );
+        Mult(rotMat);
+    }
+    void RotateZ(float rad) {
+        float s = Math::Sin(rad);
+        float c = Math::Cos(rad);
+         GmMat3 rotMat(
+            GmVec3(c, s, 0),
+            GmVec3(-s,c, 0),
+            GmVec3(0, 0, 1)
+        );
+        Mult(rotMat);
+    }
+    float Determinant() const {
+        return x.x * (y.y * z.z - y.z * z.y)
+             - y.x * (x.y * z.z - x.z * z.y)
+             + z.x * (x.y * y.z - x.z * y.y);
+    }
+    GmMat3 Inverse() const {
+        GmMat3 inv;
+        float det = Determinant();
+        if (Math::Abs(det) < 1e-6f) {
+            print("Warning: GmMat3::Inverse() called on singular matrix. Returning identity.", Severity::Warning);
+            return inv;
+        }
+        float invDet = 1.0f / det;
+        inv.x.x = (y.y * z.z - y.z * z.y) * invDet;
+        inv.y.x = (y.z * z.x - y.x * z.z) * invDet;
+        inv.z.x = (y.x * z.y - y.y * z.x) * invDet;
+        inv.x.y = (x.z * z.y - x.y * z.z) * invDet;
+        inv.y.y = (x.x * z.z - x.z * z.x) * invDet;
+        inv.z.y = (x.y * z.x - x.x * z.y) * invDet;
+        inv.x.z = (x.y * y.z - x.z * y.y) * invDet;
+        inv.y.z = (x.z * y.x - x.x * y.z) * invDet;
+        inv.z.z = (x.x * y.y - x.y * y.x) * invDet;
+        return inv;
+    }
+    GmMat3 Transposed() const {
+        GmMat3 result;
+        result.x.x = x.x; result.y.x = x.y; result.z.x = x.z;
+        result.x.y = y.x; result.y.y = y.y; result.z.y = y.z;
+        result.x.z = z.x; result.y.z = z.y; result.z.z = z.z;
+        return result;
+    }
+}
+class GmIso4 {
+    GmMat3 m_Rotation;
+    GmVec3 m_Position;
+    GmIso4() {}
+    GmIso4(const GmIso4&in other) {
+        this.m_Rotation = other.m_Rotation;
+        this.m_Position = other.m_Position;
+    }
+    GmIso4(const GmMat3&in rotation, const GmVec3&in position) {
+        this.m_Rotation = rotation;
+        this.m_Position = position;
+    }
+    GmIso4(const iso4&in other) {
+        this.m_Rotation = GmMat3(other.Rotation);
+        this.m_Position = GmVec3(other.Position);
+    }
+    iso4 ToIso4() const {
+        iso4 result;
+        result.Rotation = m_Rotation.ToMat3();
+        result.Position = m_Position.ToVec3();
+        return result;
+    }
+    void Mult(const GmIso4&in other) {
+        m_Position = m_Rotation.Transform(other.m_Position) + m_Position;
+        m_Rotation.Mult(other.m_Rotation);
+    }
+    GmIso4 opMul(const GmIso4&in other) const {
+        GmIso4 result = this;
+        result.Mult(other);
+        return result;
+    }
+    GmVec3 Transform(const GmVec3&in p) const {
+        return m_Rotation.Transform(p) + m_Position;
+    }
+    GmVec3 opMul(const GmVec3&in p) const {
+        return Transform(p);
+    }
+    GmVec3 TransformDirection(const GmVec3&in d) const {
+        return m_Rotation.Transform(d);
+    }
+    GmIso4 Inverse() const {
+        GmMat3 invRot = m_Rotation.Inverse();
+        GmVec3 invPos = invRot.Transform(-m_Position);
+        return GmIso4(invRot, invPos);
+    }
+}
+class AABB {
+    vec3 min = vec3(-1e9, -1e9, -1e9);
+    vec3 max = vec3(1e9, 1e9, 1e9);
+    AABB() {}
+    AABB(const vec3&in min, const vec3&in max) {
+        this.min = min;
+        this.max = max;
+    }
+    void Add(const vec3&in p) {
+        min.x = Math::Min(min.x, p.x);
+        min.y = Math::Min(min.y, p.y);
+        min.z = Math::Min(min.z, p.z);
+        max.x = Math::Max(max.x, p.x);
+        max.y = Math::Max(max.y, p.y);
+        max.z = Math::Max(max.z, p.z);
+    }
+    void Add(const AABB&in other) {
+        Add(other.min);
+        Add(other.max);
+    }
+    vec3 Center() const {
+        return (min + max) * 0.5f;
+    }
+    vec3 Size() const {
+        return max - min;
+    }
+    bool Contains(const vec3&in p, float margin = 1e-6f) const {
+        return (p.x >= min.x - margin && p.x <= max.x + margin &&
+                p.y >= min.y - margin && p.y <= max.y + margin &&
+                p.z >= min.z - margin && p.z <= max.z + margin);
+    }
+    float DistanceToPoint(const vec3&in p) const {
+        float dx = Math::Max(min.x - p.x, 0.0f) + Math::Max(p.x - max.x, 0.0f);
+        float dy = Math::Max(min.y - p.y, 0.0f) + Math::Max(p.y - max.y, 0.0f);
+        float dz = Math::Max(min.z - p.z, 0.0f) + Math::Max(p.z - max.z, 0.0f);
+        return Math::Sqrt(dx*dx + dy*dy + dz*dz);
+    }
+    AABB Intersect(const AABB& other) const {
+        vec3 intersectMin = vec3(
+            Math::Max(min.x, other.min.x),
+            Math::Max(min.y, other.min.y),
+            Math::Max(min.z, other.min.z)
+        );
+        vec3 intersectMax = vec3(
+            Math::Min(max.x, other.max.x),
+            Math::Min(max.y, other.max.y),
+            Math::Min(max.z, other.max.z)
+        );
+        return AABB(intersectMin, intersectMax);
+    }
+    bool IsValid() const {
+        return min.x <= max.x && min.y <= max.y && min.z <= max.z;
+    }
+    bool intersectsSegment(const vec3&in p0, const vec3&in p1) const {
+        vec3 d = p1 - p0;
+        float tmin = 0.0f;
+        float tmax = 1.0f;
+        for (int i = 0; i < 3; ++i) {
+            if (Math::Abs(d[i]) < 1e-6f) {
+                if (p0[i] < min[i] || p0[i] > max[i]) return false;
+            } else {
+                float ood = 1.0f / d[i];
+                float t1 = (min[i] - p0[i]) * ood;
+                float t2 = (max[i] - p0[i]) * ood;
+                if (t1 > t2) {
+                    float temp = t1;
+                    t1 = t2;
+                    t2 = temp;
+                }
+                tmin = Math::Max(tmin, t1);
+                tmax = Math::Min(tmax, t2);
+                if (tmin > tmax) return false;
+            }
+        }
+        return true;
+    }
+    bool testAxis(const vec3&in v0, const vec3&in v1, const vec3&in v2, const vec3&in edge, const vec3&in boxHalf, const int axis) {
+        float p, minTri, maxTri, rad;
+        if (axis == 0) {
+            p = v0.z * edge.y - v0.y * edge.z;
+            minTri = p; maxTri = p;
+            p = v1.z * edge.y - v1.y * edge.z;
+            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
+            p = v2.z * edge.y - v2.y * edge.z;
+            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
+            rad = Math::Abs(edge.y) * boxHalf.z + Math::Abs(edge.z) * boxHalf.y;
+        } else if (axis == 1) {
+            p = v0.x * edge.z - v0.z * edge.x;
+            minTri = p; maxTri = p;
+            p = v1.x * edge.z - v1.z * edge.x;
+            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
+            p = v2.x * edge.z - v2.z * edge.x;
+            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
+            rad = Math::Abs(edge.x) * boxHalf.z + Math::Abs(edge.z) * boxHalf.x;
+        } else {
+            p = v0.y * edge.x - v0.x * edge.y;
+            minTri = p; maxTri = p;
+            p = v1.y * edge.x - v1.x * edge.y;
+            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
+            p = v2.y * edge.x - v2.x * edge.y;
+            minTri = Math::Min(minTri, p); maxTri = Math::Max(maxTri, p);
+            rad = Math::Abs(edge.x) * boxHalf.y + Math::Abs(edge.y) * boxHalf.x;
+        }
+        return !(minTri > rad || maxTri < -rad);
+    }
+    bool intersectsTriangle(const vec3&in p0, const vec3&in p1, const vec3&in p2) const {
+
+        vec3 boxCenter = (min + max) * 0.5f;
+        vec3 boxHalf = (max - min) * 0.5f;
+
+        vec3 v0 = p0 - boxCenter;
+        vec3 v1 = p1 - boxCenter;
+        vec3 v2 = p2 - boxCenter;
+
+        vec3 e0 = v1 - v0;
+        vec3 e1 = v2 - v1;
+        vec3 e2 = v0 - v2;
+
+        if (!testAxis(v0, v1, v2, e0, boxHalf, 0)) return false;
+        if (!testAxis(v0, v1, v2, e0, boxHalf, 1)) return false;
+        if (!testAxis(v0, v1, v2, e0, boxHalf, 2)) return false;
+        if (!testAxis(v0, v1, v2, e1, boxHalf, 0)) return false;
+        if (!testAxis(v0, v1, v2, e1, boxHalf, 1)) return false;
+        if (!testAxis(v0, v1, v2, e1, boxHalf, 2)) return false;
+        if (!testAxis(v0, v1, v2, e2, boxHalf, 0)) return false;
+        if (!testAxis(v0, v1, v2, e2, boxHalf, 1)) return false;
+        if (!testAxis(v0, v1, v2, e2, boxHalf, 2)) return false;
+
+        for (int i = 0; i < 3; i++) {
+            float triMin = Math::Min(v0[i], Math::Min(v1[i], v2[i]));
+            float triMax = Math::Max(v0[i], Math::Max(v1[i], v2[i]));
+            if (triMin > boxHalf[i] || triMax < -boxHalf[i])
+                return false;
+        }
+
+        vec3 normal = Cross(e0, e1);
+
+        float rad = boxHalf.x * Math::Abs(normal.x) + boxHalf.y * Math::Abs(normal.y) + boxHalf.z * Math::Abs(normal.z);
+
+        float triProj0 = Math::Dot(normal, v0);
+        float triProj1 = Math::Dot(normal, v1);
+        float triProj2 = Math::Dot(normal, v2);
+        float triMin = Math::Min(triProj0, Math::Min(triProj1, triProj2));
+        float triMax = Math::Max(triProj0, Math::Max(triProj1, triProj2));
+        if (triMin > rad || triMax < -rad)
+            return false;
+
+        return true;
+    }
+
+    string ToString() {
+        return "AABB(min: " + min.x + ", " + min.y + ", " + min.z +
+               ", max: " + max.x + ", " + max.y + ", " + max.z + ")";
+    }
+}
+class Edge {
+    int v0;
+    int v1;
+    Edge() {
+        v0 = -1;
+        v1 = -1;
+    }
+    Edge(int i0 = -1, int i1 = -1) {
+
+        if (i0 < i1) {
+            v0 = i0;
+            v1 = i1;
+        } else {
+            v0 = i1;
+            v1 = i0;
+        }
+    }
+    bool opEquals(const Edge&in other) const {
+        return v0 == other.v0 && v1 == other.v1;
+    }
+    bool opLess(const Edge&in other) const {
+        if (v0 < other.v0) return true;
+        if (v0 > other.v0) return false;
+        return v1 < other.v1;
+    }
+}
+
+class SortableVertex {
+    float angle;
+    int index;
+
+    int opCmp(const SortableVertex&in other) const {
+        if (angle < other.angle) return -1;
+        if (angle > other.angle) return 1;
+        return 0;
+    }
+};
+
+class Polyhedron {
+    array<vec3> vertices;
+    array<array<int>> faces;
+    array<Edge> uniqueEdges;
+
+    Polyhedron() {}
+
+    Polyhedron(const array<vec3>&in in_vertices, const array<array<int>>&in triangleFaces) {
+        this.vertices = in_vertices;
+
+        if (vertices.IsEmpty() || triangleFaces.IsEmpty()) {
+            return;
+        }
+
+        uint numTriangles = triangleFaces.Length;
+        array<array<int>> newFaceIndices;
+
+        dictionary edgeToFaces;
+        array<vec3> faceNormals(numTriangles);
+
+        for (uint i = 0; i < numTriangles; ++i) {
+            const array<int>@ face_idxs = triangleFaces[i];
+            if (face_idxs.Length != 3) {
+                print("Error: Input face " + i + " is not a triangle. Simplification requires a triangle mesh.", Severity::Error);
+                return;
+            }
+
+            vec3 edge1 = vertices[face_idxs[1]] - vertices[face_idxs[0]];
+            vec3 edge2 = vertices[face_idxs[2]] - vertices[face_idxs[0]];
+            faceNormals[i] = Cross(edge1, edge2).Normalized();
+
+            for (uint j = 0; j < 3; ++j) {
+                int i0 = face_idxs[j];
+                int i1 = face_idxs[(j + 1) % 3];
+                string edgeKey = (i0 < i1 ? i0 : i1) + "_" + (i0 < i1 ? i1 : i0);
+
+                array<int>@ faceList;
+                if (!edgeToFaces.Get(edgeKey, @faceList)) {
+                    edgeToFaces.Set(edgeKey, array<int> = {int(i)});
+                } else {
+                    faceList.Add(i);
+                }
+            }
+        }
+
+        array<bool> processedFaces(numTriangles); 
+        const float COPLANAR_TOLERANCE = 0.9999f;
+
+        for (uint i = 0; i < numTriangles; ++i) {
+            if (processedFaces[i]) continue;
+
+            array<int> componentQueue = {int(i)};
+            array<int> componentFaces = {int(i)};
+            processedFaces[i] = true;
+            uint head = 0;
+            const vec3 referenceNormal = faceNormals[i];
+
+            while (head < componentQueue.Length) {
+                int currentIdx = componentQueue[head++];
+                const array<int>@ currentFace = triangleFaces[currentIdx];
+
+                for (uint j = 0; j < 3; ++j) {
+                    int i0 = currentFace[j];
+                    int i1 = currentFace[(j + 1) % 3];
+                    string edgeKey = (i0 < i1 ? i0 : i1) + "_" + (i0 < i1 ? i1 : i0);
+
+                    array<int>@ neighborFaces;
+                    if(edgeToFaces.Get(edgeKey, @neighborFaces)) {
+                        for (uint k = 0; k < neighborFaces.Length; ++k) {
+                            int neighborIdx = neighborFaces[k];
+                            if (!processedFaces[neighborIdx] && Math::Dot(referenceNormal, faceNormals[neighborIdx]) > COPLANAR_TOLERANCE) {
+                                processedFaces[neighborIdx] = true;
+                                componentFaces.Add(neighborIdx);
+                                componentQueue.Add(neighborIdx);
+                            }
+                        }
+                    }
+                }
+            }
+
+            dictionary uniqueVertexIndicesDict;
+            for (uint c = 0; c < componentFaces.Length; ++c) {
+                const array<int>@ tri = triangleFaces[componentFaces[c]];
+                for (uint v = 0; v < 3; ++v) uniqueVertexIndicesDict.Set(""+tri[v], true);
+            }
+            array<string>@ keys = uniqueVertexIndicesDict.GetKeys();
+            if (keys.Length < 3) continue;
+
+            array<int> allVertexIndices(keys.Length);
+            for(uint k = 0; k < keys.Length; ++k) {
+                allVertexIndices[k] = int(Text::ParseInt(keys[k]));
+            }
+
+            vec3 centroid(0,0,0);
+            for (uint v = 0; v < allVertexIndices.Length; ++v) centroid += vertices[allVertexIndices[v]];
+            centroid /= float(allVertexIndices.Length);
+
+            vec3 u = (vertices[allVertexIndices[0]] - centroid).Normalized();
+            vec3 v = Cross(referenceNormal, u);
+
+            array<SortableVertex> sortableVerts(allVertexIndices.Length);
+            for (uint v_idx = 0; v_idx < allVertexIndices.Length; ++v_idx) {
+                int vertIdx = allVertexIndices[v_idx];
+                vec3 relPos = vertices[vertIdx] - centroid;
+                sortableVerts[v_idx].angle = Math::Atan2(Math::Dot(relPos, v), Math::Dot(relPos, u));
+                sortableVerts[v_idx].index = vertIdx;
+            }
+
+            sortableVerts.SortAsc();
+
+            array<int> sortedIndices(sortableVerts.Length);
+            for (uint s = 0; s < sortableVerts.Length; ++s) sortedIndices[s] = sortableVerts[s].index;
+
+            newFaceIndices.Add(sortedIndices);
+        }
+
+        this.faces = newFaceIndices;
+
+        if (vertices.IsEmpty() || faces.IsEmpty()) return;
+
+        uint numFaces = faces.Length;
+        array<Edge> allEdgesTemp;
+        for (uint i = 0; i < numFaces; ++i) {
+            const array<int>@ faceIndices = faces[i];
+            uint faceVertCount = faceIndices.Length;
+            if (faceVertCount < 2) continue;
+            for(uint v_idx = 0; v_idx < faceVertCount; ++v_idx) {
+                int i0 = faceIndices[v_idx];
+                int i1 = faceIndices[(v_idx + 1) % faceVertCount];
+                allEdgesTemp.Add(Edge(i0, i1));
+            }
+        }
+
+        if (!allEdgesTemp.IsEmpty()) {
+            allEdgesTemp.SortAsc();
+            uniqueEdges.Add(allEdgesTemp[0]);
+            for (uint i = 1; i < allEdgesTemp.Length; ++i) {
+                if (!(allEdgesTemp[i] == uniqueEdges[uniqueEdges.Length - 1])) {
+                     uniqueEdges.Add(allEdgesTemp[i]);
+                }
+            }
+        }
+    }
+
+    bool GetFaceVertices(uint faceIndex, array<vec3>&out faceVerts) const {
+        if (faceIndex >= faces.Length) return false;
+        const array<int>@ indices = faces[faceIndex];
+        faceVerts.Resize(indices.Length);
+        for(uint i = 0; i < indices.Length; ++i) {
+            int vertexIndex = indices[i];
+            if (vertexIndex < 0 || vertexIndex >= int(vertices.Length)) return false;
+            faceVerts[i] = vertices[vertexIndex];
+        }
+        return true;
+    }
+
+    GmVec3 GetClosestPoint(const GmVec3&in p) const {
+        if (faces.IsEmpty()) {
+            if (vertices.IsEmpty()) return p;
+
+            GmVec3 closest_v(vertices[0].x, vertices[0].y, vertices[0].z);
+
+            float min_dist_sq = (p - closest_v).LengthSquared(); 
+            for (uint i = 1; i < vertices.Length; ++i) {
+                GmVec3 current_v(vertices[i].x, vertices[i].y, vertices[i].z);
+                float dist_sq = (p - current_v).LengthSquared(); 
+                if (dist_sq < min_dist_sq) {
+                    min_dist_sq = dist_sq;
+                    closest_v = current_v;
+                }
+            }
+            return closest_v;
+        }
+
+        GmVec3 closest_point_overall;
+
+        float min_dist_sq = 1e18f;
+        bool first_face = true;
+
+        array<vec3> faceVerts_vec3;
+        array<GmVec3> faceVerts_gm;
+
+        for (uint i = 0; i < faces.Length; ++i) {
+            if (!GetFaceVertices(i, faceVerts_vec3) || faceVerts_vec3.Length < 1) continue;
+
+            faceVerts_gm.Resize(faceVerts_vec3.Length);
+            for(uint j = 0; j < faceVerts_vec3.Length; ++j) {
+
+                const vec3 v = faceVerts_vec3[j];
+                faceVerts_gm[j] = GmVec3(v.x, v.y, v.z);
+            }
+
+            Polygon current_face(faceVerts_gm);
+            GmVec3 point_on_face = current_face.get_closest_point(p);
+            float dist_sq = (p - point_on_face).LengthSquared(); 
+
+            if (first_face || dist_sq < min_dist_sq) {
+                min_dist_sq = dist_sq;
+                closest_point_overall = point_on_face;
+                first_face = false;
+            }
+        }
+        return closest_point_overall;
+    }
+
+    bool GetFaceNormal(uint faceIndex, GmVec3&out normal) const {
+        if (faceIndex >= faces.Length) return false;
+        const array<int>@ indices = faces[faceIndex];
+        if (indices.Length < 3) return false;
+
+        vec3 v0 = vertices[indices[0]];
+        vec3 v1 = vertices[indices[1]];
+        vec3 v2 = vertices[indices[2]];
+
+        vec3 edge1 = v1 - v0;
+        vec3 edge2 = v2 - v0;
+        vec3 n = Cross(edge1, edge2).Normalized();
+
+        normal = GmVec3(n.x, n.y, n.z);
+        return true;
+    }
+};
+
+class Ellipsoid {
+    GmVec3 center;
+    GmVec3 radii;
+    GmMat3 rotation;
+    Ellipsoid() {
+        center = GmVec3(0,0,0);
+        radii = GmVec3(1,1,1);
+    }
+    Ellipsoid(const GmVec3&in center, const GmVec3&in radii, const GmMat3&in rotation) {
+        this.center = center;
+        this.radii = radii;
+        this.rotation = rotation;
+    }
+     Ellipsoid(const vec3&in center, const vec3&in radii, const mat3&in rotation) {
+        this.center = GmVec3(center);
+        this.radii = GmVec3(radii);
+        this.rotation = GmMat3(rotation);
+    }
+
+}
+
+vec3 Normalize(vec3 v) {
+    float magnitude = v.Length();
+    if (magnitude > 1e-6f) {
+        return v / magnitude;
+    }
+    return vec3(0,0,0);
+}
+vec3 Cross(vec3 a, vec3 b) {
+    return vec3(a.y * b.z - a.z * b.y,
+                a.z * b.x - a.x * b.z,
+                a.x * b.y - a.y * b.x);
+}
+
+GmVec3 Cross(const GmVec3&in a, const GmVec3&in b) {
+    return GmVec3(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    );
+}
+bool isApproximatelyEqual(const vec3& in a, const vec3& in b, float tol = EPSILON) {
+    return Math::Abs(a.x - b.x) < tol &&
+           Math::Abs(a.y - b.y) < tol &&
+           Math::Abs(a.z - b.z) < tol;
+}
+
+const float EPSILON = 1e-6f;
+
+GmIso4 GetCarEllipsoidLocationByIndex(SimulationManager@ simM, const GmIso4&in carLocation, uint index) {
+    if (index >= 8) {
+        print("Error: Invalid ellipsoid index requested: " + index + ". Must be 0-7.", Severity::Error);
+        return GmIso4();
+    }
+     if (index >= 4 && g_carEllipsoids.Length <= index) {
+         print("Error: g_carEllipsoids array not initialized correctly for index " + index, Severity::Error);
+         return GmIso4();
+    }
+    auto simManager = GetSimulationManager();
+    GmIso4 worldTransform;
+    if (index <= 3) {
+        GmVec3 wheelSurfaceLocalPos;
+        switch(index) {
+            case 0: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontLeft.SurfaceHandler.Location.Position); break;
+            case 1: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontRight.SurfaceHandler.Location.Position); break;
+            case 2: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackLeft.SurfaceHandler.Location.Position); break;
+            case 3: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackRight.SurfaceHandler.Location.Position); break;
+            default:
+                 print("Error: Unexpected index in wheel section: " + index, Severity::Error);
+                 return GmIso4();
+        }
+        worldTransform.m_Rotation = carLocation.m_Rotation;
+        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(wheelSurfaceLocalPos);
+        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
+    }
+    else {
+        const GmVec3@ localPositionOffset = g_carEllipsoids[index].center;
+        const GmMat3@ localRotation = g_carEllipsoids[index].rotation;
+        worldTransform.m_Rotation = carLocation.m_Rotation * localRotation;
+        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(localPositionOffset);
+        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
+    }
+    return worldTransform;
+}
+
+void InitializeCarEllipsoids() {
+    g_carEllipsoids.Clear();
+    const array<GmVec3> radii = {
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.439118f, 0.362f, 1.901528f),
+        GmVec3(0.968297f, 0.362741f, 1.682276f),
+        GmVec3(1.020922f, 0.515218f, 1.038007f),
+        GmVec3(0.384841f, 0.905323f, 0.283418f)
+    };
+    const array<GmVec3> localPositions = {
+        GmVec3(0.863012f, 0.3525f, 1.782089f),
+        GmVec3(-0.863012f, 0.3525f, 1.782089f),
+        GmVec3(0.885002f, 0.352504f, -1.205502f),
+        GmVec3(-0.885002f, 0.352504f, -1.205502f),
+        GmVec3(0.0f, 0.471253f, 0.219106f),
+        GmVec3(0.0f, 0.448782f, -0.20792f),
+        GmVec3(0.0f, 0.652812f, -0.89763f),
+        GmVec3(-0.015532f, 0.363252f, 1.75357f)
+    };
+    array<GmMat3> localRotations;
+    localRotations.Resize(8);
+    localRotations[4].RotateX(Math::ToRad(3.4160502f));
+    localRotations[5].RotateX(Math::ToRad(2.6202483f));
+    localRotations[6].RotateX(Math::ToRad(2.6874702f));
+    localRotations[7].RotateY(Math::ToRad(90.0f));
+    localRotations[7].RotateX(Math::ToRad(90.0f));
+    localRotations[7].RotateZ(Math::ToRad(-180.0f));
+    for (uint i = 0; i < 8; ++i) {
+        g_carEllipsoids.Add(Ellipsoid(localPositions[i], radii[i], localRotations[i]));
+    }
+
+}
+float GmDot(const GmVec3&in a, const GmVec3&in b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+GmVec3 GmScale(const GmVec3&in a, const GmVec3&in b) {
+    return GmVec3(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+
+class Polygon {
+    array<GmVec3> vertices;
+    GmVec3 normal;
+
+    Polygon(const array<GmVec3>&in in_vertices) {
+        this.vertices = in_vertices;
+        if (vertices.Length < 3) {
+            normal = GmVec3(0, 0, 1);
+        } else {
+            GmVec3 edge1 = vertices[1] - vertices[0];
+            GmVec3 edge2 = vertices[2] - vertices[0];
+            normal = Cross(edge1, edge2).Normalized();
+        }
+    }
+
+    GmVec3 closest_point_on_segment(const GmVec3&in p, const GmVec3&in a, const GmVec3&in b) const {
+        GmVec3 ab = b - a;
+        float ab_len_sq = ab.LengthSquared(); 
+        if (ab_len_sq < EPSILON * EPSILON) {
+            return a;
+        }
+        float t = GmDot(p - a, ab) / ab_len_sq;
+        t = Math::Max(0.0f, Math::Min(1.0f, t));
+        return a + ab * t;
+    }
+
+    GmVec3 get_closest_point(const GmVec3&in p) const {
+        if (vertices.IsEmpty()) return p;
+        if (vertices.Length == 1) return vertices[0];
+
+        GmVec3 proj_p = p - normal * GmDot(p - vertices[0], normal);
+
+        bool is_inside = true;
+        for (uint i = 0; i < vertices.Length; ++i) {
+            const GmVec3@ v1 = vertices[i];
+            const GmVec3@ v2 = vertices[(i + 1) % vertices.Length];
+            GmVec3 edge_vec = v2 - v1;
+            GmVec3 point_vec = proj_p - v1;
+
+            if (GmDot(normal, Cross(edge_vec, point_vec)) < -EPSILON) {
+                is_inside = false;
+                break;
+            }
+        }
+
+        if (is_inside) {
+            return proj_p;
+        }
+
+        GmVec3 closest_edge_point = closest_point_on_segment(p, vertices[vertices.Length - 1], vertices[0]);
+        float min_dist_sq = (p - closest_edge_point).LengthSquared(); 
+
+        for (uint i = 0; i < vertices.Length - 1; ++i) {
+            GmVec3 edge_point = closest_point_on_segment(p, vertices[i], vertices[i + 1]);
+            float dist_sq = (p - edge_point).LengthSquared(); 
+            if (dist_sq < min_dist_sq) {
+                min_dist_sq = dist_sq;
+                closest_edge_point = edge_point;
+            }
+        }
+        return closest_edge_point;
+    }
+};
+
+vec3 GetClosestPointOnTransformedPolyhedron(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
+    if (transformedVertices.IsEmpty()) return vec3(0,0,0);
+
+    vec3 sphereCenter = vec3(0, 0, 0);
+    vec3 closestPolyPointTransformed = transformedVertices[0];
+    float minDistanceSqTransformed = (closestPolyPointTransformed - sphereCenter).LengthSquared();
+
+    for (uint i = 0; i < originalPoly.faces.Length; ++i) {
+        const array<int>@ faceIndices = originalPoly.faces[i];
+        if (faceIndices.Length < 3) continue;
+
+        int i0 = faceIndices[0];
+        for (uint j = 1; j < faceIndices.Length - 1; ++j) {
+            int i1 = faceIndices[j];
+            int i2 = faceIndices[j + 1];
+
+            const vec3 v0 = transformedVertices[i0];
+            const vec3 v1 = transformedVertices[i1];
+            const vec3 v2 = transformedVertices[i2];
+
+            vec3 planeNormal = Cross(v1 - v0, v2 - v0).Normalized();
+            if (planeNormal.LengthSquared() < EPSILON) continue;
+
+            vec3 projectedPoint = ProjectPointOnPlane(sphereCenter, planeNormal, v0);
+
+            if (IsPointInsideTriangle(projectedPoint, v0, v1, v2, planeNormal)) {
+                float distSq = (projectedPoint - sphereCenter).LengthSquared();
+                if (distSq < minDistanceSqTransformed) {
+                    minDistanceSqTransformed = distSq;
+                    closestPolyPointTransformed = projectedPoint;
+                }
+            }
+        }
+    }
+
+    for (uint j = 0; j < originalPoly.uniqueEdges.Length; ++j) {
+        const Edge@ edge = originalPoly.uniqueEdges[j];
+        const vec3 ta = transformedVertices[edge.v0];
+        const vec3 tb = transformedVertices[edge.v1];
+
+        vec3 closestPointOnEdge;
+        float edgeDistSq = PointToSegmentDistanceSq(sphereCenter, ta, tb, closestPointOnEdge);
+        if (edgeDistSq < minDistanceSqTransformed) {
+            minDistanceSqTransformed = edgeDistSq;
+            closestPolyPointTransformed = closestPointOnEdge;
+        }
+    }
+
+    for (uint i = 0; i < transformedVertices.Length; ++i) {
+        float distSq = (transformedVertices[i] - sphereCenter).LengthSquared();
+        if (distSq < minDistanceSqTransformed) {
+            minDistanceSqTransformed = distSq;
+            closestPolyPointTransformed = transformedVertices[i];
+        }
+    }
+
+    return closestPolyPointTransformed;
+}
+
+void getClosestPointsSpherePolyhedron(const Polyhedron@ polyhedron_transformed, GmVec3&out p_sphere_transformed, GmVec3&out p_poly_transformed, bool&out is_intersecting) {
+    p_poly_transformed = polyhedron_transformed.GetClosestPoint(GmVec3(0, 0, 0));
+
+    float dist_sq_to_origin = p_poly_transformed.LengthSquared(); 
+    is_intersecting = dist_sq_to_origin <= 1.0f;
+
+    p_sphere_transformed = p_poly_transformed.Normalized();
+}
+
+float CalculateMinCarDistanceToPoly(const GmIso4&in carWorldTransform, const Polyhedron@ targetPoly) {
+    if (targetPoly is null || targetPoly.vertices.IsEmpty()) {
+        print("Warning: CalculateMinCarDistanceToPoly called with null or empty target polyhedron.", Severity::Warning);
+        return 1e18f;
+    }
+
+    float minDistanceSqOverall = 1e18f;
+
+    GmMat3 carInvRotation = carWorldTransform.m_Rotation.Transposed();
+
+    array<GmVec3> polyVertsRotatedForWheels(targetPoly.vertices.Length);
+    for (uint i = 0; i < targetPoly.vertices.Length; ++i) {
+        polyVertsRotatedForWheels[i] = carInvRotation.Transform(GmVec3(targetPoly.vertices[i]));
+    }
+
+    for (uint ellipsoidIndex = 0; ellipsoidIndex < 4; ++ellipsoidIndex) {
+        const Ellipsoid@ baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
+        GmIso4 ellipsoidWorldTransform = GetCarEllipsoidLocationByIndex(null, carWorldTransform, ellipsoidIndex);
+
+        GmVec3 center_rotated = carInvRotation.Transform(ellipsoidWorldTransform.m_Position);
+        GmVec3 invRadii(1.0f / baseEllipsoid.radii.x, 1.0f / baseEllipsoid.radii.y, 1.0f / baseEllipsoid.radii.z);
+
+        array<vec3> transformedVertices(targetPoly.vertices.Length);
+        for(uint i = 0; i < targetPoly.vertices.Length; ++i) {
+            GmVec3 v_relative_rotated = polyVertsRotatedForWheels[i] - center_rotated;
+            GmVec3 v_scaled = GmScale(v_relative_rotated, invRadii);
+            transformedVertices[i] = vec3(v_scaled.x, v_scaled.y, v_scaled.z);
+        }
+
+        GmVec3 p_poly_transformed(GetClosestPointOnTransformedPolyhedron(transformedVertices, targetPoly));
+        if (p_poly_transformed.LengthSquared() < 1.0f - EPSILON) {
+            return 0.0f;
+        }
+
+        GmVec3 p_sphere_transformed = p_poly_transformed.Normalized();
+
+        GmVec3 p_poly_world = ellipsoidWorldTransform.m_Rotation.Transform(GmScale(p_poly_transformed, baseEllipsoid.radii)) + ellipsoidWorldTransform.m_Position;
+        GmVec3 p_sphere_world = ellipsoidWorldTransform.m_Rotation.Transform(GmScale(p_sphere_transformed, baseEllipsoid.radii)) + ellipsoidWorldTransform.m_Position;
+
+        float distanceSq = (p_poly_world - p_sphere_world).LengthSquared();
+
+        if (distanceSq < minDistanceSqOverall) {
+            minDistanceSqOverall = distanceSq;
+        }
+    }
+    for (uint ellipsoidIndex = 4; ellipsoidIndex < g_carEllipsoids.Length; ++ellipsoidIndex) {
+        const Ellipsoid@ baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
+        GmIso4 ellipsoidWorldTransform = GetCarEllipsoidLocationByIndex(null, carWorldTransform, ellipsoidIndex);
+        Ellipsoid worldEllipsoid(ellipsoidWorldTransform.m_Position, baseEllipsoid.radii, ellipsoidWorldTransform.m_Rotation);
+
+        GmMat3 invRotation = worldEllipsoid.rotation.Transposed();
+        GmVec3 invRadii(1.0f / worldEllipsoid.radii.x, 1.0f / worldEllipsoid.radii.y, 1.0f / worldEllipsoid.radii.z);
+
+        array<vec3> transformedVertices(targetPoly.vertices.Length);
+        for(uint i = 0; i < targetPoly.vertices.Length; ++i) {
+            GmVec3 v_world(targetPoly.vertices[i]);
+            GmVec3 v_relative = v_world - worldEllipsoid.center;
+            GmVec3 v_rotated = invRotation.Transform(v_relative);
+            GmVec3 v_scaled = GmScale(v_rotated, invRadii);
+            transformedVertices[i] = vec3(v_scaled.x, v_scaled.y, v_scaled.z);
+        }
+
+        GmVec3 p_poly_transformed(GetClosestPointOnTransformedPolyhedron(transformedVertices, targetPoly));
+        if (p_poly_transformed.LengthSquared() < 1.0f - EPSILON) {
+            return 0.0f;
+        }
+
+        GmVec3 p_sphere_transformed = p_poly_transformed.Normalized();
+
+        GmVec3 p_poly_world = worldEllipsoid.rotation.Transform(GmScale(p_poly_transformed, worldEllipsoid.radii)) + worldEllipsoid.center;
+        GmVec3 p_sphere_world = worldEllipsoid.rotation.Transform(GmScale(p_sphere_transformed, worldEllipsoid.radii)) + worldEllipsoid.center;
+
+        float distanceSq = (p_poly_world - p_sphere_world).LengthSquared();
+
+        if (distanceSq < minDistanceSqOverall) {
+            minDistanceSqOverall = distanceSq;
+        }
+    }
+
+    return Math::Sqrt(minDistanceSqOverall);
+}
+Polyhedron ClipPolyhedronByPlane(const Polyhedron& in poly, const vec3& in clipPlaneNormal, const vec3& in clipPlanePoint)
+{
+    if (poly.vertices.IsEmpty()) return poly;
+
+    array<vec3> newVertices;
+    array<array<int>> newFaces;
+    dictionary vertexMap; 
+
+    array<float> vertexDists(poly.vertices.Length);
+    for (uint i = 0; i < poly.vertices.Length; i++) {
+        vertexDists[i] = Math::Dot(poly.vertices[i] - clipPlanePoint, clipPlaneNormal);
+    }
+
+    for (uint faceIdx = 0; faceIdx < poly.faces.Length; faceIdx++) {
+        const array<int>@ face = poly.faces[faceIdx];
+        if (face.Length < 3) continue;
+
+        array<int> newPolygonIndices; 
+
+        for (uint i = 0; i < face.Length; i++) {
+            int currOriginalIdx = face[i];
+            int nextOriginalIdx = face[(i + 1) % face.Length];
+
+            float currDist = vertexDists[currOriginalIdx];
+            float nextDist = vertexDists[nextOriginalIdx];
+
+            if (currDist <= EPSILON) {
+                string key = "" + currOriginalIdx;
+                int newIdx;
+                if (!vertexMap.Get(key, newIdx)) {
+                    newIdx = newVertices.Length;
+                    vertexMap.Set(key, newIdx);
+                    newVertices.Add(poly.vertices[currOriginalIdx]);
+                }
+
+                if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length-1] != newIdx) {
+                    newPolygonIndices.Add(newIdx);
+                }
+            }
+
+            if ((currDist > 0 && nextDist < 0) || (currDist < 0 && nextDist > 0)) {
+                float t = currDist / (currDist - nextDist);
+                vec3 intersectionPoint = poly.vertices[currOriginalIdx] + (poly.vertices[nextOriginalIdx] - poly.vertices[currOriginalIdx]) * t;
+
+                int newIdx = newVertices.Length;
+                newVertices.Add(intersectionPoint);
+
+                if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length-1] != newIdx) {
+                    newPolygonIndices.Add(newIdx);
+                }
+            }
+        }
+
+        if (newPolygonIndices.Length >= 3) {
+
+            for (uint i = 1; i < newPolygonIndices.Length - 1; i++) {
+                array<int> newTriangle = {
+                    newPolygonIndices[0],
+                    newPolygonIndices[i],
+                    newPolygonIndices[i + 1]
+                };
+                newFaces.Add(newTriangle);
+            }
+        }
+    }
+
+    Polyhedron clippedPoly(newVertices, newFaces);
+    return clippedPoly;
+}
+
+Polyhedron ClipPolyhedronByAABB(const Polyhedron& in poly, const AABB& in box)
+{
+    Polyhedron clippedPoly = poly;
+
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(-1, 0, 0), box.min); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 1, 0, 0), box.max); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0,-1, 0), box.min); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 1, 0), box.max); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 0,-1), box.min); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 0, 1), box.max); 
+
+    return clippedPoly;
 }
