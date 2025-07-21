@@ -1083,6 +1083,9 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
     }
 }
 
+array<vec3> g_polyVertsInCarSpace;
+array<vec3> g_transformedVertices;
+
 vec3 Normalize(vec3 v) {
     float magnitude = v.Length();
     if (magnitude > 1e-6f) {
@@ -1302,18 +1305,18 @@ float CalculateMinCarDistanceToPoly_Inner(const GmIso4&in carWorldTransformGm, c
 
     mat3 carInvRotation = carWorldTransform.Rotation;
 
-    array<vec3> polyVertsInCarSpace(targetPoly.vertices.Length);
+    g_polyVertsInCarSpace.Resize(targetPoly.vertices.Length);
     for (uint i = 0; i < targetPoly.vertices.Length; ++i) {
         vec3 v_rel_world = targetPoly.vertices[i] - carWorldTransform.Position;
 
-        polyVertsInCarSpace[i] = vec3(
+        g_polyVertsInCarSpace[i] = vec3(
             carInvRotation.x.x * v_rel_world.x + carInvRotation.y.x * v_rel_world.y + carInvRotation.z.x * v_rel_world.z,
             carInvRotation.x.y * v_rel_world.x + carInvRotation.y.y * v_rel_world.y + carInvRotation.z.y * v_rel_world.z,
             carInvRotation.x.z * v_rel_world.x + carInvRotation.y.z * v_rel_world.y + carInvRotation.z.z * v_rel_world.z
         );
     }
 
-    array<vec3> transformedVertices(targetPoly.vertices.Length);
+    g_transformedVertices.Resize(targetPoly.vertices.Length);
 
     for (uint ellipsoidIndex = 0; ellipsoidIndex < g_carEllipsoids.Length; ++ellipsoidIndex) {
         const Ellipsoid@ baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
@@ -1330,26 +1333,26 @@ float CalculateMinCarDistanceToPoly_Inner(const GmIso4&in carWorldTransformGm, c
             }
             localPosition = wheelSurfaceLocation.Position;
 
-            for(uint i = 0; i < polyVertsInCarSpace.Length; ++i) {
-                transformedVertices[i] = Scale(polyVertsInCarSpace[i] - localPosition, invRadii);
+            for(uint i = 0; i < g_polyVertsInCarSpace.Length; ++i) {
+                g_transformedVertices[i] = Scale(g_polyVertsInCarSpace[i] - localPosition, invRadii);
             }
         } else { 
 
             mat3 localInvRotation = baseEllipsoid.rotation.ToMat3();
 
-            for(uint i = 0; i < polyVertsInCarSpace.Length; ++i) {
-                vec3 v_relative_to_ellipsoid = polyVertsInCarSpace[i] - localPosition;
+            for(uint i = 0; i < g_polyVertsInCarSpace.Length; ++i) {
+                vec3 v_relative_to_ellipsoid = g_polyVertsInCarSpace[i] - localPosition;
 
                 vec3 v_rotated = vec3(
                     localInvRotation.x.x * v_relative_to_ellipsoid.x + localInvRotation.y.x * v_relative_to_ellipsoid.y + localInvRotation.z.x * v_relative_to_ellipsoid.z,
                     localInvRotation.x.y * v_relative_to_ellipsoid.x + localInvRotation.y.y * v_relative_to_ellipsoid.y + localInvRotation.z.y * v_relative_to_ellipsoid.z,
                     localInvRotation.x.z * v_relative_to_ellipsoid.x + localInvRotation.y.z * v_relative_to_ellipsoid.y + localInvRotation.z.z * v_relative_to_ellipsoid.z
                 );
-                transformedVertices[i] = Scale(v_rotated, invRadii);
+                g_transformedVertices[i] = Scale(v_rotated, invRadii);
             }
         }
 
-        vec3 p_poly_transformed = GetClosestPointOnTransformedPolyhedron(transformedVertices, targetPoly);
+        vec3 p_poly_transformed = GetClosestPointOnTransformedPolyhedron(g_transformedVertices, targetPoly);
 
         if (p_poly_transformed.LengthSquared() < 1.0f - EPSILON) {
             return 0.0f; 
