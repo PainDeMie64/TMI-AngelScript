@@ -124,6 +124,8 @@ void CacheCheckpointData() {
         g_worldCheckpointPolys.Clear();
         g_worldCheckpointAABBs.Clear();
         g_worldCheckpointNames.Clear();
+        g_worldFinishPolys.Clear();
+        g_worldFinishAABBs.Clear();
         return;
     }
     if (challenge.Uid == g_cachedChallengeUid) {
@@ -134,6 +136,8 @@ void CacheCheckpointData() {
     g_worldCheckpointPolys.Clear();
     g_worldCheckpointAABBs.Clear();
     g_worldCheckpointNames.Clear();
+    g_worldFinishPolys.Clear();
+    g_worldFinishAABBs.Clear();
     array<TM::GameCtnBlock@> blocks = challenge.Blocks;
     if (blocks is null) {
          print("Error: Could not get challenge blocks.", Severity::Error);
@@ -736,7 +740,9 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
 
     if (shouldCalculateDistance) {
         g_windowResultProcessed = false;
+
         GmIso4 carWorldTransform = GmIso4(simManager.Dyna.CurrentState.Location);
+        vec3 carPosition = carWorldTransform.m_Position.ToVec3(); 
 
         if (g_bfTargetType == 0) {
             const Polyhedron@ targetPoly;
@@ -749,11 +755,11 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
                 @targetPoly = g_targetCpPoly;
             }
 
-            bool needsAccurateDistance = targetAABB.Contains(carWorldTransform.m_Position.ToVec3(), 15);
+            bool needsAccurateDistance = targetAABB.Contains(carPosition, 15);
             if (needsAccurateDistance) {
                 currentTickDistance = CalculateMinCarDistanceToPoly(carWorldTransform, targetPoly);
             } else {
-                currentTickDistance = Math::Max(0.0f, targetAABB.DistanceToPoint(carWorldTransform.m_Position.ToVec3()));
+                currentTickDistance = Math::Max(0.0f, targetAABB.DistanceToPoint(carPosition));
             }
         } else {
             float minDistToAnyFinish = 1e18f;
@@ -762,12 +768,12 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
                 if (targetPoly is null || targetPoly.faces.Length == 0) continue;
                 const AABB targetAABB = g_worldClippedFinishAABBs[i];
 
-                bool needsAccurateDistance = targetAABB.Contains(carWorldTransform.m_Position.ToVec3(), 15);
+                bool needsAccurateDistance = targetAABB.Contains(carPosition, 15);
                 float distToThisFinish = 1e18f;
                 if (needsAccurateDistance) {
                     distToThisFinish = CalculateMinCarDistanceToPoly(carWorldTransform, targetPoly);
                 } else {
-                    distToThisFinish = Math::Max(0.0f, targetAABB.DistanceToPoint(carWorldTransform.m_Position.ToVec3()));
+                    distToThisFinish = Math::Max(0.0f, targetAABB.DistanceToPoint(carPosition));
                 }
                 minDistToAnyFinish = Math::Min(minDistToAnyFinish, distToThisFinish);
             }
@@ -1076,6 +1082,7 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
         }
     }
 }
+
 vec3 Normalize(vec3 v) {
     float magnitude = v.Length();
     if (magnitude > 1e-6f) {
@@ -1179,54 +1186,51 @@ GmVec3 GmScale(const GmVec3&in a, const GmVec3&in b) {
     return GmVec3(a.x * b.x, a.y * b.y, a.z * b.z);
 }
 
-GmVec3 FindClosestPointOnPolyToOrigin(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
-    if (transformedVertices.IsEmpty()) return GmVec3(0, 0, 0);
+vec3 FindClosestPointOnPolyToOrigin_Native(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
+    if (transformedVertices.IsEmpty()) return vec3(0, 0, 0);
 
-    GmVec3 centroid(0,0,0);
+    vec3 centroid(0,0,0);
     for(uint i = 0; i < transformedVertices.Length; ++i) {
-        centroid += GmVec3(transformedVertices[i]);
+        centroid += transformedVertices[i];
     }
     if (!transformedVertices.IsEmpty()) {
         centroid /= float(transformedVertices.Length);
     }
 
-    float max_dist = -1e18f; 
+    float max_dist = -1e18f;
     int best_face_index = -1;
 
     for (uint i = 0; i < originalPoly.precomputedFaces.Length; ++i) {
         const PrecomputedFace@ face_info = originalPoly.precomputedFaces[i];
         if (face_info.vertexIndices.Length < 3) continue;
 
-        GmVec3 v0(transformedVertices[face_info.vertexIndices[0]]);
-        GmVec3 v1(transformedVertices[face_info.vertexIndices[1]]);
-        GmVec3 v2(transformedVertices[face_info.vertexIndices[2]]);
+        const vec3 v0 = transformedVertices[face_info.vertexIndices[0]];
+        const vec3 v1 = transformedVertices[face_info.vertexIndices[1]];
+        const vec3 v2 = transformedVertices[face_info.vertexIndices[2]];
 
-        GmVec3 face_normal = Cross(v1 - v0, v2 - v0).Normalized();
+        vec3 face_normal = Cross(v1 - v0, v2 - v0).Normalized();
 
-        GmVec3 face_to_center = centroid - v0;
+        if (Math::Dot(face_normal, centroid - v0) > 0.0f) {
 
-        if (GmDot(face_normal, face_to_center) > 0.0f) {
-            face_normal = -face_normal;
+            face_normal = face_normal * -1.0f;
         }
 
-        float dist = -GmDot(v0, face_normal);
+        float dist = -Math::Dot(v0, face_normal);
 
         if (dist > max_dist) {
             max_dist = dist;
             best_face_index = i;
-
         }
     }
 
     if (best_face_index == -1) {
-
         float min_dist_sq = 1e18f;
-        GmVec3 closest_point;
+        vec3 closest_point;
         for (uint i = 0; i < transformedVertices.Length; i++) {
             float dist_sq = transformedVertices[i].LengthSquared();
             if (dist_sq < min_dist_sq) {
                 min_dist_sq = dist_sq;
-                closest_point = GmVec3(transformedVertices[i]);
+                closest_point = transformedVertices[i];
             }
         }
         return closest_point;
@@ -1235,24 +1239,25 @@ GmVec3 FindClosestPointOnPolyToOrigin(const array<vec3>&in transformedVertices, 
     const PrecomputedFace@ best_face = originalPoly.precomputedFaces[best_face_index];
     const array<int>@ vertexIndices = best_face.vertexIndices;
 
-    GmVec3 v0(transformedVertices[vertexIndices[0]]);
-    GmVec3 v1(transformedVertices[vertexIndices[1]]);
-    GmVec3 v2(transformedVertices[vertexIndices[2]]);
-    GmVec3 best_face_normal = Cross(v1 - v0, v2 - v0).Normalized();
-    if (GmDot(best_face_normal, centroid - v0) > 0.0f) {
-        best_face_normal = -best_face_normal;
+    const vec3 v0 = transformedVertices[vertexIndices[0]];
+    const vec3 v1 = transformedVertices[vertexIndices[1]];
+    const vec3 v2 = transformedVertices[vertexIndices[2]];
+    vec3 best_face_normal = Cross(v1 - v0, v2 - v0).Normalized();
+    if (Math::Dot(best_face_normal, centroid - v0) > 0.0f) {
+
+        best_face_normal = best_face_normal * -1.0f;
     }
-    float plane_dist_from_origin = GmDot(v0, best_face_normal);
-    GmVec3 projectedPoint = best_face_normal*plane_dist_from_origin;
+
+    vec3 projectedPoint = best_face_normal * -Math::Dot(v0, best_face_normal);
 
     bool isInside = true;
     for (uint j = 0; j < vertexIndices.Length; ++j) {
-        GmVec3 v_start(transformedVertices[vertexIndices[j]]);
-        GmVec3 v_end(transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]]);
-        GmVec3 edge = v_end - v_start;
-        GmVec3 to_point = projectedPoint - v_start;
+        const vec3 v_start = transformedVertices[vertexIndices[j]];
+        const vec3 v_end = transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]];
+        vec3 edge = v_end - v_start;
+        vec3 to_point = projectedPoint - v_start;
 
-        if (GmDot(Cross(edge, to_point), best_face_normal) < -1e-6f) {
+        if (Math::Dot(Cross(edge, to_point), best_face_normal) < -EPSILON) {
             isInside = false;
             break;
         }
@@ -1262,70 +1267,60 @@ GmVec3 FindClosestPointOnPolyToOrigin(const array<vec3>&in transformedVertices, 
         return projectedPoint;
     } else {
         float min_dist_sq = 1e18f;
-        GmVec3 closest_point;
+        vec3 closest_point_on_edge;
         for (uint j = 0; j < vertexIndices.Length; j++) {
-            GmVec3 vA(transformedVertices[vertexIndices[j]]);
-            GmVec3 vB(transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]]);
-            GmVec3 point_on_edge = closest_point_on_segment_from_origin(vA, vB);
+            const vec3 vA = transformedVertices[vertexIndices[j]];
+            const vec3 vB = transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]];
+            vec3 point_on_edge = closest_point_on_segment_from_origin_native(vA, vB);
             float dist_sq = point_on_edge.LengthSquared();
             if (dist_sq < min_dist_sq) {
                 min_dist_sq = dist_sq;
-                closest_point = point_on_edge;
+                closest_point_on_edge = point_on_edge;
             }
         }
-        return closest_point;
+        return closest_point_on_edge;
     }
-}
-
-GmVec3 closest_point_on_segment_from_origin(const GmVec3&in a, const GmVec3&in b) {
-    GmVec3 ab = b - a;
-    float ab_len_sq = ab.LengthSquared();
-    if (ab_len_sq < EPSILON * EPSILON) {
-        return a;
-    }
-
-    float t = -GmDot(a, ab) / ab_len_sq;
-
-    if (t < 0.0f) t = 0.0f;
-    if (t > 1.0f) t = 1.0f;
-
-    return a + ab * t;
 }
 
 vec3 GetClosestPointOnTransformedPolyhedron(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
     uint64 polyCheckStartTime = Time::get_Now();
-    GmVec3 closestPointGm = FindClosestPointOnPolyToOrigin(transformedVertices, originalPoly);
-    g_totalClosestPointPolyTime += (Time::get_Now() - polyCheckStartTime); 
 
-    return closestPointGm.ToVec3();
+    vec3 closestPoint = FindClosestPointOnPolyToOrigin_Native(transformedVertices, originalPoly);
+    g_totalClosestPointPolyTime += (Time::get_Now() - polyCheckStartTime); 
+    return closestPoint;
 }
 
-float CalculateMinCarDistanceToPoly_Inner(const GmIso4&in carWorldTransform, const Polyhedron@ targetPoly) {
+float CalculateMinCarDistanceToPoly_Inner(const GmIso4&in carWorldTransformGm, const Polyhedron@ targetPoly) {
     if (targetPoly is null || targetPoly.vertices.IsEmpty()) {
-        print("Warning: CalculateMinCarDistanceToPoly called with null or empty target polyhedron.", Severity::Warning);
         return 1e18f;
     }
 
-    float minDistanceSqOverall = 1e18f;
     auto simManager = GetSimulationManager();
+    float minDistanceSqOverall = 1e18f;
 
-    uint64 transformStartTime = Time::get_Now();
-    GmMat3 carInvRotation = carWorldTransform.m_Rotation.Transposed();
-    array<GmVec3> polyVertsInCarSpace(targetPoly.vertices.Length);
+    iso4 carWorldTransform = carWorldTransformGm.ToIso4();
+
+    mat3 carInvRotation = carWorldTransform.Rotation;
+
+    array<vec3> polyVertsInCarSpace(targetPoly.vertices.Length);
     for (uint i = 0; i < targetPoly.vertices.Length; ++i) {
-        polyVertsInCarSpace[i] = carInvRotation.Transform(GmVec3(targetPoly.vertices[i]) - carWorldTransform.m_Position);
+        vec3 v_rel_world = targetPoly.vertices[i] - carWorldTransform.Position;
+
+        polyVertsInCarSpace[i] = vec3(
+            carInvRotation.x.x * v_rel_world.x + carInvRotation.y.x * v_rel_world.y + carInvRotation.z.x * v_rel_world.z,
+            carInvRotation.x.y * v_rel_world.x + carInvRotation.y.y * v_rel_world.y + carInvRotation.z.y * v_rel_world.z,
+            carInvRotation.x.z * v_rel_world.x + carInvRotation.y.z * v_rel_world.y + carInvRotation.z.z * v_rel_world.z
+        );
     }
-    g_totalVertexTransformTime += (Time::get_Now() - transformStartTime);
 
     array<vec3> transformedVertices(targetPoly.vertices.Length);
 
     for (uint ellipsoidIndex = 0; ellipsoidIndex < g_carEllipsoids.Length; ++ellipsoidIndex) {
         const Ellipsoid@ baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
-        GmVec3 localPosition = baseEllipsoid.center;
-        GmVec3 invRadii(1.0f / baseEllipsoid.radii.x, 1.0f / baseEllipsoid.radii.y, 1.0f / baseEllipsoid.radii.z);
+        vec3 localPosition = baseEllipsoid.center.ToVec3();
+        vec3 invRadii(1.0f / baseEllipsoid.radii.x, 1.0f / baseEllipsoid.radii.y, 1.0f / baseEllipsoid.radii.z);
 
         if (ellipsoidIndex <= 3) { 
-
             iso4 wheelSurfaceLocation;
             switch(ellipsoidIndex) {
                 case 0: wheelSurfaceLocation = simManager.Wheels.FrontLeft.SurfaceHandler.Location; break;
@@ -1333,47 +1328,61 @@ float CalculateMinCarDistanceToPoly_Inner(const GmIso4&in carWorldTransform, con
                 case 2: wheelSurfaceLocation = simManager.Wheels.BackLeft.SurfaceHandler.Location; break;
                 case 3: wheelSurfaceLocation = simManager.Wheels.BackRight.SurfaceHandler.Location; break;
             }
-            localPosition = GmVec3(wheelSurfaceLocation.Position);
-        }
+            localPosition = wheelSurfaceLocation.Position;
 
-        if (ellipsoidIndex <= 3) { 
-             for(uint i = 0; i < targetPoly.vertices.Length; ++i) {
-                GmVec3 v_relative_to_wheel = polyVertsInCarSpace[i] - localPosition;
-                GmVec3 v_scaled = GmScale(v_relative_to_wheel, invRadii);
-                transformedVertices[i] = vec3(v_scaled.x, v_scaled.y, v_scaled.z);
+            for(uint i = 0; i < polyVertsInCarSpace.Length; ++i) {
+                transformedVertices[i] = Scale(polyVertsInCarSpace[i] - localPosition, invRadii);
             }
         } else { 
-            GmMat3 localInvRotation = baseEllipsoid.rotation.Transposed();
-            for(uint i = 0; i < targetPoly.vertices.Length; ++i) {
-                GmVec3 v_relative_to_ellipsoid = polyVertsInCarSpace[i] - localPosition;
-                GmVec3 v_rotated = localInvRotation.Transform(v_relative_to_ellipsoid);
-                GmVec3 v_scaled = GmScale(v_rotated, invRadii);
-                transformedVertices[i] = vec3(v_scaled.x, v_scaled.y, v_scaled.z);
+
+            mat3 localInvRotation = baseEllipsoid.rotation.ToMat3();
+
+            for(uint i = 0; i < polyVertsInCarSpace.Length; ++i) {
+                vec3 v_relative_to_ellipsoid = polyVertsInCarSpace[i] - localPosition;
+
+                vec3 v_rotated = vec3(
+                    localInvRotation.x.x * v_relative_to_ellipsoid.x + localInvRotation.y.x * v_relative_to_ellipsoid.y + localInvRotation.z.x * v_relative_to_ellipsoid.z,
+                    localInvRotation.x.y * v_relative_to_ellipsoid.x + localInvRotation.y.y * v_relative_to_ellipsoid.y + localInvRotation.z.y * v_relative_to_ellipsoid.z,
+                    localInvRotation.x.z * v_relative_to_ellipsoid.x + localInvRotation.y.z * v_relative_to_ellipsoid.y + localInvRotation.z.z * v_relative_to_ellipsoid.z
+                );
+                transformedVertices[i] = Scale(v_rotated, invRadii);
             }
         }
 
-        GmVec3 p_poly_transformed(GetClosestPointOnTransformedPolyhedron(transformedVertices, targetPoly));
+        vec3 p_poly_transformed = GetClosestPointOnTransformedPolyhedron(transformedVertices, targetPoly);
 
         if (p_poly_transformed.LengthSquared() < 1.0f - EPSILON) {
             return 0.0f; 
         }
 
-        GmVec3 p_sphere_transformed = p_poly_transformed.Normalized();
+        vec3 p_sphere_transformed = p_poly_transformed.Normalized();
 
-        GmVec3 p_poly_world_offset, p_sphere_world_offset;
+        vec3 p_poly_carspace, p_sphere_carspace;
+
+        vec3 p_poly_unscaled = Scale(p_poly_transformed, baseEllipsoid.radii.ToVec3());
+        vec3 p_sphere_unscaled = Scale(p_sphere_transformed, baseEllipsoid.radii.ToVec3());
 
         if (ellipsoidIndex <= 3) { 
-            p_poly_world_offset = GmScale(p_poly_transformed, baseEllipsoid.radii) + localPosition;
-            p_sphere_world_offset = GmScale(p_sphere_transformed, baseEllipsoid.radii) + localPosition;
+            p_poly_carspace = p_poly_unscaled + localPosition;
+            p_sphere_carspace = p_sphere_unscaled + localPosition;
         } else { 
-            p_poly_world_offset = baseEllipsoid.rotation.Transform(GmScale(p_poly_transformed, baseEllipsoid.radii)) + localPosition;
-            p_sphere_world_offset = baseEllipsoid.rotation.Transform(GmScale(p_sphere_transformed, baseEllipsoid.radii)) + localPosition;
+
+            mat3 localForwardRotation = baseEllipsoid.rotation.ToMat3();
+            localForwardRotation.Transpose();
+
+            p_poly_carspace = vec3(
+                localForwardRotation.x.x * p_poly_unscaled.x + localForwardRotation.y.x * p_poly_unscaled.y + localForwardRotation.z.x * p_poly_unscaled.z,
+                localForwardRotation.x.y * p_poly_unscaled.x + localForwardRotation.y.y * p_poly_unscaled.y + localForwardRotation.z.y * p_poly_unscaled.z,
+                localForwardRotation.x.z * p_poly_unscaled.x + localForwardRotation.y.z * p_poly_unscaled.y + localForwardRotation.z.z * p_poly_unscaled.z
+            ) + localPosition;
+            p_sphere_carspace = vec3(
+                localForwardRotation.x.x * p_sphere_unscaled.x + localForwardRotation.y.x * p_sphere_unscaled.y + localForwardRotation.z.x * p_sphere_unscaled.z,
+                localForwardRotation.x.y * p_sphere_unscaled.x + localForwardRotation.y.y * p_sphere_unscaled.y + localForwardRotation.z.y * p_sphere_unscaled.z,
+                localForwardRotation.x.z * p_sphere_unscaled.x + localForwardRotation.y.z * p_sphere_unscaled.y + localForwardRotation.z.z * p_sphere_unscaled.z
+            ) + localPosition;
         }
 
-        GmVec3 p_poly_world = carWorldTransform.m_Rotation.Transform(p_poly_world_offset) + carWorldTransform.m_Position;
-        GmVec3 p_sphere_world = carWorldTransform.m_Rotation.Transform(p_sphere_world_offset) + carWorldTransform.m_Position;
-
-        float distanceSq = (p_poly_world - p_sphere_world).LengthSquared();
+        float distanceSq = (p_poly_carspace - p_sphere_carspace).LengthSquared();
         if (distanceSq < minDistanceSqOverall) {
             minDistanceSqOverall = distanceSq;
         }
@@ -1471,6 +1480,25 @@ Polyhedron ClipPolyhedronByAABB(const Polyhedron& in poly, const AABB& in box)
 
     return clippedPoly;
 }
+
+vec3 Scale(const vec3&in a, const vec3&in b) {
+    return vec3(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+
+vec3 closest_point_on_segment_from_origin_native(const vec3&in a, const vec3&in b) {
+    vec3 ab = b - a;
+
+    float ab_len_sq = ab.LengthSquared();
+    if (ab_len_sq < 1e-12f) { 
+        return a;
+    }
+
+    float t = -Math::Dot(a, ab) / ab_len_sq;
+
+    t = Math::Clamp(t, 0.0f, 1.0f);
+    return a + ab * t;
+}
+
 class GmVec3 {
     float x = 0.0f;
     float y = 0.0f;
