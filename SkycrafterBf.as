@@ -353,11 +353,11 @@ Polyhedron CreateAABBPolyhedron(const vec3&in center, const vec3&in size) {
 }
 Polyhedron TransformPolyhedronToWorld(const Polyhedron&in basePoly, const TM::GameCtnBlock@ block) {
     Polyhedron worldPoly;
-    worldPoly.faces = basePoly.faces;
-    worldPoly.vertices.Resize(basePoly.vertices.Length);
+
     vec3 blockOriginWorld = vec3(block.Coord.x * 32.0f, block.Coord.y * 8.0f, block.Coord.z * 32.0f);
     GmVec3 centerOffsetLocal = GmVec3(16.0f, 4.0f, 16.0f);
     GmVec3 blockCenterWorld = GmVec3(blockOriginWorld) + centerOffsetLocal;
+
     GmMat3 blockRotationMat;
     float angleRad = 0.0f;
     if (block.Dir == TM::CardinalDir::East) {
@@ -370,6 +370,8 @@ Polyhedron TransformPolyhedronToWorld(const Polyhedron&in basePoly, const TM::Ga
     if (angleRad != 0.0f) {
         blockRotationMat.RotateY(angleRad);
     }
+
+    worldPoly.vertices.Resize(basePoly.vertices.Length);
     for (uint i = 0; i < basePoly.vertices.Length; ++i) {
         GmVec3 baseVertexLocal = GmVec3(basePoly.vertices[i]);
         GmVec3 vertexRelativeToCenterLocal = baseVertexLocal - centerOffsetLocal;
@@ -377,6 +379,25 @@ Polyhedron TransformPolyhedronToWorld(const Polyhedron&in basePoly, const TM::Ga
         GmVec3 finalWorldVertex = rotatedRelativeVertex + blockCenterWorld;
         worldPoly.vertices[i] = finalWorldVertex.ToVec3();
     }
+
+    worldPoly.faces = basePoly.faces;
+    worldPoly.uniqueEdges = basePoly.uniqueEdges;
+
+    worldPoly.precomputedFaces.Resize(basePoly.precomputedFaces.Length);
+    for (uint i = 0; i < basePoly.precomputedFaces.Length; ++i) {
+        const PrecomputedFace@ basePface = basePoly.precomputedFaces[i];
+        PrecomputedFace@ worldPface = worldPoly.precomputedFaces[i];
+
+        worldPface.vertexIndices = basePface.vertexIndices;
+
+        GmVec3 localPlanePoint = basePface.planePoint;
+        GmVec3 pointRelativeToCenter = localPlanePoint - centerOffsetLocal;
+        GmVec3 rotatedRelativePoint = blockRotationMat.Transform(pointRelativeToCenter);
+        worldPface.planePoint = rotatedRelativePoint + blockCenterWorld;
+
+        worldPface.normal = blockRotationMat.Transform(basePface.normal);
+    }
+
     return worldPoly;
 }
 
@@ -1159,73 +1180,101 @@ GmVec3 GmScale(const GmVec3&in a, const GmVec3&in b) {
 }
 
 GmVec3 FindClosestPointOnPolyToOrigin(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
-    if (transformedVertices.IsEmpty()) return GmVec3(0,0,0);
+    if (transformedVertices.IsEmpty()) return GmVec3(0, 0, 0);
 
-    float min_dist_sq = 1e18f;
-    GmVec3 closest_point;
-
-    for (uint i = 0; i < transformedVertices.Length; i++) {
-        float dist_sq = transformedVertices[i].LengthSquared();
-        if (dist_sq < min_dist_sq) {
-            min_dist_sq = dist_sq;
-            closest_point = GmVec3(transformedVertices[i]);
-        }
+    GmVec3 centroid(0,0,0);
+    for(uint i = 0; i < transformedVertices.Length; ++i) {
+        centroid += GmVec3(transformedVertices[i]);
+    }
+    if (!transformedVertices.IsEmpty()) {
+        centroid /= float(transformedVertices.Length);
     }
 
-    for (uint i = 0; i < originalPoly.uniqueEdges.Length; i++) {
-        const Edge@ edge = originalPoly.uniqueEdges[i];
-        GmVec3 vA(transformedVertices[edge.v0]);
-        GmVec3 vB(transformedVertices[edge.v1]);
-
-        GmVec3 point_on_edge = closest_point_on_segment_from_origin(vA, vB);
-        float dist_sq = point_on_edge.LengthSquared();
-
-        if (dist_sq < min_dist_sq) {
-            min_dist_sq = dist_sq;
-            closest_point = point_on_edge;
-        }
-    }
+    float max_dist = -1e18f; 
+    int best_face_index = -1;
 
     for (uint i = 0; i < originalPoly.precomputedFaces.Length; ++i) {
         const PrecomputedFace@ face_info = originalPoly.precomputedFaces[i];
-        const array<int>@ vertexIndices = face_info.vertexIndices;
-        if (vertexIndices.Length < 3) continue;
+        if (face_info.vertexIndices.Length < 3) continue;
 
-        GmVec3 v0 = GmVec3(transformedVertices[vertexIndices[0]]);
-        GmVec3 v1 = GmVec3(transformedVertices[vertexIndices[1]]);
-        GmVec3 v2 = GmVec3(transformedVertices[vertexIndices[2]]);
+        GmVec3 v0(transformedVertices[face_info.vertexIndices[0]]);
+        GmVec3 v1(transformedVertices[face_info.vertexIndices[1]]);
+        GmVec3 v2(transformedVertices[face_info.vertexIndices[2]]);
 
         GmVec3 face_normal = Cross(v1 - v0, v2 - v0).Normalized();
 
-        float d = GmDot(v0, face_normal);
+        GmVec3 face_to_center = centroid - v0;
 
-        if (d * d >= min_dist_sq) {
-            continue;
+        if (GmDot(face_normal, face_to_center) > 0.0f) {
+            face_normal = -face_normal;
         }
 
-        GmVec3 projectedPoint = face_normal * d;
+        float dist = -GmDot(v0, face_normal);
 
-        bool isInside = true;
-        for (uint j = 0; j < vertexIndices.Length; ++j) {
-            GmVec3 v_start = GmVec3(transformedVertices[vertexIndices[j]]);
-            GmVec3 v_end = GmVec3(transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]]);
-            GmVec3 edge = v_end - v_start;
-            GmVec3 to_point = projectedPoint - v_start;
+        if (dist > max_dist) {
+            max_dist = dist;
+            best_face_index = i;
 
-            if (GmDot(Cross(edge, to_point), face_normal) < -EPSILON) {
-                isInside = false;
-                break;
-            }
-        }
-
-        if (isInside) {
-
-            min_dist_sq = d * d;
-            closest_point = projectedPoint;
         }
     }
 
-    return closest_point;
+    if (best_face_index == -1) {
+
+        float min_dist_sq = 1e18f;
+        GmVec3 closest_point;
+        for (uint i = 0; i < transformedVertices.Length; i++) {
+            float dist_sq = transformedVertices[i].LengthSquared();
+            if (dist_sq < min_dist_sq) {
+                min_dist_sq = dist_sq;
+                closest_point = GmVec3(transformedVertices[i]);
+            }
+        }
+        return closest_point;
+    }
+
+    const PrecomputedFace@ best_face = originalPoly.precomputedFaces[best_face_index];
+    const array<int>@ vertexIndices = best_face.vertexIndices;
+
+    GmVec3 v0(transformedVertices[vertexIndices[0]]);
+    GmVec3 v1(transformedVertices[vertexIndices[1]]);
+    GmVec3 v2(transformedVertices[vertexIndices[2]]);
+    GmVec3 best_face_normal = Cross(v1 - v0, v2 - v0).Normalized();
+    if (GmDot(best_face_normal, centroid - v0) > 0.0f) {
+        best_face_normal = -best_face_normal;
+    }
+    float plane_dist_from_origin = GmDot(v0, best_face_normal);
+    GmVec3 projectedPoint = best_face_normal*plane_dist_from_origin;
+
+    bool isInside = true;
+    for (uint j = 0; j < vertexIndices.Length; ++j) {
+        GmVec3 v_start(transformedVertices[vertexIndices[j]]);
+        GmVec3 v_end(transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]]);
+        GmVec3 edge = v_end - v_start;
+        GmVec3 to_point = projectedPoint - v_start;
+
+        if (GmDot(Cross(edge, to_point), best_face_normal) < -1e-6f) {
+            isInside = false;
+            break;
+        }
+    }
+
+    if (isInside) {
+        return projectedPoint;
+    } else {
+        float min_dist_sq = 1e18f;
+        GmVec3 closest_point;
+        for (uint j = 0; j < vertexIndices.Length; j++) {
+            GmVec3 vA(transformedVertices[vertexIndices[j]]);
+            GmVec3 vB(transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]]);
+            GmVec3 point_on_edge = closest_point_on_segment_from_origin(vA, vB);
+            float dist_sq = point_on_edge.LengthSquared();
+            if (dist_sq < min_dist_sq) {
+                min_dist_sq = dist_sq;
+                closest_point = point_on_edge;
+            }
+        }
+        return closest_point;
+    }
 }
 
 GmVec3 closest_point_on_segment_from_origin(const GmVec3&in a, const GmVec3&in b) {
@@ -1914,204 +1963,238 @@ class Polyhedron {
 
     Polyhedron() {}
 
-Polyhedron(const array<vec3>&in in_vertices, const array<array<int>>&in triangleFaces) {
-    this.vertices = in_vertices;
+    Polyhedron(const array<vec3>&in in_vertices, const array<array<int>>&in triangleFaces) {
+        this.vertices = in_vertices;
 
-    if (vertices.IsEmpty() || triangleFaces.IsEmpty()) {
-        return;
-    }
-
-    uint numTriangles = triangleFaces.Length;
-    array<array<int>> newFaceIndices;
-    array<PrecomputedFace> newPrecomputedFaces; 
-
-    dictionary edgeToGlobalFaces;
-    array<vec3> faceNormals(numTriangles);
-
-    for (uint i = 0; i < numTriangles; ++i) {
-        const array<int>@ face_idxs = triangleFaces[i];
-        if (face_idxs.Length != 3) {
-            print("Error: Input face " + i + " is not a triangle. Simplification requires a triangle mesh.", Severity::Error);
+        if (vertices.IsEmpty() || triangleFaces.IsEmpty()) {
             return;
         }
 
-        vec3 edge1 = vertices[face_idxs[1]] - vertices[face_idxs[0]];
-        vec3 edge2 = vertices[face_idxs[2]] - vertices[face_idxs[0]];
-        faceNormals[i] = Cross(edge1, edge2).Normalized();
+        uint numTriangles = triangleFaces.Length;
+        array<array<int>> newFaceIndices;
+        array<PrecomputedFace> newPrecomputedFaces; 
 
-        for (uint j = 0; j < 3; ++j) {
-            Edge e(face_idxs[j], face_idxs[(j + 1) % 3]);
-            string edgeKey = e.v0 + "_" + e.v1;
+        dictionary edgeToGlobalFaces;
+        array<vec3> faceNormals(numTriangles);
 
-            array<int>@ faceList;
-            if (!edgeToGlobalFaces.Get(edgeKey, @faceList)) {
-                edgeToGlobalFaces.Set(edgeKey, array<int> = {int(i)});
-            } else {
-                faceList.Add(i);
+        for (uint i = 0; i < numTriangles; ++i) {
+            const array<int>@ face_idxs = triangleFaces[i];
+            if (face_idxs.Length != 3) {
+                print("Error: Input face " + i + " is not a triangle. Simplification requires a triangle mesh.", Severity::Error);
+                return;
             }
-        }
-    }
 
-    array<bool> processedFaces(numTriangles); 
-    const float COPLANAR_TOLERANCE = 0.9999f;
-
-    for (uint i = 0; i < numTriangles; ++i) {
-        if (processedFaces[i]) continue;
-
-        array<int> componentQueue = {int(i)};
-        array<int> componentFaces = {int(i)};
-        processedFaces[i] = true;
-        uint head = 0;
-        const vec3 referenceNormal = faceNormals[i];
-
-        while (head < componentQueue.Length) {
-            int currentIdx = componentQueue[head++];
-            const array<int>@ currentFace = triangleFaces[currentIdx];
+            vec3 edge1 = vertices[face_idxs[1]] - vertices[face_idxs[0]];
+            vec3 edge2 = vertices[face_idxs[2]] - vertices[face_idxs[0]];
+            faceNormals[i] = Cross(edge1, edge2).Normalized();
 
             for (uint j = 0; j < 3; ++j) {
-                Edge e(currentFace[j], currentFace[(j + 1) % 3]);
+                Edge e(face_idxs[j], face_idxs[(j + 1) % 3]);
                 string edgeKey = e.v0 + "_" + e.v1;
 
-                array<int>@ neighborFaces;
-                if(edgeToGlobalFaces.Get(edgeKey, @neighborFaces)) {
-                    for (uint k = 0; k < neighborFaces.Length; ++k) {
-                        int neighborIdx = neighborFaces[k];
-                        if (!processedFaces[neighborIdx] && Math::Dot(referenceNormal, faceNormals[neighborIdx]) > COPLANAR_TOLERANCE) {
-                            processedFaces[neighborIdx] = true;
-                            componentFaces.Add(neighborIdx);
-                            componentQueue.Add(neighborIdx);
-                        }
-                    }
+                array<int>@ faceList;
+                if (!edgeToGlobalFaces.Get(edgeKey, @faceList)) {
+                    edgeToGlobalFaces.Set(edgeKey, array<int> = {int(i)});
+                } else {
+                    faceList.Add(i);
                 }
             }
         }
 
-        dictionary boundaryEdges;
-        dictionary vertToBoundaryEdges;
+        array<bool> processedFaces(numTriangles); 
+        const float COPLANAR_TOLERANCE = 0.9999f;
 
-        for(uint c_idx = 0; c_idx < componentFaces.Length; ++c_idx) {
-            int triFaceIdx = componentFaces[c_idx];
-            const array<int>@ triVerts = triangleFaces[triFaceIdx];
-            for (uint v_idx = 0; v_idx < 3; ++v_idx) {
-                Edge e(triVerts[v_idx], triVerts[(v_idx+1)%3]);
-                string edgeKey = e.v0 + "_" + e.v1;
+        for (uint i = 0; i < numTriangles; ++i) {
+            if (processedFaces[i]) continue;
 
-                array<int>@ globalFaces;
-                edgeToGlobalFaces.Get(edgeKey, @globalFaces);
+            array<int> componentQueue = {int(i)};
+            array<int> componentFaces = {int(i)};
+            processedFaces[i] = true;
+            uint head = 0;
+            const vec3 referenceNormal = faceNormals[i];
 
-                int sharedCoplanarFaces = 0;
-                for(uint g_idx = 0; g_idx < globalFaces.Length; ++g_idx) {
-                    if(componentFaces.Find(globalFaces[g_idx]) != -1) {
-                        sharedCoplanarFaces++;
-                    }
-                }
+            while (head < componentQueue.Length) {
+                int currentIdx = componentQueue[head++];
+                const array<int>@ currentFace = triangleFaces[currentIdx];
 
-                if(sharedCoplanarFaces == 1) {
-                    if (!boundaryEdges.Exists(edgeKey)) {
-                        boundaryEdges.Set(edgeKey, e);
+                for (uint j = 0; j < 3; ++j) {
+                    Edge e(currentFace[j], currentFace[(j + 1) % 3]);
+                    string edgeKey = e.v0 + "_" + e.v1;
 
-                        array<Edge>@ v0_edges;
-                        if (!vertToBoundaryEdges.Get(""+e.v0, @v0_edges)) {
-                            @v0_edges = array<Edge>();
-                            vertToBoundaryEdges.Set(""+e.v0, @v0_edges);
+                    array<int>@ neighborFaces;
+                    if(edgeToGlobalFaces.Get(edgeKey, @neighborFaces)) {
+                        for (uint k = 0; k < neighborFaces.Length; ++k) {
+                            int neighborIdx = neighborFaces[k];
+                            if (!processedFaces[neighborIdx] && Math::Dot(referenceNormal, faceNormals[neighborIdx]) > COPLANAR_TOLERANCE) {
+                                processedFaces[neighborIdx] = true;
+                                componentFaces.Add(neighborIdx);
+                                componentQueue.Add(neighborIdx);
+                            }
                         }
-                        v0_edges.Add(e);
-
-                        array<Edge>@ v1_edges;
-                        if (!vertToBoundaryEdges.Get(""+e.v1, @v1_edges)) {
-                            @v1_edges = array<Edge>();
-                            vertToBoundaryEdges.Set(""+e.v1, @v1_edges);
-                        }
-                        v1_edges.Add(e);
                     }
                 }
             }
-        }
 
-        array<string>@ boundaryEdgeKeys = boundaryEdges.GetKeys();
-        if (boundaryEdgeKeys.Length < 3) continue;
+            dictionary boundaryEdges;
+            dictionary vertToBoundaryEdges;
 
-        array<int> sortedIndices;
-        Edge startEdge;
-        boundaryEdges.Get(boundaryEdgeKeys[0], startEdge);
+            for(uint c_idx = 0; c_idx < componentFaces.Length; ++c_idx) {
+                int triFaceIdx = componentFaces[c_idx];
+                const array<int>@ triVerts = triangleFaces[triFaceIdx];
+                for (uint v_idx = 0; v_idx < 3; ++v_idx) {
+                    Edge e(triVerts[v_idx], triVerts[(v_idx+1)%3]);
+                    string edgeKey = e.v0 + "_" + e.v1;
 
-        sortedIndices.Add(startEdge.v0);
-        sortedIndices.Add(startEdge.v1);
+                    array<int>@ globalFaces;
+                    edgeToGlobalFaces.Get(edgeKey, @globalFaces);
 
-        dictionary usedEdgeKeys;
-        usedEdgeKeys.Set(boundaryEdgeKeys[0], true);
+                    int sharedCoplanarFaces = 0;
+                    for(uint g_idx = 0; g_idx < globalFaces.Length; ++g_idx) {
+                        if(componentFaces.Find(globalFaces[g_idx]) != -1) {
+                            sharedCoplanarFaces++;
+                        }
+                    }
 
-        int currentVert = startEdge.v1;
-        int startVert = startEdge.v0;
+                    if(sharedCoplanarFaces == 1) {
+                        if (!boundaryEdges.Exists(edgeKey)) {
+                            boundaryEdges.Set(edgeKey, e);
 
-        while(currentVert != startVert && sortedIndices.Length <= boundaryEdgeKeys.Length) {
-            array<Edge>@ connectedEdges;
-            vertToBoundaryEdges.Get(""+currentVert, @connectedEdges);
+                            array<Edge>@ v0_edges;
+                            if (!vertToBoundaryEdges.Get(""+e.v0, @v0_edges)) {
+                                @v0_edges = array<Edge>();
+                                vertToBoundaryEdges.Set(""+e.v0, @v0_edges);
+                            }
+                            v0_edges.Add(e);
 
-            bool foundNext = false;
-            for(uint edge_idx = 0; edge_idx < connectedEdges.Length; ++edge_idx) {
-                Edge nextEdge = connectedEdges[edge_idx];
-                string nextEdgeKey = nextEdge.v0 + "_" + nextEdge.v1;
+                            array<Edge>@ v1_edges;
+                            if (!vertToBoundaryEdges.Get(""+e.v1, @v1_edges)) {
+                                @v1_edges = array<Edge>();
+                                vertToBoundaryEdges.Set(""+e.v1, @v1_edges);
+                            }
+                            v1_edges.Add(e);
+                        }
+                    }
+                }
+            }
 
-                if (!usedEdgeKeys.Exists(nextEdgeKey)) {
-                    usedEdgeKeys.Set(nextEdgeKey, true);
+            array<string>@ boundaryEdgeKeys = boundaryEdges.GetKeys();
+            if (boundaryEdgeKeys.Length < 3) continue;
 
-                    currentVert = (nextEdge.v0 == currentVert) ? nextEdge.v1 : nextEdge.v0;
-                    sortedIndices.Add(currentVert);
-                    foundNext = true;
+            array<int> sortedIndices;
+            Edge startEdge;
+            boundaryEdges.Get(boundaryEdgeKeys[0], startEdge);
+
+            sortedIndices.Add(startEdge.v0);
+            sortedIndices.Add(startEdge.v1);
+
+            dictionary usedEdgeKeys;
+            usedEdgeKeys.Set(boundaryEdgeKeys[0], true);
+
+            int currentVert = startEdge.v1;
+            int startVert = startEdge.v0;
+
+            while(currentVert != startVert && sortedIndices.Length <= boundaryEdgeKeys.Length) {
+                array<Edge>@ connectedEdges;
+                vertToBoundaryEdges.Get(""+currentVert, @connectedEdges);
+
+                bool foundNext = false;
+                for(uint edge_idx = 0; edge_idx < connectedEdges.Length; ++edge_idx) {
+                    Edge nextEdge = connectedEdges[edge_idx];
+                    string nextEdgeKey = nextEdge.v0 + "_" + nextEdge.v1;
+
+                    if (!usedEdgeKeys.Exists(nextEdgeKey)) {
+                        usedEdgeKeys.Set(nextEdgeKey, true);
+
+                        currentVert = (nextEdge.v0 == currentVert) ? nextEdge.v1 : nextEdge.v0;
+                        sortedIndices.Add(currentVert);
+                        foundNext = true;
+                        break;
+                    }
+                }
+                if (!foundNext) {
+
+                    print("Error: Could not find next edge in chain for merged face.", Severity::Error);
                     break;
                 }
             }
-            if (!foundNext) {
 
-                print("Error: Could not find next edge in chain for merged face.", Severity::Error);
-                break;
+            if(sortedIndices.Length > 0 && sortedIndices[sortedIndices.Length-1] == startVert) {
+                sortedIndices.RemoveAt(sortedIndices.Length - 1);
+            }
+
+            if (sortedIndices.Length < 3) continue;
+
+            newFaceIndices.Add(sortedIndices);
+
+            PrecomputedFace pface;
+            pface.vertexIndices = sortedIndices;
+            pface.normal = GmVec3(referenceNormal);
+            pface.planePoint = GmVec3(vertices[sortedIndices[0]]);
+            newPrecomputedFaces.Add(pface);
+        }
+
+        this.faces = newFaceIndices;
+        this.precomputedFaces = newPrecomputedFaces; 
+
+        if (this.precomputedFaces.IsEmpty()) {
+
+        } else {
+
+            GmVec3 centroid(0,0,0);
+            for(uint i = 0; i < this.vertices.Length; ++i) {
+                centroid += GmVec3(this.vertices[i]);
+            }
+            if (this.vertices.Length > 0) {
+                centroid /= float(this.vertices.Length);
+            }
+
+            for (uint i = 0; i < this.precomputedFaces.Length; ++i) {
+
+                PrecomputedFace@ pface = this.precomputedFaces[i];
+
+                if (pface.vertexIndices.Length < 3) continue;
+
+                GmVec3 v0 = GmVec3(this.vertices[pface.vertexIndices[0]]);
+                GmVec3 v1 = GmVec3(this.vertices[pface.vertexIndices[1]]);
+                GmVec3 v2 = GmVec3(this.vertices[pface.vertexIndices[2]]);
+                GmVec3 correct_normal = Cross(v1 - v0, v2 - v0).Normalized();
+
+                GmVec3 face_to_center = centroid - v0;
+                if (GmDot(correct_normal, face_to_center) > 0.0f) {
+                    correct_normal = -correct_normal; 
+                }
+
+                pface.normal = correct_normal;
+
+                pface.planePoint = v0;
             }
         }
 
-        if(sortedIndices.Length > 0 && sortedIndices[sortedIndices.Length-1] == startVert) {
-            sortedIndices.RemoveAt(sortedIndices.Length - 1);
+        if (vertices.IsEmpty() || this.faces.IsEmpty()) return;
+
+        uint numFaces = this.faces.Length;
+        array<Edge> allEdgesTemp;
+        for (uint i = 0; i < numFaces; ++i) {
+            const array<int>@ faceIndices = this.faces[i];
+            uint faceVertCount = faceIndices.Length;
+            if (faceVertCount < 2) continue;
+            for(uint v_idx = 0; v_idx < faceVertCount; ++v_idx) {
+                int i0 = faceIndices[v_idx];
+                int i1 = faceIndices[(v_idx + 1) % faceVertCount];
+                allEdgesTemp.Add(Edge(i0, i1));
+            }
         }
 
-        if (sortedIndices.Length < 3) continue;
-
-        newFaceIndices.Add(sortedIndices);
-
-        PrecomputedFace pface;
-        pface.vertexIndices = sortedIndices;
-        pface.normal = GmVec3(referenceNormal);
-        pface.planePoint = GmVec3(vertices[sortedIndices[0]]);
-        newPrecomputedFaces.Add(pface);
-    }
-
-    this.faces = newFaceIndices;
-    this.precomputedFaces = newPrecomputedFaces; 
-
-    if (vertices.IsEmpty() || this.faces.IsEmpty()) return;
-
-    uint numFaces = this.faces.Length;
-    array<Edge> allEdgesTemp;
-    for (uint i = 0; i < numFaces; ++i) {
-        const array<int>@ faceIndices = this.faces[i];
-        uint faceVertCount = faceIndices.Length;
-        if (faceVertCount < 2) continue;
-        for(uint v_idx = 0; v_idx < faceVertCount; ++v_idx) {
-            int i0 = faceIndices[v_idx];
-            int i1 = faceIndices[(v_idx + 1) % faceVertCount];
-            allEdgesTemp.Add(Edge(i0, i1));
-        }
-    }
-
-    if (!allEdgesTemp.IsEmpty()) {
-        allEdgesTemp.SortAsc();
-        uniqueEdges.Add(allEdgesTemp[0]);
-        for (uint i = 1; i < allEdgesTemp.Length; ++i) {
-            if (!(allEdgesTemp[i] == uniqueEdges[uniqueEdges.Length - 1])) {
-                 uniqueEdges.Add(allEdgesTemp[i]);
+        if (!allEdgesTemp.IsEmpty()) {
+            allEdgesTemp.SortAsc();
+            uniqueEdges.Add(allEdgesTemp[0]);
+            for (uint i = 1; i < allEdgesTemp.Length; ++i) {
+                if (!(allEdgesTemp[i] == uniqueEdges[uniqueEdges.Length - 1])) {
+                    uniqueEdges.Add(allEdgesTemp[i]);
+                }
             }
         }
     }
-}
 
     bool GetFaceVertices(uint faceIndex, array<vec3>&out faceVerts) const {
         if (faceIndex >= faces.Length) return false;
