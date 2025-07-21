@@ -444,6 +444,8 @@ void OnSimulationBegin(SimulationManager@ simManager) {
     g_isNewBFEvaluationRun=true;
     g_simEndProcessed = false;
     g_isEarlyStop=false;
+    g_forceAccept = false;
+    g_bfPhase = BFPhase::Initial;
 
     TM::GameCtnChallenge@ challenge = GetCurrentChallenge();
     if (challenge !is null && challenge.Uid != g_cachedChallengeUid) {
@@ -698,16 +700,38 @@ BFResultPrinter g_bfPrinter;
 bool g_isNewBFEvaluationRun = false;
 CommandList g_earlyStopCommandList;
 bool g_isEarlyStop = false;
+bool g_forceAccept = false;
+BFPhase g_bfPhase = BFPhase::Initial;
 
 void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target){
+    int raceTime = simManager.RaceTime;
     if(GetVariableString("bf_target") != g_bruteforceDistanceTargetIdentifier || GetVariableString("controller") != "bruteforce"){
         return;
     }
-    int raceTime = simManager.RaceTime;
+    if(current==target && raceTime <= bfTimeTo && raceTime >= bfTimeFrom && g_bfPhase == BFPhase::Search){
+        if(GetVariableBool(g_pluginPrefix + "_shift_finish_eval")){
+            CommandList finish();
+            finish.Content = simManager.InputEvents.ToCommandsText();
+            finish.Save(GetVariableString("bf_result_filename").Split(".")[0] + "_bestfin.txt");
+            g_bfPrinter.PrintTargetAchieved();
+            print("");
+            print("Finish reached at " + (raceTime) + "ms (or before), shifting finish evaluation earlier...", Severity::Warning);
+            bfTimeTo = raceTime-10;
+            if(bfTimeFrom > bfTimeTo) {
+                bfTimeFrom = bfTimeTo;
+            }
+            g_bestBfDistance = 1e18f;
+            g_currentWindowMinDistance = 1e18f;
+            g_windowResultProcessed = false;
+            g_forceAccept = true;
+        }else{
+            g_isEarlyStop = true;
+            g_forceAccept = true;
+        }
+    }
     if(raceTime < bfTimeFrom || raceTime >= bfTimeTo){
         return;
     }
-
 }
 BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info) {
     uint64 onEvaluateStartTime = Time::get_Now();
@@ -725,6 +749,7 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
     }
 
     int raceTime = simManager.RaceTime;
+    g_bfPhase = info.Phase;
 
     if (raceTime < g_lastProcessedRaceTime) {
         g_currentWindowMinDistance = 1e18f;
@@ -764,23 +789,6 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
                 currentTickDistance = Math::Max(0.0f, targetAABB.DistanceToPoint(carPosition));
             }
         } else {
-            if(GetVariableBool(g_pluginPrefix + "_shift_finish_eval") && playerInfo.RaceFinished) {
-                CommandList finish();
-                finish.Content = simManager.InputEvents.ToCommandsText();
-                finish.Save(GetVariableString("bf_result_filename").Split(".")[0] + "_bestfin.txt");
-                g_bfPrinter.PrintTargetAchieved();
-                print("");
-                print("Finish reached at " + (raceTime-10) + "ms, shifting finish evaluation earlier...", Severity::Warning);
-                resp.Decision = BFEvaluationDecision::Reject;
-                bfTimeTo = raceTime-10;
-                if(bfTimeFrom > bfTimeTo) {
-                    bfTimeFrom = bfTimeTo;
-                }
-                g_bestBfDistance = 1e18f;
-                g_currentWindowMinDistance = 1e18f;
-                g_windowResultProcessed = false;
-                return resp;
-            }
             float minDistToAnyFinish = 1e18f;
             for (uint i = 0; i < g_worldClippedFinishPolys.Length; ++i) {
                const Polyhedron@ targetPoly = g_worldClippedFinishPolys[i];
@@ -803,7 +811,7 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
 
     if (isDecisionTime && !g_windowResultProcessed) {
         g_windowResultProcessed = true;
-        if(g_bfTargetType == 1 && playerInfo.RaceFinished){
+        if(g_bfTargetType == 1 && playerInfo.RaceFinished && !GetVariableBool(g_pluginPrefix + "_shift_finish_eval")){
             g_isEarlyStop = true;
         }
         if (g_isEarlyStop) {
@@ -836,6 +844,10 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
                 resp.ResultFileStartContent = "# Baseline min distance to " + targetDesc + " [" + bfTimeFrom + "-" + bfTimeTo + "ms]: " + Text::FormatFloat(g_bestBfDistance, "", 0, 6) + " m";
             }
         } else {
+            if(finalMinDistance == 0.0f){
+                resp.Decision= BFEvaluationDecision::DoNothing;
+                return resp;
+            }
             if (finalMinDistance < g_bestBfDistance) {
                 float oldBest = g_bestBfDistance;
                 g_bestBfDistance = finalMinDistance;
@@ -851,6 +863,17 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
         g_currentWindowMinDistance = 1e18f;
 
         return resp;
+    }
+    if(g_forceAccept && info.Phase == BFPhase::Search){
+        if(GetVariableBool(g_pluginPrefix + "_shift_finish_eval")){
+            
+            g_isNewBFEvaluationRun = true;
+        }
+        g_forceAccept = false;
+        resp.Decision = BFEvaluationDecision::Accept;
+    }
+    if(raceTime > bfTimeTo+10){
+        resp.Decision = BFEvaluationDecision::Reject;
     }
     return resp;
 }
@@ -886,6 +909,7 @@ void OnRunStep(SimulationManager@ simManager) {
         CacheCheckpointData();
         if (challenge.Uid != g_cachedChallengeUid) return;
     }
+    
 
 }
 PluginInfo@ GetPluginInfo()
@@ -1097,6 +1121,7 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
         }
     }
 }
+
 array<vec3> g_polyVertsInCarSpace;
 array<vec3> g_transformedVertices;
 
@@ -1526,6 +1551,7 @@ GmVec3 closest_point_on_segment(const GmVec3&in p, const GmVec3&in a, const GmVe
     t = Math::Max(0.0f, Math::Min(1.0f, t));
     return a + ab * t;
 }
+
 class GmVec3 {
     float x = 0.0f;
     float y = 0.0f;
