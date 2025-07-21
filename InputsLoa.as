@@ -84,7 +84,7 @@ class TimedState{
 void LoaInputFile(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
     string t="";
     for(uint i = 0; i < args.Length; i++){
-        t+=args[i]+ "";
+        t+=args[i]+" ";
     }
     CommandList load = CommandList();
     load.Content = "load " + t;
