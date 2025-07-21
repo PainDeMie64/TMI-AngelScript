@@ -231,7 +231,9 @@ void RenderBruteforceEvaluationSettingssss() {
         }
     } else {
         UI::Text("Target Finish Settings:");
-         UI::Dummy(vec2(0, 5));
+        UI::Dummy(vec2(0, 5));
+        UI::CheckboxVar("Shift finish eval after reached", g_pluginPrefix + "_shift_finish_eval");
+        UI::Dummy(vec2(0, 5));
         UI::BeginDisabled();
         UI::TextWrapped("The bruteforce will optimize towards the closest point on any finish line block surface.");
         UI::EndDisabled();
@@ -762,6 +764,23 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
                 currentTickDistance = Math::Max(0.0f, targetAABB.DistanceToPoint(carPosition));
             }
         } else {
+            if(GetVariableBool(g_pluginPrefix + "_shift_finish_eval") && playerInfo.RaceFinished) {
+                CommandList finish();
+                finish.Content = simManager.InputEvents.ToCommandsText();
+                finish.Save(GetVariableString("bf_result_filename").Split(".")[0] + "_bestfin.txt");
+                g_bfPrinter.PrintTargetAchieved();
+                print("");
+                print("Finish reached at " + (raceTime-10) + "ms, shifting finish evaluation earlier...", Severity::Warning);
+                resp.Decision = BFEvaluationDecision::Reject;
+                bfTimeTo = raceTime-10;
+                if(bfTimeFrom > bfTimeTo) {
+                    bfTimeFrom = bfTimeTo;
+                }
+                g_bestBfDistance = 1e18f;
+                g_currentWindowMinDistance = 1e18f;
+                g_windowResultProcessed = false;
+                return resp;
+            }
             float minDistToAnyFinish = 1e18f;
             for (uint i = 0; i < g_worldClippedFinishPolys.Length; ++i) {
                const Polyhedron@ targetPoly = g_worldClippedFinishPolys[i];
@@ -849,6 +868,7 @@ void Main()
     RegisterVariable(g_pluginPrefix + "_bf_time_from", 0);
     RegisterVariable(g_pluginPrefix + "_bf_time_to", 0);
     RegisterVariable(g_pluginPrefix + "_constraint_trigger_index", -1);
+    RegisterVariable(g_pluginPrefix + "_shift_finish_eval", true);
     RegisterBruteforceEvaluation(
         g_bruteforceDistanceTargetIdentifier,
         "Distance to Target (CP/Finish)",
@@ -867,11 +887,6 @@ void OnRunStep(SimulationManager@ simManager) {
         if (challenge.Uid != g_cachedChallengeUid) return;
     }
 
-    float distance = CalculateMinCarDistanceToPoly(
-        GmIso4(simManager.Dyna.CurrentState.Location),
-        g_worldFinishPolys[0]
-    );
-    log("Current distance to finish at " + raceTime + "ms: " + Text::FormatFloat(distance, "", 0, 4) + " m");
 }
 PluginInfo@ GetPluginInfo()
 {
@@ -1082,7 +1097,6 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
         }
     }
 }
-
 array<vec3> g_polyVertsInCarSpace;
 array<vec3> g_transformedVertices;
 
@@ -1502,6 +1516,16 @@ vec3 closest_point_on_segment_from_origin_native(const vec3&in a, const vec3&in 
     return a + ab * t;
 }
 
+GmVec3 closest_point_on_segment(const GmVec3&in p, const GmVec3&in a, const GmVec3&in b) {
+    GmVec3 ab = b - a;
+    float ab_len_sq = ab.LengthSquared();
+    if (ab_len_sq < EPSILON * EPSILON) {
+        return a;
+    }
+    float t = GmDot(p - a, ab) / ab_len_sq;
+    t = Math::Max(0.0f, Math::Min(1.0f, t));
+    return a + ab * t;
+}
 class GmVec3 {
     float x = 0.0f;
     float y = 0.0f;
@@ -1991,8 +2015,11 @@ class Polyhedron {
     array<array<int>> faces;
     array<PrecomputedFace> precomputedFaces; 
     array<Edge> uniqueEdges;
+    vec3 BoundingSphereCenter;
+    float BoundingSphereRadius;
 
-    Polyhedron() {}
+    Polyhedron() {
+        BoundingSphereRadius = 0.0f;}
 
     Polyhedron(const array<vec3>&in in_vertices, const array<array<int>>&in triangleFaces) {
         this.vertices = in_vertices;
@@ -2225,6 +2252,28 @@ class Polyhedron {
                 }
             }
         }
+
+        if (!this.vertices.IsEmpty()) {
+
+            vec3 center(0,0,0);
+            for (uint i = 0; i < this.vertices.Length; ++i) {
+                center += this.vertices[i];
+            }
+            center /= float(this.vertices.Length);
+            this.BoundingSphereCenter = center;
+
+            float maxRadiusSq = 0.0f;
+            for (uint i = 0; i < this.vertices.Length; ++i) {
+                float distSq = (this.vertices[i] - this.BoundingSphereCenter).LengthSquared();
+                if (distSq > maxRadiusSq) {
+                    maxRadiusSq = distSq;
+                }
+            }
+            this.BoundingSphereRadius = Math::Sqrt(maxRadiusSq);
+        } else {
+            this.BoundingSphereCenter = vec3(0,0,0);
+            this.BoundingSphereRadius = 0.0f;
+        }
     }
 
     bool GetFaceVertices(uint faceIndex, array<vec3>&out faceVerts) const {
@@ -2336,14 +2385,4 @@ class Ellipsoid {
         this.rotation = GmMat3(rotation);
     }
 
-}
-GmVec3 closest_point_on_segment(const GmVec3&in p, const GmVec3&in a, const GmVec3&in b) {
-    GmVec3 ab = b - a;
-    float ab_len_sq = ab.LengthSquared();
-    if (ab_len_sq < EPSILON * EPSILON) {
-        return a;
-    }
-    float t = GmDot(p - a, ab) / ab_len_sq;
-    t = Math::Max(0.0f, Math::Min(1.0f, t));
-    return a + ab * t;
 }
