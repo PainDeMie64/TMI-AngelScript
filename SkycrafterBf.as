@@ -111,7 +111,8 @@ uint64 g_totalVertexTransformTime = 0;
 uint64 g_totalClosestPointPolyTime = 0;
 uint64 g_onEvaluateCallCount = 0;
 
-const string g_pluginPrefix = "dist_bf";
+const string g_distPluginPrefix = "dist_bf";
+const string g_uberPluginPrefix = "uber_bf";
 int g_bfTargetType = -1;
 int g_bfTargetCpIndex = -1;
 float g_bestBfDistance = 1e18f;
@@ -182,8 +183,8 @@ void CacheCheckpointData() {
 }
 
 void RenderBruteforceEvaluationSettingssss() {
-    g_bfTargetType = int(GetVariableDouble(g_pluginPrefix + "_target_type"));
-    g_bfTargetCpIndex = int(GetVariableDouble(g_pluginPrefix + "_target_cp_index"));
+    g_bfTargetType = int(GetVariableDouble(g_distPluginPrefix + "_target_type"));
+    g_bfTargetCpIndex = int(GetVariableDouble(g_distPluginPrefix + "_target_cp_index"));
     bool typeChanged = false;
     UI::Text("Optimize for minimum distance to:");
     bool isCpSelected = (g_bfTargetType == 0);
@@ -204,15 +205,15 @@ void RenderBruteforceEvaluationSettingssss() {
     if (g_bfTargetType == 0) {
         UI::Text("Target Checkpoint Settings:");
         UI::Dummy(vec2(0, 5));
-        UI::CheckboxVar("Show Checkpoint Numbers", g_pluginPrefix + "_show_cp_numbers");
+        UI::CheckboxVar("Show Checkpoint Numbers", g_distPluginPrefix + "_show_cp_numbers");
         UI::PushItemWidth(120);
-        UI::InputIntVar("Target Index##CPIndex", g_pluginPrefix + "_target_cp_index", 1);
+        UI::InputIntVar("Target Index##CPIndex", g_distPluginPrefix + "_target_cp_index", 1);
         UI::PopItemWidth();
-        int potentiallyUpdatedIndex = int(GetVariableDouble(g_pluginPrefix + "_target_cp_index"));
+        int potentiallyUpdatedIndex = int(GetVariableDouble(g_distPluginPrefix + "_target_cp_index"));
         int clampedIndex = Math::Max(0, potentiallyUpdatedIndex);
         if (clampedIndex != g_bfTargetCpIndex || clampedIndex != potentiallyUpdatedIndex) {
              g_bfTargetCpIndex = clampedIndex;
-             SetVariable(g_pluginPrefix + "_target_cp_index", g_bfTargetCpIndex);
+             SetVariable(g_distPluginPrefix + "_target_cp_index", g_bfTargetCpIndex);
         } else {
              g_bfTargetCpIndex = clampedIndex;
         }
@@ -232,14 +233,14 @@ void RenderBruteforceEvaluationSettingssss() {
     } else {
         UI::Text("Target Finish Settings:");
         UI::Dummy(vec2(0, 5));
-        UI::CheckboxVar("Shift finish eval after reached", g_pluginPrefix + "_shift_finish_eval");
+        UI::CheckboxVar("Shift finish eval after reached", g_distPluginPrefix + "_shift_finish_eval");
         UI::Dummy(vec2(0, 5));
         UI::BeginDisabled();
         UI::TextWrapped("The bruteforce will optimize towards the closest point on any finish line block surface.");
         UI::EndDisabled();
     }
     if (typeChanged) {
-        SetVariable(g_pluginPrefix + "_target_type", g_bfTargetType);
+        SetVariable(g_distPluginPrefix + "_target_type", g_bfTargetType);
     }
     UI::Separator();
     string bestDistText = "Current Best Distance Found: ";
@@ -255,26 +256,26 @@ void RenderBruteforceEvaluationSettingssss() {
     UI::Dummy(vec2(30, 0));
     UI::SameLine();
     UI::PushItemWidth(150);
-    UI::InputTimeVar("##Nothing1", g_pluginPrefix + "_bf_time_from");
+    UI::InputTimeVar("##Nothing1", g_distPluginPrefix + "_bf_time_from");
     UI::PopItemWidth();
     UI::Text("To");
     UI::SameLine();
     UI::Dummy(vec2(49, 0));
     UI::SameLine();
     UI::PushItemWidth(150);
-    UI::InputTimeVar("##Nothing2", g_pluginPrefix + "_bf_time_to");
+    UI::InputTimeVar("##Nothing2", g_distPluginPrefix + "_bf_time_to");
     UI::PopItemWidth();
     UI::Text("Trigger constraint");
     UI::SameLine();
     UI::Dummy(vec2(-11, 0));
     UI::SameLine();
     UI::PushItemWidth(110);
-    int triggerId=UI::InputIntVar("##Nothing3", g_pluginPrefix + "_constraint_trigger_index", 1);
+    int triggerId=UI::InputIntVar("##Nothing3", g_distPluginPrefix + "_constraint_trigger_index", 1);
     UI::PopItemWidth();
     UI::TextDimmed("0 to disable, 1 or more for the trigger index (see Triggers tab)");
     if (triggerId < 0) {
         triggerId = 0;
-        SetVariable(g_pluginPrefix + "_constraint_trigger_index", triggerId);
+        SetVariable(g_distPluginPrefix + "_constraint_trigger_index", triggerId);
     }
 }
 vec3 ProjectPointOnPlane(const vec3&in point, const vec3&in planeNormal, const vec3&in planePoint) {
@@ -436,8 +437,9 @@ AABB@ g_clippedtargetCpAABB;
 array<Polyhedron@> g_worldClippedFinishPolys;
 array<AABB> g_worldClippedFinishAABBs;
 
-void OnSimulationBegin(SimulationManager@ simManager) {
-    if(!(GetVariableString("bf_target")==g_bruteforceDistanceTargetIdentifier && GetVariableString("controller")=="bruteforce")){
+void OnDistSimulationBegin(SimulationManager@ simManager){
+    
+    if(!(GetVariableString("controller")=="bruteforce")){
         g_bfConfigIsValid = false;
         return;
     }
@@ -452,12 +454,12 @@ void OnSimulationBegin(SimulationManager@ simManager) {
         CacheCheckpointData();
     }
     g_bfConfigIsValid = false;
-    bfTimeFrom = int(GetVariableDouble(g_pluginPrefix + "_bf_time_from"));
-    bfTimeTo = int(GetVariableDouble(g_pluginPrefix + "_bf_time_to"));
-    g_bfTargetType = int(GetVariableDouble(g_pluginPrefix + "_target_type"));
+    bfTimeFrom = int(GetVariableDouble(g_distPluginPrefix + "_bf_time_from"));
+    bfTimeTo = int(GetVariableDouble(g_distPluginPrefix + "_bf_time_to"));
+    g_bfTargetType = int(GetVariableDouble(g_distPluginPrefix + "_target_type"));
 
     if (g_bfTargetType == 0) {
-        g_bfTargetCpIndex = int(GetVariableDouble(g_pluginPrefix + "_target_cp_index"));
+        g_bfTargetCpIndex = int(GetVariableDouble(g_distPluginPrefix + "_target_cp_index"));
         if (g_bfTargetCpIndex < 0 || g_bfTargetCpIndex >= int(g_worldCheckpointPolys.Length)) {
             print("BF Init Error: Target CP index " + g_bfTargetCpIndex + " is out of bounds (0-" + (g_worldCheckpointPolys.Length) + ").", Severity::Error);
         } else {
@@ -500,7 +502,7 @@ void OnSimulationBegin(SimulationManager@ simManager) {
         g_totalClosestPointPolyTime = 0;
         g_onEvaluateCallCount = 0;
 
-        AABB triggerAABB = triggerIdToAABB(int(GetVariableDouble(g_pluginPrefix + "_constraint_trigger_index")));
+        AABB triggerAABB = triggerIdToAABB(int(GetVariableDouble(g_distPluginPrefix + "_constraint_trigger_index")));
         if (g_bfTargetType == 0) {
             g_clippedtargetCpPoly = ClipPolyhedronByAABB(g_targetCpPoly, triggerAABB);
             g_targetCpAABB = triggerAABB;
@@ -519,6 +521,14 @@ void OnSimulationBegin(SimulationManager@ simManager) {
         }
     } else {
          print("BF Initialization failed. Evaluation will be stopped.");
+    }
+}
+
+void OnSimulationBegin(SimulationManager@ simManager) {
+    if(GetVariableString("bf_target")==g_bruteforceDistanceTargetIdentifier){
+        OnDistSimulationBegin(simManager);
+    }else if(GetVariableString("bf_target")==g_uberbugTargetIdentifier){
+        OnUberSimulationBegin(simManager);
     }
 }
 
@@ -709,13 +719,13 @@ void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int ta
         return;
     }
     if(current==target && raceTime <= bfTimeTo && raceTime >= bfTimeFrom && g_bfPhase == BFPhase::Search){
-        if(GetVariableBool(g_pluginPrefix + "_shift_finish_eval")){
+        if(GetVariableBool(g_distPluginPrefix + "_shift_finish_eval")){
             CommandList finish();
             finish.Content = simManager.InputEvents.ToCommandsText();
-            finish.Save(GetVariableString("bf_result_filename").Split(".")[0] + "_bestfin.txt");
             g_bfPrinter.PrintTargetAchieved();
             print("");
             print("Finish reached at " + (raceTime) + "ms (or before), shifting finish evaluation earlier...", Severity::Warning);
+            print("File saved: " + finish.Save(GetVariableString("bf_result_filename").Split(".")[0] + "_bestfin.txt"));
             bfTimeTo = raceTime-10;
             if(bfTimeFrom > bfTimeTo) {
                 bfTimeFrom = bfTimeTo;
@@ -774,7 +784,7 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
         if (g_bfTargetType == 0) {
             const Polyhedron@ targetPoly;
             const AABB targetAABB = g_targetCpAABB;
-            int constraintTriggerIndex = int(GetVariableDouble(g_pluginPrefix + "_constraint_trigger_index"));
+            int constraintTriggerIndex = int(GetVariableDouble(g_distPluginPrefix + "_constraint_trigger_index"));
             bool constraintIsActive = (constraintTriggerIndex > 0);
             if (constraintIsActive) {
                 @targetPoly = g_clippedtargetCpPoly;
@@ -811,7 +821,7 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
 
     if (isDecisionTime && !g_windowResultProcessed) {
         g_windowResultProcessed = true;
-        if(g_bfTargetType == 1 && playerInfo.RaceFinished && !GetVariableBool(g_pluginPrefix + "_shift_finish_eval")){
+        if(g_bfTargetType == 1 && playerInfo.RaceFinished && !GetVariableBool(g_distPluginPrefix + "_shift_finish_eval")){
             g_isEarlyStop = true;
         }
         if (g_isEarlyStop) {
@@ -865,7 +875,7 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
         return resp;
     }
     if(g_forceAccept && info.Phase == BFPhase::Search){
-        if(GetVariableBool(g_pluginPrefix + "_shift_finish_eval")){
+        if(GetVariableBool(g_distPluginPrefix + "_shift_finish_eval")){
             
             g_isNewBFEvaluationRun = true;
         }
@@ -878,39 +888,69 @@ BFEvaluationResponse@ OnEvaluate_Inner(SimulationManager@ simManager, const BFEv
     return resp;
 }
 string g_bruteforceDistanceTargetIdentifier = "distance_target";
+string g_uberbugTargetIdentifier = "uberbug_target";
 void Main()
 {
     log("Skycrafter Bruteforce Targets v2 loaded.");
     InitializeTriggerData();
     InitializeCarEllipsoids();
 
-    RegisterVariable(g_pluginPrefix + "_target_type", 0);
-    RegisterVariable(g_pluginPrefix + "_target_cp_index", 0);
-    RegisterVariable(g_pluginPrefix + "_show_cp_numbers", false);
-    RegisterVariable(g_pluginPrefix + "_cached_triggers", "");
-    RegisterVariable(g_pluginPrefix + "_bf_time_from", 0);
-    RegisterVariable(g_pluginPrefix + "_bf_time_to", 0);
-    RegisterVariable(g_pluginPrefix + "_constraint_trigger_index", -1);
-    RegisterVariable(g_pluginPrefix + "_shift_finish_eval", true);
+    RegisterVariable(g_distPluginPrefix + "_target_type", 0);
+    RegisterVariable(g_distPluginPrefix + "_target_cp_index", 0);
+    RegisterVariable(g_distPluginPrefix + "_show_cp_numbers", false);
+    RegisterVariable(g_distPluginPrefix + "_cached_triggers", "");
+    RegisterVariable(g_distPluginPrefix + "_bf_time_from", 0);
+    RegisterVariable(g_distPluginPrefix + "_bf_time_to", 0);
+    RegisterVariable(g_distPluginPrefix + "_constraint_trigger_index", -1);
+    RegisterVariable(g_distPluginPrefix + "_shift_finish_eval", true);
     RegisterBruteforceEvaluation(
         g_bruteforceDistanceTargetIdentifier,
         "Distance to Target (CP/Finish)",
         OnEvaluate,
         RenderBruteforceEvaluationSettingssss
     );
-}
-void OnRunStep(SimulationManager@ simManager) {
-    int raceTime = simManager.RaceTime;
-    if (!simManager.InRace || simManager.RaceTime < 0) {
-        return;
-    }
-    TM::GameCtnChallenge@ challenge = GetCurrentChallenge();
-    if (challenge !is null && challenge.Uid != g_cachedChallengeUid) {
-        CacheCheckpointData();
-        if (challenge.Uid != g_cachedChallengeUid) return;
-    }
     
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_threshold", 0.8);
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_mode", "Find");
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_show_visualization", false);
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_amount", 10);
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_result_file", "uber{i}.txt");
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_min_speed", 300.0f);
+    RegisterVariable(g_uberPluginPrefix + "_bf_time_from", 0);
+    RegisterVariable(g_uberPluginPrefix + "_bf_time_to", 0);
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_viz_follow_race", false);
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_point1", "0,0,0");
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_point2", "0,0,0");
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_show_trajectory", false);
+    RegisterVariable(g_uberPluginPrefix + "_uberbug_find_mode", "Single");
+    RegisterVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
+    RegisterVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", "");
+    currentUberMode = GetVariableString(g_uberPluginPrefix + "_uberbug_mode");
+    currentFindMode = GetVariableString(g_uberPluginPrefix + "_uberbug_find_mode");
+    RegisterBruteforceEvaluation(
+        g_uberbugTargetIdentifier,
+        "Uberbug",
+        OnEvaluateUberbug,
+        RenderBruteforceEvaluationSettingsUberbug
+    );
+    RegisterSettingsPage("Uberbug BF", UberbugPageSettings);
 
+    string trajectoryTriggerCache = GetVariableString(g_uberPluginPrefix + "_trajectory_trigger_cache");
+    if (trajectoryTriggerCache != "") {
+        array<string> triggerIds = trajectoryTriggerCache.Split(",");
+        for (uint i = 0; i < triggerIds.Length; ++i) {
+            int triggerId = Text::ParseInt(triggerIds[i]);
+            RemoveTrigger(triggerId);
+        }
+    }
+    string cachedTriggers = GetVariableString(g_uberPluginPrefix + "_uberbugs_trigger_cache");
+    if (cachedTriggers != "") {
+        array<string> triggerIds = cachedTriggers.Split(",");
+        for (uint i = 0; i < triggerIds.Length; ++i) {
+            int triggerId = Text::ParseInt(triggerIds[i]);
+            RemoveTrigger(triggerId);
+        }
+    }
 }
 PluginInfo@ GetPluginInfo()
 {
@@ -1020,8 +1060,8 @@ array<Trigger3D> GetTextTriggers(const vec3&in camPos, const vec3&in textPos, co
     }
     return triggers;
 }
-void Render()
-{
+
+void DistRender(){
     array<vec3> positions;
     array<string> texts;
     float size = 5;
@@ -1031,7 +1071,13 @@ void Render()
         positions.Add(center);
         texts.Add(Text::FormatInt(i));
     }
-    drawTriggers(positions, size, texts, GetVariableBool(g_pluginPrefix + "_show_cp_numbers"));
+    drawTriggers(positions, size, texts, GetVariableBool(g_distPluginPrefix + "_show_cp_numbers"));
+}
+
+void Render()
+{
+    DistRender();
+    UberRender();   
 }
 uint64 last_update=0;
 array<vec3> g_textTriggersPositions;
@@ -1049,14 +1095,13 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
         print("Error: Positions and text arrays must have the same length.");
         return;
     }
-    string cachedTriggerIds = GetVariableString(g_pluginPrefix + "_cached_triggers");
+    string cachedTriggerIds = GetVariableString(g_distPluginPrefix + "_cached_triggers");
     if (g_triggerIds.Length == 0 && cachedTriggerIds != "") {
         array<string> ids = cachedTriggerIds.Split(",");
         for (uint i = 0; i < ids.Length; ++i) {
             g_triggerIds.Add(Text::ParseInt(ids[i]));
         }
-        SetVariable(g_pluginPrefix + "_cached_triggers", "");
-        print("Loaded " + g_triggerIds.Length + " cached triggers");
+        SetVariable(g_distPluginPrefix + "_cached_triggers", "");
     }
     if(!doDraw)
     {
@@ -1073,10 +1118,7 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
         for (uint i = 0; i < g_triggerIds.Length; ++i) {
             RemoveTrigger(g_triggerIds[i]);
         }
-        if(g_triggerIds.Length != 0) {
-            print("Attempted to remove " + g_triggerIds.Length + " triggers");
-        }
-        SetVariable(g_pluginPrefix + "_cached_triggers", "");
+        SetVariable(g_distPluginPrefix + "_cached_triggers", "");
         g_triggerIds.Clear();
         return;
     }
@@ -1117,441 +1159,10 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
                 }
             }
             triggerIds = triggerIds.Substr(0, triggerIds.Length - 1);
-            SetVariable(g_pluginPrefix + "_cached_triggers", triggerIds);
+            SetVariable(g_distPluginPrefix + "_cached_triggers", triggerIds);
         }
     }
 }
-
-array<vec3> g_polyVertsInCarSpace;
-array<vec3> g_transformedVertices;
-
-vec3 Normalize(vec3 v) {
-    float magnitude = v.Length();
-    if (magnitude > 1e-6f) {
-        return v / magnitude;
-    }
-    return vec3(0,0,0);
-}
-
-vec3 Cross(vec3 a, vec3 b) {
-    return vec3(a.y * b.z - a.z * b.y,
-                a.z * b.x - a.x * b.z,
-                a.x * b.y - a.y * b.x);
-}
-
-GmVec3 Cross(const GmVec3&in a, const GmVec3&in b) {
-    return GmVec3(
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    );
-}
-
-const float EPSILON = 1e-6f;
-
-GmIso4 GetCarEllipsoidLocationByIndex(SimulationManager@ simM, const GmIso4&in carLocation, uint index) {
-    if (index >= 8) {
-        print("Error: Invalid ellipsoid index requested: " + index + ". Must be 0-7.", Severity::Error);
-        return GmIso4();
-    }
-     if (index >= 4 && g_carEllipsoids.Length <= index) {
-         print("Error: g_carEllipsoids array not initialized correctly for index " + index, Severity::Error);
-         return GmIso4();
-    }
-    auto simManager = GetSimulationManager();
-    GmIso4 worldTransform;
-    if (index <= 3) {
-        GmVec3 wheelSurfaceLocalPos;
-        switch(index) {
-            case 0: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontLeft.SurfaceHandler.Location.Position); break;
-            case 1: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontRight.SurfaceHandler.Location.Position); break;
-            case 2: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackLeft.SurfaceHandler.Location.Position); break;
-            case 3: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackRight.SurfaceHandler.Location.Position); break;
-            default:
-                 print("Error: Unexpected index in wheel section: " + index, Severity::Error);
-                 return GmIso4();
-        }
-        worldTransform.m_Rotation = carLocation.m_Rotation;
-        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(wheelSurfaceLocalPos);
-        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
-    }
-    else {
-        const GmVec3@ localPositionOffset = g_carEllipsoids[index].center;
-        const GmMat3@ localRotation = g_carEllipsoids[index].rotation;
-        worldTransform.m_Rotation = carLocation.m_Rotation * localRotation;
-        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(localPositionOffset);
-        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
-    }
-    return worldTransform;
-}
-
-void InitializeCarEllipsoids() {
-    g_carEllipsoids.Clear();
-    const array<GmVec3> radii = {
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.182f, 0.364f, 0.364f),
-        GmVec3(0.439118f, 0.362f, 1.901528f),
-        GmVec3(0.968297f, 0.362741f, 1.682276f),
-        GmVec3(1.020922f, 0.515218f, 1.038007f),
-        GmVec3(0.384841f, 0.905323f, 0.283418f)
-    };
-    const array<GmVec3> localPositions = {
-        GmVec3(0.863012f, 0.3525f, 1.782089f),
-        GmVec3(-0.863012f, 0.3525f, 1.782089f),
-        GmVec3(0.885002f, 0.352504f, -1.205502f),
-        GmVec3(-0.885002f, 0.352504f, -1.205502f),
-        GmVec3(0.0f, 0.471253f, 0.219106f),
-        GmVec3(0.0f, 0.448782f, -0.20792f),
-        GmVec3(0.0f, 0.652812f, -0.89763f),
-        GmVec3(-0.015532f, 0.363252f, 1.75357f)
-    };
-    array<GmMat3> localRotations;
-    localRotations.Resize(8);
-    localRotations[4].RotateX(Math::ToRad(3.4160502f));
-    localRotations[5].RotateX(Math::ToRad(2.6202483f));
-    localRotations[6].RotateX(Math::ToRad(2.6874702f));
-    localRotations[7].RotateY(Math::ToRad(90.0f));
-    localRotations[7].RotateX(Math::ToRad(90.0f));
-    localRotations[7].RotateZ(Math::ToRad(-180.0f));
-    for (uint i = 0; i < 8; ++i) {
-        g_carEllipsoids.Add(Ellipsoid(localPositions[i], radii[i], localRotations[i]));
-    }
-}
-
-float GmDot(const GmVec3&in a, const GmVec3&in b) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-GmVec3 GmScale(const GmVec3&in a, const GmVec3&in b) {
-    return GmVec3(a.x * b.x, a.y * b.y, a.z * b.z);
-}
-
-vec3 FindClosestPointOnPolyToOrigin_Native(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
-    if (transformedVertices.IsEmpty()) return vec3(0, 0, 0);
-
-    vec3 centroid(0,0,0);
-    for(uint i = 0; i < transformedVertices.Length; ++i) {
-        centroid += transformedVertices[i];
-    }
-    if (!transformedVertices.IsEmpty()) {
-        centroid /= float(transformedVertices.Length);
-    }
-
-    float max_dist = -1e18f;
-    int best_face_index = -1;
-
-    for (uint i = 0; i < originalPoly.precomputedFaces.Length; ++i) {
-        const PrecomputedFace@ face_info = originalPoly.precomputedFaces[i];
-        if (face_info.vertexIndices.Length < 3) continue;
-
-        const vec3 v0 = transformedVertices[face_info.vertexIndices[0]];
-        const vec3 v1 = transformedVertices[face_info.vertexIndices[1]];
-        const vec3 v2 = transformedVertices[face_info.vertexIndices[2]];
-
-        vec3 face_normal = Cross(v1 - v0, v2 - v0).Normalized();
-
-        if (Math::Dot(face_normal, centroid - v0) > 0.0f) {
-
-            face_normal = face_normal * -1.0f;
-        }
-
-        float dist = -Math::Dot(v0, face_normal);
-
-        if (dist > max_dist) {
-            max_dist = dist;
-            best_face_index = i;
-        }
-    }
-
-    if (best_face_index == -1) {
-        float min_dist_sq = 1e18f;
-        vec3 closest_point;
-        for (uint i = 0; i < transformedVertices.Length; i++) {
-            float dist_sq = transformedVertices[i].LengthSquared();
-            if (dist_sq < min_dist_sq) {
-                min_dist_sq = dist_sq;
-                closest_point = transformedVertices[i];
-            }
-        }
-        return closest_point;
-    }
-
-    const PrecomputedFace@ best_face = originalPoly.precomputedFaces[best_face_index];
-    const array<int>@ vertexIndices = best_face.vertexIndices;
-
-    const vec3 v0 = transformedVertices[vertexIndices[0]];
-    const vec3 v1 = transformedVertices[vertexIndices[1]];
-    const vec3 v2 = transformedVertices[vertexIndices[2]];
-    vec3 best_face_normal = Cross(v1 - v0, v2 - v0).Normalized();
-    if (Math::Dot(best_face_normal, centroid - v0) > 0.0f) {
-
-        best_face_normal = best_face_normal * -1.0f;
-    }
-
-    vec3 projectedPoint = best_face_normal * -Math::Dot(v0, best_face_normal);
-
-    bool isInside = true;
-    for (uint j = 0; j < vertexIndices.Length; ++j) {
-        const vec3 v_start = transformedVertices[vertexIndices[j]];
-        const vec3 v_end = transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]];
-        vec3 edge = v_end - v_start;
-        vec3 to_point = projectedPoint - v_start;
-
-        if (Math::Dot(Cross(edge, to_point), best_face_normal) < -EPSILON) {
-            isInside = false;
-            break;
-        }
-    }
-
-    if (isInside) {
-        return projectedPoint;
-    } else {
-        float min_dist_sq = 1e18f;
-        vec3 closest_point_on_edge;
-        for (uint j = 0; j < vertexIndices.Length; j++) {
-            const vec3 vA = transformedVertices[vertexIndices[j]];
-            const vec3 vB = transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]];
-            vec3 point_on_edge = closest_point_on_segment_from_origin_native(vA, vB);
-            float dist_sq = point_on_edge.LengthSquared();
-            if (dist_sq < min_dist_sq) {
-                min_dist_sq = dist_sq;
-                closest_point_on_edge = point_on_edge;
-            }
-        }
-        return closest_point_on_edge;
-    }
-}
-
-vec3 GetClosestPointOnTransformedPolyhedron(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
-    uint64 polyCheckStartTime = Time::get_Now();
-
-    vec3 closestPoint = FindClosestPointOnPolyToOrigin_Native(transformedVertices, originalPoly);
-    g_totalClosestPointPolyTime += (Time::get_Now() - polyCheckStartTime); 
-    return closestPoint;
-}
-
-float CalculateMinCarDistanceToPoly_Inner(const GmIso4&in carWorldTransformGm, const Polyhedron@ targetPoly) {
-    if (targetPoly is null || targetPoly.vertices.IsEmpty()) {
-        return 1e18f;
-    }
-
-    auto simManager = GetSimulationManager();
-    float minDistanceSqOverall = 1e18f;
-
-    iso4 carWorldTransform = carWorldTransformGm.ToIso4();
-
-    mat3 carInvRotation = carWorldTransform.Rotation;
-
-    g_polyVertsInCarSpace.Resize(targetPoly.vertices.Length);
-    for (uint i = 0; i < targetPoly.vertices.Length; ++i) {
-        vec3 v_rel_world = targetPoly.vertices[i] - carWorldTransform.Position;
-
-        g_polyVertsInCarSpace[i] = vec3(
-            carInvRotation.x.x * v_rel_world.x + carInvRotation.y.x * v_rel_world.y + carInvRotation.z.x * v_rel_world.z,
-            carInvRotation.x.y * v_rel_world.x + carInvRotation.y.y * v_rel_world.y + carInvRotation.z.y * v_rel_world.z,
-            carInvRotation.x.z * v_rel_world.x + carInvRotation.y.z * v_rel_world.y + carInvRotation.z.z * v_rel_world.z
-        );
-    }
-
-    g_transformedVertices.Resize(targetPoly.vertices.Length);
-
-    for (uint ellipsoidIndex = 0; ellipsoidIndex < g_carEllipsoids.Length; ++ellipsoidIndex) {
-        const Ellipsoid@ baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
-        vec3 localPosition = baseEllipsoid.center.ToVec3();
-        vec3 invRadii(1.0f / baseEllipsoid.radii.x, 1.0f / baseEllipsoid.radii.y, 1.0f / baseEllipsoid.radii.z);
-
-        if (ellipsoidIndex <= 3) { 
-            iso4 wheelSurfaceLocation;
-            switch(ellipsoidIndex) {
-                case 0: wheelSurfaceLocation = simManager.Wheels.FrontLeft.SurfaceHandler.Location; break;
-                case 1: wheelSurfaceLocation = simManager.Wheels.FrontRight.SurfaceHandler.Location; break;
-                case 2: wheelSurfaceLocation = simManager.Wheels.BackLeft.SurfaceHandler.Location; break;
-                case 3: wheelSurfaceLocation = simManager.Wheels.BackRight.SurfaceHandler.Location; break;
-            }
-            localPosition = wheelSurfaceLocation.Position;
-
-            for(uint i = 0; i < g_polyVertsInCarSpace.Length; ++i) {
-                g_transformedVertices[i] = Scale(g_polyVertsInCarSpace[i] - localPosition, invRadii);
-            }
-        } else { 
-
-            mat3 localInvRotation = baseEllipsoid.rotation.ToMat3();
-
-            for(uint i = 0; i < g_polyVertsInCarSpace.Length; ++i) {
-                vec3 v_relative_to_ellipsoid = g_polyVertsInCarSpace[i] - localPosition;
-
-                vec3 v_rotated = vec3(
-                    localInvRotation.x.x * v_relative_to_ellipsoid.x + localInvRotation.y.x * v_relative_to_ellipsoid.y + localInvRotation.z.x * v_relative_to_ellipsoid.z,
-                    localInvRotation.x.y * v_relative_to_ellipsoid.x + localInvRotation.y.y * v_relative_to_ellipsoid.y + localInvRotation.z.y * v_relative_to_ellipsoid.z,
-                    localInvRotation.x.z * v_relative_to_ellipsoid.x + localInvRotation.y.z * v_relative_to_ellipsoid.y + localInvRotation.z.z * v_relative_to_ellipsoid.z
-                );
-                g_transformedVertices[i] = Scale(v_rotated, invRadii);
-            }
-        }
-
-        vec3 p_poly_transformed = GetClosestPointOnTransformedPolyhedron(g_transformedVertices, targetPoly);
-
-        if (p_poly_transformed.LengthSquared() < 1.0f - EPSILON) {
-            return 0.0f; 
-        }
-
-        vec3 p_sphere_transformed = p_poly_transformed.Normalized();
-
-        vec3 p_poly_carspace, p_sphere_carspace;
-
-        vec3 p_poly_unscaled = Scale(p_poly_transformed, baseEllipsoid.radii.ToVec3());
-        vec3 p_sphere_unscaled = Scale(p_sphere_transformed, baseEllipsoid.radii.ToVec3());
-
-        if (ellipsoidIndex <= 3) { 
-            p_poly_carspace = p_poly_unscaled + localPosition;
-            p_sphere_carspace = p_sphere_unscaled + localPosition;
-        } else { 
-
-            mat3 localForwardRotation = baseEllipsoid.rotation.ToMat3();
-            localForwardRotation.Transpose();
-
-            p_poly_carspace = vec3(
-                localForwardRotation.x.x * p_poly_unscaled.x + localForwardRotation.y.x * p_poly_unscaled.y + localForwardRotation.z.x * p_poly_unscaled.z,
-                localForwardRotation.x.y * p_poly_unscaled.x + localForwardRotation.y.y * p_poly_unscaled.y + localForwardRotation.z.y * p_poly_unscaled.z,
-                localForwardRotation.x.z * p_poly_unscaled.x + localForwardRotation.y.z * p_poly_unscaled.y + localForwardRotation.z.z * p_poly_unscaled.z
-            ) + localPosition;
-            p_sphere_carspace = vec3(
-                localForwardRotation.x.x * p_sphere_unscaled.x + localForwardRotation.y.x * p_sphere_unscaled.y + localForwardRotation.z.x * p_sphere_unscaled.z,
-                localForwardRotation.x.y * p_sphere_unscaled.x + localForwardRotation.y.y * p_sphere_unscaled.y + localForwardRotation.z.y * p_sphere_unscaled.z,
-                localForwardRotation.x.z * p_sphere_unscaled.x + localForwardRotation.y.z * p_sphere_unscaled.y + localForwardRotation.z.z * p_sphere_unscaled.z
-            ) + localPosition;
-        }
-
-        float distanceSq = (p_poly_carspace - p_sphere_carspace).LengthSquared();
-        if (distanceSq < minDistanceSqOverall) {
-            minDistanceSqOverall = distanceSq;
-        }
-    }
-
-    return Math::Sqrt(minDistanceSqOverall);
-}
-
-float CalculateMinCarDistanceToPoly(const GmIso4&in carWorldTransform, const Polyhedron@ targetPoly) {
-    uint64 funcStartTime = Time::get_Now();
-    float result = CalculateMinCarDistanceToPoly_Inner(carWorldTransform, targetPoly);
-    g_totalCalcMinCarDistTime += (Time::get_Now() - funcStartTime);
-    return result;
-}
-
-Polyhedron ClipPolyhedronByPlane(const Polyhedron& in poly, const vec3& in clipPlaneNormal, const vec3& in clipPlanePoint)
-{
-    if (poly.vertices.IsEmpty()) return poly;
-
-    array<vec3> newVertices;
-    array<array<int>> newFaces;
-    dictionary vertexMap; 
-
-    array<float> vertexDists(poly.vertices.Length);
-    for (uint i = 0; i < poly.vertices.Length; i++) {
-        vertexDists[i] = Math::Dot(poly.vertices[i] - clipPlanePoint, clipPlaneNormal);
-    }
-
-    for (uint faceIdx = 0; faceIdx < poly.faces.Length; faceIdx++) {
-        const array<int>@ face = poly.faces[faceIdx];
-        if (face.Length < 3) continue;
-
-        array<int> newPolygonIndices; 
-
-        for (uint i = 0; i < face.Length; i++) {
-            int currOriginalIdx = face[i];
-            int nextOriginalIdx = face[(i + 1) % face.Length];
-
-            float currDist = vertexDists[currOriginalIdx];
-            float nextDist = vertexDists[nextOriginalIdx];
-
-            if (currDist <= EPSILON) {
-                string key = "" + currOriginalIdx;
-                int newIdx;
-                if (!vertexMap.Get(key, newIdx)) {
-                    newIdx = newVertices.Length;
-                    vertexMap.Set(key, newIdx);
-                    newVertices.Add(poly.vertices[currOriginalIdx]);
-                }
-
-                if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length-1] != newIdx) {
-                    newPolygonIndices.Add(newIdx);
-                }
-            }
-
-            if ((currDist > 0 && nextDist < 0) || (currDist < 0 && nextDist > 0)) {
-                float t = currDist / (currDist - nextDist);
-                vec3 intersectionPoint = poly.vertices[currOriginalIdx] + (poly.vertices[nextOriginalIdx] - poly.vertices[currOriginalIdx]) * t;
-
-                int newIdx = newVertices.Length;
-                newVertices.Add(intersectionPoint);
-
-                if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length-1] != newIdx) {
-                    newPolygonIndices.Add(newIdx);
-                }
-            }
-        }
-
-        if (newPolygonIndices.Length >= 3) {
-            for (uint i = 1; i < newPolygonIndices.Length - 1; i++) {
-                array<int> newTriangle = {
-                    newPolygonIndices[0],
-                    newPolygonIndices[i],
-                    newPolygonIndices[i + 1]
-                };
-                newFaces.Add(newTriangle);
-            }
-        }
-    }
-
-    Polyhedron clippedPoly(newVertices, newFaces);
-    return clippedPoly;
-}
-
-Polyhedron ClipPolyhedronByAABB(const Polyhedron& in poly, const AABB& in box)
-{
-    Polyhedron clippedPoly = poly;
-
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(-1, 0, 0), box.min); 
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 1, 0, 0), box.max); 
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0,-1, 0), box.min); 
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 1, 0), box.max); 
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 0,-1), box.min); 
-    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 0, 1), box.max); 
-
-    return clippedPoly;
-}
-
-vec3 Scale(const vec3&in a, const vec3&in b) {
-    return vec3(a.x * b.x, a.y * b.y, a.z * b.z);
-}
-
-vec3 closest_point_on_segment_from_origin_native(const vec3&in a, const vec3&in b) {
-    vec3 ab = b - a;
-
-    float ab_len_sq = ab.LengthSquared();
-    if (ab_len_sq < 1e-12f) { 
-        return a;
-    }
-
-    float t = -Math::Dot(a, ab) / ab_len_sq;
-
-    t = Math::Clamp(t, 0.0f, 1.0f);
-    return a + ab * t;
-}
-
-GmVec3 closest_point_on_segment(const GmVec3&in p, const GmVec3&in a, const GmVec3&in b) {
-    GmVec3 ab = b - a;
-    float ab_len_sq = ab.LengthSquared();
-    if (ab_len_sq < EPSILON * EPSILON) {
-        return a;
-    }
-    float t = GmDot(p - a, ab) / ab_len_sq;
-    t = Math::Max(0.0f, Math::Min(1.0f, t));
-    return a + ab * t;
-}
-
 class GmVec3 {
     float x = 0.0f;
     float y = 0.0f;
@@ -2411,4 +2022,913 @@ class Ellipsoid {
         this.rotation = GmMat3(rotation);
     }
 
+}
+array<iso4> currentRunStates;
+array<string> runStatesResultFiles;
+array<iso4> initialRunStates;
+int maxDur = 0;
+float viztime = 0;
+
+bool runAccepted = false;
+bool stop = false;
+float bestProj = 0.0f;
+
+BFEvaluationResponse@ OnEvaluateUberbug(SimulationManager@ simManager, const BFEvaluationInfo&in info){
+    BFEvaluationResponse@ resp = BFEvaluationResponse();
+    auto phase = info.Phase;
+    int raceTime = simManager.RaceTime;
+    bool isEvalTime = raceTime >= GetVariableDouble(g_uberPluginPrefix + "_bf_time_from") && 
+                        raceTime <= GetVariableDouble(g_uberPluginPrefix + "_bf_time_to");
+    bool isPastEvalTime = raceTime > GetVariableDouble(g_uberPluginPrefix + "_bf_time_to");
+    if(currentUberMode != "Find"){
+        resp.Decision == BFEvaluationDecision::Stop;
+        print("Uberbug evaluation is not implemented for mode: " + currentUberMode);
+        return resp;
+
+    }
+    if (phase == BFPhase::Initial){
+        if(raceTime>=0){
+            initialRunStates.InsertAt(raceTime/10, simManager.Dyna.CurrentState.Location);
+        }
+        if(isEvalTime && isUberbug(simManager)){
+            if(currentFindMode == "Single"){
+                print("Base run already contained a uberbug at time " + Text::FormatInt(raceTime) + ".");
+                resp.Decision == BFEvaluationDecision::Stop;
+            }
+        }
+        if(isPastEvalTime){
+            currentRunStates= initialRunStates;
+        }
+    }else{
+        if(raceTime>=0 && currentFindMode == "Collect many"){
+            currentRunStates.RemoveAt(raceTime/10);
+            currentRunStates.InsertAt(raceTime/10, simManager.Dyna.CurrentState.Location);
+        }
+        if(isEvalTime && isUberbug(simManager) && !runAccepted){
+            if(currentFindMode == "Collect many"){
+                totalAmountCollected++;
+                runStatesResultFiles.Add(SaveCurrentInputs(simManager));
+                runAccepted = true;
+                print("Collected uberbug at time " + Text::FormatInt(raceTime) + ".", Severity::Success);
+                if(totalAmountCollected >= GetVariableDouble(g_uberPluginPrefix + "_uberbug_amount")){
+                    stop = true;
+                }
+            }else if(currentFindMode == "Single"){
+                print("Found a uberbug at time " + Text::FormatInt(raceTime) + ". Stopping evaluation.", Severity::Success);
+                SaveCurrentInputs(simManager);
+                resp.Decision = BFEvaluationDecision::Stop;
+                return resp;
+            }else if(currentFindMode == "Keep best"){
+                vec3 desiredTraj = Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point2")) - 
+                    Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point1"));
+                vec3 uberTraj = GetUberbugTrajectory(simManager)*100*3.6f;
+                float length = uberTraj.Length();
+                if(length > 1000.0f){
+                    uberTraj = uberTraj.Normalized() * 1000.0f;
+                }
+                float k = uberTraj.Length() *Math::Dot(uberTraj.Normalized(), desiredTraj.Normalized());
+                if(k > bestProj){
+                    bestProj = k;
+                    SaveCurrentInputs(simManager);
+                    print("Found a better uberbug at time " + Text::FormatInt(raceTime) + ". Matches desired trajectory with a projected speed of " + Text::FormatFloat(bestProj,"",0,3) + " km/h.", Severity::Success);
+                    resp.Decision = BFEvaluationDecision::Reject;
+                }
+            }
+        }
+        if(isPastEvalTime && !runAccepted){
+            resp.Decision = BFEvaluationDecision::Reject;
+            currentRunStates=initialRunStates;
+        }
+    }
+    if(raceTime >= int(simManager.EventsDuration) && runAccepted){
+        uberbugStates.Add(currentRunStates);
+        currentRunStates=initialRunStates;
+        runAccepted = false;
+        resp.Decision = BFEvaluationDecision::Reject;
+        if(stop){
+            resp.Decision = BFEvaluationDecision::Stop;
+            print("Collected enough uberbugs, stopping evaluation.", Severity::Warning);
+        }
+    }
+    return resp;
+}
+
+string SaveCurrentInputs(SimulationManager@ simManager) {
+    string filename = currentFindMode == "Collect many" ? 
+        GetVariableString(g_uberPluginPrefix + "_uberbug_result_file") 
+                                : 
+        GetVariableString("bf_result_filename");
+    int i = totalAmountCollected;
+    int indexPos = filename.FindLast("{i}");
+    CommandList inputs();
+    inputs.Content = simManager.InputEvents.ToCommandsText();
+    if(indexPos != -1){
+        filename.Erase(indexPos, 3);
+        filename.Insert(indexPos, Text::FormatInt(i));
+    }
+    if(inputs.Save(filename)){
+        print("Saved inputs to " + filename, Severity::Success);
+    }else{
+        print("Failed to save inputs to " + filename, Severity::Error);
+    } 
+    return filename;
+}
+
+bool isUberbug(SimulationManager@ simManager){
+    vec3 speed = simManager.Dyna.CurrentState.LinearSpeed;
+    vec3 previousSpeed = simManager.Dyna.PreviousState.LinearSpeed;
+    return Math::Dot(speed.Normalized(), previousSpeed.Normalized()) <= GetVariableDouble(g_uberPluginPrefix + "_uberbug_threshold") && speed.Length()*3.6f >= GetVariableDouble(g_uberPluginPrefix + "_uberbug_min_speed");
+}
+
+vec3 GetUberbugTrajectory(SimulationManager@ simManager) {
+    vec3 pos = simManager.Dyna.CurrentState.Location.Position;
+    vec3 prevPos = simManager.Dyna.PreviousState.Location.Position;
+    return (pos - prevPos);
+}
+
+int totalAmountCollected = 0;
+
+void OnUberSimulationBegin(SimulationManager@ simManager) {
+    if(GetVariableString("controller") != "bruteforce"){
+        return;
+    }
+    totalAmountCollected = 0;
+    uberbugStates = array<array<iso4>>();
+    currentRunStates.Clear();
+    initialRunStates.Clear();
+    runStatesResultFiles.Clear();
+    runAccepted = false;
+    maxDur = int(simManager.EventsDuration);
+    stop = false;
+    closestInputFile="";
+    bestProj = 0.0f;
+}
+
+string currentUberMode = "Find";
+string currentFindMode = "Single";
+
+array<array<iso4>> uberbugStates;
+
+void RenderBruteforceEvaluationSettingsUberbug() {
+
+    SimulationManager@ simManager = GetSimulationManager();
+    TM::GameCamera@ cam = GetCurrentCamera();
+
+    UI::Dummy(vec2(0, 5));
+    UI::PushItemWidth(231);
+    
+    if(UI::BeginCombo("Mode", currentUberMode)) {
+        if(UI::Selectable("Find", currentUberMode == "Find")) {
+            currentUberMode = "Find";
+            SetVariable(g_uberPluginPrefix + "_uberbug_mode", currentUberMode);
+        }
+        if(UI::Selectable("Optimize", currentUberMode == "Optimize")) {
+            currentUberMode = "Optimize";
+            SetVariable(g_uberPluginPrefix + "_uberbug_mode", currentUberMode);
+        }
+        UI::EndCombo();
+    }
+    UI::Dummy(vec2(0, 1));
+    if(currentUberMode == "Find"){
+        UI::Dummy(vec2(0, 1));
+        if(UI::BeginCombo("Find mode", currentFindMode)){
+            if(UI::Selectable("Single", currentFindMode == "Single")) {
+                currentFindMode = "Single";
+                SetVariable(g_uberPluginPrefix + "_uberbug_find_mode", currentFindMode);
+            }
+            if(UI::Selectable("Collect many", currentFindMode == "Collect many")) {
+                currentFindMode = "Collect many";
+                SetVariable(g_uberPluginPrefix + "_uberbug_find_mode", currentFindMode);
+            }
+            if(UI::Selectable("Keep best", currentFindMode == "Keep best")) {
+                currentFindMode = "Keep best";
+                SetVariable(g_uberPluginPrefix + "_uberbug_find_mode", currentFindMode);
+            }
+            UI::EndCombo();
+        }
+        UI::Dummy(vec2(0, 1));
+        if(currentFindMode == "Collect many"){
+            
+                UI::InputIntVar("Amount", g_uberPluginPrefix + "_uberbug_amount", 10);
+                UI::Dummy(vec2(0, 1));
+                UI::InputTextVar("Result file", g_uberPluginPrefix + "_uberbug_result_file");
+                UI::TextDimmed("This is the file where the uberbugs will be saved. {i} will be replaced with the uberbug number, starting from 1.");
+                UI::Dummy(vec2(0, 1));
+        }
+        if(currentFindMode == "Keep best"){
+            UI::Dummy(vec2(0, 1));
+            UI::DragFloat3Var("Point 1", g_uberPluginPrefix + "_uberbug_point1", 0.1f, 0.0f, 0.0f, "%.3f");
+            if(simManager.InRace){
+                UI::SameLine();
+                if(UI::Button("Copy cam position")){
+                    SetVariable(g_uberPluginPrefix + "_uberbug_point1", cam.Location.Position.ToString());
+                }
+            }
+            UI::Dummy(vec2(0, 1));
+            UI::DragFloat3Var("Point 2", g_uberPluginPrefix + "_uberbug_point2", 0.1f, 0.0f, 0.0f, "%.3f");
+            if(simManager.InRace){
+                UI::SameLine();
+                if(UI::Button("Copy cam position##")){
+                    SetVariable(g_uberPluginPrefix + "_uberbug_point2", cam.Location.Position.ToString());
+                }
+            }
+            UI::Dummy(vec2(0, 1));
+        }
+    }
+    if(currentUberMode == "Optimize"){
+        UI::Text("THIS MODE IS NOT IMPLEMENTED YET");
+        UI::Dummy(vec2(0, 1));
+    }
+    UI::Separator();
+    UI::Dummy(vec2(0, 5));
+    UI::InputFloatVar("Threshold", g_uberPluginPrefix + "_uberbug_threshold", 0.05f);
+    UI::PopItemWidth();
+    UI::TextDimmed("This is the maximum value for which a dot product is considered valid for a uberbug. If you have no idea what this means, leave it at default (0.8). Decrease slightly if you are getting false positives.");
+    UI::Dummy(vec2(0, 5));
+    UI::Text("From");
+    UI::SameLine();
+    UI::Dummy(vec2(30, 0));
+    UI::SameLine();
+    UI::PushItemWidth(150);
+    UI::InputTimeVar("##Nothing1", g_uberPluginPrefix + "_bf_time_from");
+    UI::PopItemWidth();
+    UI::Text("To");
+    UI::SameLine();
+    UI::Dummy(vec2(49, 0));
+    UI::SameLine();
+    UI::PushItemWidth(150);
+    UI::InputTimeVar("##Nothing2", g_uberPluginPrefix + "_bf_time_to");
+    UI::Dummy(vec2(0, 5));
+    UI::PushItemWidth(231);
+    UI::InputFloatVar("Min. speed", g_uberPluginPrefix + "_uberbug_min_speed", 10.0f);
+    UI::PopItemWidth();
+}
+
+void OnRunStep(SimulationManager@ simManager) {
+    int raceTime = simManager.RaceTime;
+    TM::GameCtnChallenge@ challenge = GetCurrentChallenge();
+    if (challenge !is null && challenge.Uid != g_cachedChallengeUid) {
+        CacheCheckpointData();
+        if (challenge.Uid != g_cachedChallengeUid) return;
+    }
+}
+uint64 last_ubertriggers_update = 0;
+
+array<int> g_uberbugDrawTriggerIds;
+array<int> g_trajectoryDrawTriggerIds;
+
+int prevTime = -1;
+
+vec3 prev1();
+vec3 prev2();
+
+void drawTrajectory(vec3 p1, vec3 p2){
+
+    if(p1 == prev1 && p2 == prev2){
+        if(!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_trajectory")) {
+            for(uint i = 0; i < g_trajectoryDrawTriggerIds.Length; i++) {
+                RemoveTrigger(g_trajectoryDrawTriggerIds[i]);
+            }
+            g_trajectoryDrawTriggerIds.Clear();
+            return;
+        }else if(g_trajectoryDrawTriggerIds.Length != 0) {
+            return;
+        }
+    }
+    prev1 = p1;
+    prev2 = p2;
+    for(uint i = 0; i < g_trajectoryDrawTriggerIds.Length; i++) {
+        RemoveTrigger(g_trajectoryDrawTriggerIds[i]);
+    }
+    g_trajectoryDrawTriggerIds.Clear();
+    SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", "");
+    vec3 dir = (p2 - p1).Normalized();
+    float s = 0.4f;
+    float spacing = 5.0f;
+    vec3 size = vec3(s, s, s);
+    vec3 max();
+    vec3 min();
+    if(p1.Length()> p2.Length()){
+        max = p1;
+        min = p2;
+    }else{
+        max = p2;
+        min = p1;
+    }
+    while(max.Length() - min.Length() > 0) {
+        int id = SetTrigger(Trigger3D(min - size, size));
+        g_trajectoryDrawTriggerIds.Add(id);
+        min += dir * s * spacing;
+    }
+    string cache="";
+    for(uint i = 0; i < g_trajectoryDrawTriggerIds.Length; i++) {
+        cache += Text::FormatInt(g_trajectoryDrawTriggerIds[i]) + ",";
+    }
+    if(cache.Length > 0) {
+        cache.Erase(cache.Length - 1, 1);
+    }
+    SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", cache);
+}
+
+void UberRender(){
+    SimulationManager@ simManager = GetSimulationManager();
+    if(!simManager.InRace) { return; }
+    int raceTime = simManager.RaceTime;
+    if(GetVariableBool(g_uberPluginPrefix + "_uberbug_viz_follow_race")) {
+        drawUberTriggers(raceTime);
+    }else{
+        drawUberTriggers(int(viztime*1000));
+    }
+    drawTrajectory(
+        Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point1")),
+        Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point2"))
+    );
+}
+
+void drawUberTriggers(int time){
+
+    if(time == prevTime){
+        if(!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_visualization")) {
+            for(uint i = 0; i < g_uberbugDrawTriggerIds.Length; ++i) {
+                RemoveTrigger(g_uberbugDrawTriggerIds[i]);
+            }
+            g_uberbugDrawTriggerIds.Clear();
+        }else if(g_uberbugDrawTriggerIds.Length != 0) {
+            return;
+        }
+    }
+    prevTime = time;
+    if(!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_visualization")) {
+            for(uint i = 0; i < g_uberbugDrawTriggerIds.Length; ++i) {
+                RemoveTrigger(g_uberbugDrawTriggerIds[i]);
+            }
+            g_uberbugDrawTriggerIds.Clear();
+            return;
+    }
+    for(uint i = 0; i < g_uberbugDrawTriggerIds.Length; ++i) {
+        RemoveTrigger(g_uberbugDrawTriggerIds[i]);
+    }
+    g_uberbugDrawTriggerIds.Clear();
+    auto simManager = GetSimulationManager();
+    if (simManager is null || !simManager.InRace) { return; }
+    if(time < 0) {
+        return;
+    }
+    if(uberbugStates.Length == 0) {
+        return;
+    }
+    for(uint i = 0; i < uberbugStates.Length; ++i) {
+        try{
+            iso4 carTransform = uberbugStates[i][time/10];
+            vec3 carWorldPos = carTransform.Position;
+            mat3 carWorldRot = carTransform.Rotation;
+
+            vec3 aabbMin, aabbSize;
+            int id;
+
+            vec3 mainBodyLocalHalfExtents(1.5f / 2.0f, 0.45 / 2.0f, 3.0f / 2.0f); 
+            vec3 mainBodyLocalOffset(0.0f, 0.0f, 0.0f); 
+
+            CalculateRotatedAABB(mainBodyLocalOffset, mainBodyLocalHalfExtents, carWorldPos, carWorldRot, aabbMin, aabbSize);
+            id = SetTrigger(Trigger3D(aabbMin, aabbSize));
+            g_uberbugDrawTriggerIds.Add(id);
+
+            vec3 backPartLocalHalfExtents(0.6f / 2.0f, 0.5f / 2.0f, 0.6f / 2.0f); 
+            vec3 backPartLocalOffset(0.0f, 0.4f, -0.8f); 
+
+            CalculateRotatedAABB(backPartLocalOffset, backPartLocalHalfExtents, carWorldPos, carWorldRot, aabbMin, aabbSize);
+            id = SetTrigger(Trigger3D(aabbMin, aabbSize));
+            g_uberbugDrawTriggerIds.Add(id);
+
+            vec3 topPartLocalHalfExtents(0.3f / 2.0f, 0.35f / 2.0f, 0.7f / 2.0f); 
+            vec3 topPartLocalOffset(0.0f, 0.4f, 0.0f); 
+
+            CalculateRotatedAABB(topPartLocalOffset, topPartLocalHalfExtents, carWorldPos, carWorldRot, aabbMin, aabbSize);
+            id = SetTrigger(Trigger3D(aabbMin, aabbSize));
+            g_uberbugDrawTriggerIds.Add(id);
+        }catch{
+            continue;
+        }
+    }
+    string cache = "";
+    for(uint i = 0; i < g_uberbugDrawTriggerIds.Length; ++i) {
+        cache += Text::FormatInt(g_uberbugDrawTriggerIds[i]) + ",";
+    }
+    if(cache.Length > 0) {
+        cache.Erase(cache.Length - 1, 1);
+    }
+    SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", cache);
+}
+
+string closestInputFile = "";
+
+void UberbugPageSettings(){
+    UI::CheckboxVar("Show uberbugs visualization", g_uberPluginPrefix + "_uberbug_show_visualization");
+    UI::Dummy(vec2(0, 1));
+    if(!UI::CheckboxVar("Follow race", g_uberPluginPrefix + "_uberbug_viz_follow_race")){
+        viztime=UI::SliderFloat("Time", viztime, 0, maxDur/1000.0f, "%.2f");
+    }
+    if(GetSimulationManager().InRace && uberbugStates.Length > 0 && UI::Button("Get inputs from closest car")){
+        TM::GameCamera@ cam = GetCurrentCamera();
+        vec3 position = cam.Location.Position;
+        closestInputFile = "";
+        float bestDist = 1e18f;
+        int time = 0;
+        if(GetVariableBool(g_uberPluginPrefix + "_uberbug_viz_follow_race")){
+            time= GetSimulationManager().RaceTime;
+        }else{
+            time = int(viztime * 1000);
+        }
+        for(uint i = 0 ; i < uberbugStates.Length; i++){
+            float d=Math::Distance(uberbugStates[i][time/10].Position, position);
+            if(d < bestDist){
+                bestDist = d;
+                closestInputFile = runStatesResultFiles[i];
+            }
+        }
+    }
+    if(closestInputFile != ""){
+        UI::Dummy(vec2(0, 1));
+        UI::Text("Closest inputs found: " + closestInputFile);
+        UI::Dummy(vec2(0, 1));
+        if(UI::Button("Load inputs")){
+            CommandList list(closestInputFile);
+            list.Process();
+            SetCurrentCommandList(list);
+        }
+    }
+    UI::Dummy(vec2(0, 1));
+    UI::CheckboxVar("Show trajectory preview", g_uberPluginPrefix + "_uberbug_show_trajectory");
+
+    UI::Dummy(vec2(0, 150));
+    if(UI::Button("Clear stored states (PERMANENT)")){
+        uberbugStates.Clear();
+    }
+}
+
+vec3 Mat3MultVec3(const mat3&in M, const vec3&in v) {
+    return vec3(
+        M.x.x * v.x + M.x.y * v.y + M.x.z * v.z, 
+        M.y.x * v.x + M.y.y * v.y + M.y.z * v.z, 
+        M.z.x * v.x + M.z.y * v.y + M.z.z * v.z  
+    );
+}
+
+void CalculateRotatedAABB(
+    const vec3&in localCenterOffset,    
+    const vec3&in localHalfExtents,     
+    const vec3&in carWorldPosition,     
+    const mat3&in carWorldRotation,     
+    vec3&out out_aabbMin,               
+    vec3&out out_aabbSize               
+) {
+
+    vec3 worldBoxCenter = carWorldPosition + Mat3MultVec3(carWorldRotation, localCenterOffset);
+
+    vec3 newGlobalHalfExtents;
+    newGlobalHalfExtents.x = Math::Abs(carWorldRotation.x.x * localHalfExtents.x) + 
+                             Math::Abs(carWorldRotation.y.x * localHalfExtents.y) + 
+                             Math::Abs(carWorldRotation.z.x * localHalfExtents.z);
+    newGlobalHalfExtents.y = Math::Abs(carWorldRotation.x.y * localHalfExtents.x) + 
+                             Math::Abs(carWorldRotation.y.y * localHalfExtents.y) + 
+                             Math::Abs(carWorldRotation.z.y * localHalfExtents.z);
+    newGlobalHalfExtents.z = Math::Abs(carWorldRotation.x.z * localHalfExtents.x) + 
+                             Math::Abs(carWorldRotation.y.z * localHalfExtents.y) + 
+                             Math::Abs(carWorldRotation.z.z * localHalfExtents.z);
+
+    out_aabbMin = worldBoxCenter - newGlobalHalfExtents;
+    out_aabbSize = newGlobalHalfExtents * 2.0f;
+}
+array<vec3> g_polyVertsInCarSpace;
+array<vec3> g_transformedVertices;
+
+vec3 Normalize(vec3 v) {
+    float magnitude = v.Length();
+    if (magnitude > 1e-6f) {
+        return v / magnitude;
+    }
+    return vec3(0,0,0);
+}
+
+vec3 Cross(vec3 a, vec3 b) {
+    return vec3(a.y * b.z - a.z * b.y,
+                a.z * b.x - a.x * b.z,
+                a.x * b.y - a.y * b.x);
+}
+
+GmVec3 Cross(const GmVec3&in a, const GmVec3&in b) {
+    return GmVec3(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    );
+}
+
+const float EPSILON = 1e-6f;
+
+GmIso4 GetCarEllipsoidLocationByIndex(SimulationManager@ simM, const GmIso4&in carLocation, uint index) {
+    if (index >= 8) {
+        print("Error: Invalid ellipsoid index requested: " + index + ". Must be 0-7.", Severity::Error);
+        return GmIso4();
+    }
+     if (index >= 4 && g_carEllipsoids.Length <= index) {
+         print("Error: g_carEllipsoids array not initialized correctly for index " + index, Severity::Error);
+         return GmIso4();
+    }
+    auto simManager = GetSimulationManager();
+    GmIso4 worldTransform;
+    if (index <= 3) {
+        GmVec3 wheelSurfaceLocalPos;
+        switch(index) {
+            case 0: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontLeft.SurfaceHandler.Location.Position); break;
+            case 1: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.FrontRight.SurfaceHandler.Location.Position); break;
+            case 2: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackLeft.SurfaceHandler.Location.Position); break;
+            case 3: wheelSurfaceLocalPos = GmVec3(simManager.Wheels.BackRight.SurfaceHandler.Location.Position); break;
+            default:
+                 print("Error: Unexpected index in wheel section: " + index, Severity::Error);
+                 return GmIso4();
+        }
+        worldTransform.m_Rotation = carLocation.m_Rotation;
+        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(wheelSurfaceLocalPos);
+        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
+    }
+    else {
+        const GmVec3@ localPositionOffset = g_carEllipsoids[index].center;
+        const GmMat3@ localRotation = g_carEllipsoids[index].rotation;
+        worldTransform.m_Rotation = carLocation.m_Rotation * localRotation;
+        GmVec3 worldSpaceOffset = carLocation.m_Rotation.Transform(localPositionOffset);
+        worldTransform.m_Position = carLocation.m_Position + worldSpaceOffset;
+    }
+    return worldTransform;
+}
+
+void InitializeCarEllipsoids() {
+    g_carEllipsoids.Clear();
+    const array<GmVec3> radii = {
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.182f, 0.364f, 0.364f),
+        GmVec3(0.439118f, 0.362f, 1.901528f),
+        GmVec3(0.968297f, 0.362741f, 1.682276f),
+        GmVec3(1.020922f, 0.515218f, 1.038007f),
+        GmVec3(0.384841f, 0.905323f, 0.283418f)
+    };
+    const array<GmVec3> localPositions = {
+        GmVec3(0.863012f, 0.3525f, 1.782089f),
+        GmVec3(-0.863012f, 0.3525f, 1.782089f),
+        GmVec3(0.885002f, 0.352504f, -1.205502f),
+        GmVec3(-0.885002f, 0.352504f, -1.205502f),
+        GmVec3(0.0f, 0.471253f, 0.219106f),
+        GmVec3(0.0f, 0.448782f, -0.20792f),
+        GmVec3(0.0f, 0.652812f, -0.89763f),
+        GmVec3(-0.015532f, 0.363252f, 1.75357f)
+    };
+    array<GmMat3> localRotations;
+    localRotations.Resize(8);
+    localRotations[4].RotateX(Math::ToRad(3.4160502f));
+    localRotations[5].RotateX(Math::ToRad(2.6202483f));
+    localRotations[6].RotateX(Math::ToRad(2.6874702f));
+    localRotations[7].RotateY(Math::ToRad(90.0f));
+    localRotations[7].RotateX(Math::ToRad(90.0f));
+    localRotations[7].RotateZ(Math::ToRad(-180.0f));
+    for (uint i = 0; i < 8; ++i) {
+        g_carEllipsoids.Add(Ellipsoid(localPositions[i], radii[i], localRotations[i]));
+    }
+}
+
+float GmDot(const GmVec3&in a, const GmVec3&in b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+GmVec3 GmScale(const GmVec3&in a, const GmVec3&in b) {
+    return GmVec3(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+
+vec3 FindClosestPointOnPolyToOrigin_Native(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
+    if (transformedVertices.IsEmpty()) return vec3(0, 0, 0);
+
+    vec3 centroid(0,0,0);
+    for(uint i = 0; i < transformedVertices.Length; ++i) {
+        centroid += transformedVertices[i];
+    }
+    if (!transformedVertices.IsEmpty()) {
+        centroid /= float(transformedVertices.Length);
+    }
+
+    float max_dist = -1e18f;
+    int best_face_index = -1;
+
+    for (uint i = 0; i < originalPoly.precomputedFaces.Length; ++i) {
+        const PrecomputedFace@ face_info = originalPoly.precomputedFaces[i];
+        if (face_info.vertexIndices.Length < 3) continue;
+
+        const vec3 v0 = transformedVertices[face_info.vertexIndices[0]];
+        const vec3 v1 = transformedVertices[face_info.vertexIndices[1]];
+        const vec3 v2 = transformedVertices[face_info.vertexIndices[2]];
+
+        vec3 face_normal = Cross(v1 - v0, v2 - v0).Normalized();
+
+        if (Math::Dot(face_normal, centroid - v0) > 0.0f) {
+
+            face_normal = face_normal * -1.0f;
+        }
+
+        float dist = -Math::Dot(v0, face_normal);
+
+        if (dist > max_dist) {
+            max_dist = dist;
+            best_face_index = i;
+        }
+    }
+
+    if (best_face_index == -1) {
+        float min_dist_sq = 1e18f;
+        vec3 closest_point;
+        for (uint i = 0; i < transformedVertices.Length; i++) {
+            float dist_sq = transformedVertices[i].LengthSquared();
+            if (dist_sq < min_dist_sq) {
+                min_dist_sq = dist_sq;
+                closest_point = transformedVertices[i];
+            }
+        }
+        return closest_point;
+    }
+
+    const PrecomputedFace@ best_face = originalPoly.precomputedFaces[best_face_index];
+    const array<int>@ vertexIndices = best_face.vertexIndices;
+
+    const vec3 v0 = transformedVertices[vertexIndices[0]];
+    const vec3 v1 = transformedVertices[vertexIndices[1]];
+    const vec3 v2 = transformedVertices[vertexIndices[2]];
+    vec3 best_face_normal = Cross(v1 - v0, v2 - v0).Normalized();
+    if (Math::Dot(best_face_normal, centroid - v0) > 0.0f) {
+
+        best_face_normal = best_face_normal * -1.0f;
+    }
+
+    vec3 projectedPoint = best_face_normal * -Math::Dot(v0, best_face_normal);
+
+    bool isInside = true;
+    for (uint j = 0; j < vertexIndices.Length; ++j) {
+        const vec3 v_start = transformedVertices[vertexIndices[j]];
+        const vec3 v_end = transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]];
+        vec3 edge = v_end - v_start;
+        vec3 to_point = projectedPoint - v_start;
+
+        if (Math::Dot(Cross(edge, to_point), best_face_normal) < -EPSILON) {
+            isInside = false;
+            break;
+        }
+    }
+
+    if (isInside) {
+        return projectedPoint;
+    } else {
+        float min_dist_sq = 1e18f;
+        vec3 closest_point_on_edge;
+        for (uint j = 0; j < vertexIndices.Length; j++) {
+            const vec3 vA = transformedVertices[vertexIndices[j]];
+            const vec3 vB = transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]];
+            vec3 point_on_edge = closest_point_on_segment_from_origin_native(vA, vB);
+            float dist_sq = point_on_edge.LengthSquared();
+            if (dist_sq < min_dist_sq) {
+                min_dist_sq = dist_sq;
+                closest_point_on_edge = point_on_edge;
+            }
+        }
+        return closest_point_on_edge;
+    }
+}
+
+vec3 GetClosestPointOnTransformedPolyhedron(const array<vec3>&in transformedVertices, const Polyhedron&in originalPoly) {
+    uint64 polyCheckStartTime = Time::get_Now();
+
+    vec3 closestPoint = FindClosestPointOnPolyToOrigin_Native(transformedVertices, originalPoly);
+    g_totalClosestPointPolyTime += (Time::get_Now() - polyCheckStartTime); 
+    return closestPoint;
+}
+
+float CalculateMinCarDistanceToPoly_Inner(const GmIso4&in carWorldTransformGm, const Polyhedron@ targetPoly) {
+    if (targetPoly is null || targetPoly.vertices.IsEmpty()) {
+        return 1e18f;
+    }
+
+    auto simManager = GetSimulationManager();
+    float minDistanceSqOverall = 1e18f;
+
+    iso4 carWorldTransform = carWorldTransformGm.ToIso4();
+
+    mat3 carInvRotation = carWorldTransform.Rotation;
+
+    g_polyVertsInCarSpace.Resize(targetPoly.vertices.Length);
+    for (uint i = 0; i < targetPoly.vertices.Length; ++i) {
+        vec3 v_rel_world = targetPoly.vertices[i] - carWorldTransform.Position;
+
+        g_polyVertsInCarSpace[i] = vec3(
+            carInvRotation.x.x * v_rel_world.x + carInvRotation.y.x * v_rel_world.y + carInvRotation.z.x * v_rel_world.z,
+            carInvRotation.x.y * v_rel_world.x + carInvRotation.y.y * v_rel_world.y + carInvRotation.z.y * v_rel_world.z,
+            carInvRotation.x.z * v_rel_world.x + carInvRotation.y.z * v_rel_world.y + carInvRotation.z.z * v_rel_world.z
+        );
+    }
+
+    g_transformedVertices.Resize(targetPoly.vertices.Length);
+
+    for (uint ellipsoidIndex = 0; ellipsoidIndex < g_carEllipsoids.Length; ++ellipsoidIndex) {
+        const Ellipsoid@ baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
+        vec3 localPosition = baseEllipsoid.center.ToVec3();
+        vec3 invRadii(1.0f / baseEllipsoid.radii.x, 1.0f / baseEllipsoid.radii.y, 1.0f / baseEllipsoid.radii.z);
+
+        if (ellipsoidIndex <= 3) { 
+            iso4 wheelSurfaceLocation;
+            switch(ellipsoidIndex) {
+                case 0: wheelSurfaceLocation = simManager.Wheels.FrontLeft.SurfaceHandler.Location; break;
+                case 1: wheelSurfaceLocation = simManager.Wheels.FrontRight.SurfaceHandler.Location; break;
+                case 2: wheelSurfaceLocation = simManager.Wheels.BackLeft.SurfaceHandler.Location; break;
+                case 3: wheelSurfaceLocation = simManager.Wheels.BackRight.SurfaceHandler.Location; break;
+            }
+            localPosition = wheelSurfaceLocation.Position;
+
+            for(uint i = 0; i < g_polyVertsInCarSpace.Length; ++i) {
+                g_transformedVertices[i] = Scale(g_polyVertsInCarSpace[i] - localPosition, invRadii);
+            }
+        } else { 
+
+            mat3 localInvRotation = baseEllipsoid.rotation.ToMat3();
+
+            for(uint i = 0; i < g_polyVertsInCarSpace.Length; ++i) {
+                vec3 v_relative_to_ellipsoid = g_polyVertsInCarSpace[i] - localPosition;
+
+                vec3 v_rotated = vec3(
+                    localInvRotation.x.x * v_relative_to_ellipsoid.x + localInvRotation.y.x * v_relative_to_ellipsoid.y + localInvRotation.z.x * v_relative_to_ellipsoid.z,
+                    localInvRotation.x.y * v_relative_to_ellipsoid.x + localInvRotation.y.y * v_relative_to_ellipsoid.y + localInvRotation.z.y * v_relative_to_ellipsoid.z,
+                    localInvRotation.x.z * v_relative_to_ellipsoid.x + localInvRotation.y.z * v_relative_to_ellipsoid.y + localInvRotation.z.z * v_relative_to_ellipsoid.z
+                );
+                g_transformedVertices[i] = Scale(v_rotated, invRadii);
+            }
+        }
+
+        vec3 p_poly_transformed = GetClosestPointOnTransformedPolyhedron(g_transformedVertices, targetPoly);
+
+        if (p_poly_transformed.LengthSquared() < 1.0f - EPSILON) {
+            return 0.0f; 
+        }
+
+        vec3 p_sphere_transformed = p_poly_transformed.Normalized();
+
+        vec3 p_poly_carspace, p_sphere_carspace;
+
+        vec3 p_poly_unscaled = Scale(p_poly_transformed, baseEllipsoid.radii.ToVec3());
+        vec3 p_sphere_unscaled = Scale(p_sphere_transformed, baseEllipsoid.radii.ToVec3());
+
+        if (ellipsoidIndex <= 3) { 
+            p_poly_carspace = p_poly_unscaled + localPosition;
+            p_sphere_carspace = p_sphere_unscaled + localPosition;
+        } else { 
+
+            mat3 localForwardRotation = baseEllipsoid.rotation.ToMat3();
+            localForwardRotation.Transpose();
+
+            p_poly_carspace = vec3(
+                localForwardRotation.x.x * p_poly_unscaled.x + localForwardRotation.y.x * p_poly_unscaled.y + localForwardRotation.z.x * p_poly_unscaled.z,
+                localForwardRotation.x.y * p_poly_unscaled.x + localForwardRotation.y.y * p_poly_unscaled.y + localForwardRotation.z.y * p_poly_unscaled.z,
+                localForwardRotation.x.z * p_poly_unscaled.x + localForwardRotation.y.z * p_poly_unscaled.y + localForwardRotation.z.z * p_poly_unscaled.z
+            ) + localPosition;
+            p_sphere_carspace = vec3(
+                localForwardRotation.x.x * p_sphere_unscaled.x + localForwardRotation.y.x * p_sphere_unscaled.y + localForwardRotation.z.x * p_sphere_unscaled.z,
+                localForwardRotation.x.y * p_sphere_unscaled.x + localForwardRotation.y.y * p_sphere_unscaled.y + localForwardRotation.z.y * p_sphere_unscaled.z,
+                localForwardRotation.x.z * p_sphere_unscaled.x + localForwardRotation.y.z * p_sphere_unscaled.y + localForwardRotation.z.z * p_sphere_unscaled.z
+            ) + localPosition;
+        }
+
+        float distanceSq = (p_poly_carspace - p_sphere_carspace).LengthSquared();
+        if (distanceSq < minDistanceSqOverall) {
+            minDistanceSqOverall = distanceSq;
+        }
+    }
+
+    return Math::Sqrt(minDistanceSqOverall);
+}
+
+float CalculateMinCarDistanceToPoly(const GmIso4&in carWorldTransform, const Polyhedron@ targetPoly) {
+    uint64 funcStartTime = Time::get_Now();
+    float result = CalculateMinCarDistanceToPoly_Inner(carWorldTransform, targetPoly);
+    g_totalCalcMinCarDistTime += (Time::get_Now() - funcStartTime);
+    return result;
+}
+
+Polyhedron ClipPolyhedronByPlane(const Polyhedron& in poly, const vec3& in clipPlaneNormal, const vec3& in clipPlanePoint)
+{
+    if (poly.vertices.IsEmpty()) return poly;
+
+    array<vec3> newVertices;
+    array<array<int>> newFaces;
+    dictionary vertexMap; 
+
+    array<float> vertexDists(poly.vertices.Length);
+    for (uint i = 0; i < poly.vertices.Length; i++) {
+        vertexDists[i] = Math::Dot(poly.vertices[i] - clipPlanePoint, clipPlaneNormal);
+    }
+
+    for (uint faceIdx = 0; faceIdx < poly.faces.Length; faceIdx++) {
+        const array<int>@ face = poly.faces[faceIdx];
+        if (face.Length < 3) continue;
+
+        array<int> newPolygonIndices; 
+
+        for (uint i = 0; i < face.Length; i++) {
+            int currOriginalIdx = face[i];
+            int nextOriginalIdx = face[(i + 1) % face.Length];
+
+            float currDist = vertexDists[currOriginalIdx];
+            float nextDist = vertexDists[nextOriginalIdx];
+
+            if (currDist <= EPSILON) {
+                string key = "" + currOriginalIdx;
+                int newIdx;
+                if (!vertexMap.Get(key, newIdx)) {
+                    newIdx = newVertices.Length;
+                    vertexMap.Set(key, newIdx);
+                    newVertices.Add(poly.vertices[currOriginalIdx]);
+                }
+
+                if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length-1] != newIdx) {
+                    newPolygonIndices.Add(newIdx);
+                }
+            }
+
+            if ((currDist > 0 && nextDist < 0) || (currDist < 0 && nextDist > 0)) {
+                float t = currDist / (currDist - nextDist);
+                vec3 intersectionPoint = poly.vertices[currOriginalIdx] + (poly.vertices[nextOriginalIdx] - poly.vertices[currOriginalIdx]) * t;
+
+                int newIdx = newVertices.Length;
+                newVertices.Add(intersectionPoint);
+
+                if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length-1] != newIdx) {
+                    newPolygonIndices.Add(newIdx);
+                }
+            }
+        }
+
+        if (newPolygonIndices.Length >= 3) {
+            for (uint i = 1; i < newPolygonIndices.Length - 1; i++) {
+                array<int> newTriangle = {
+                    newPolygonIndices[0],
+                    newPolygonIndices[i],
+                    newPolygonIndices[i + 1]
+                };
+                newFaces.Add(newTriangle);
+            }
+        }
+    }
+
+    Polyhedron clippedPoly(newVertices, newFaces);
+    return clippedPoly;
+}
+
+Polyhedron ClipPolyhedronByAABB(const Polyhedron& in poly, const AABB& in box)
+{
+    Polyhedron clippedPoly = poly;
+
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(-1, 0, 0), box.min); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 1, 0, 0), box.max); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0,-1, 0), box.min); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 1, 0), box.max); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 0,-1), box.min); 
+    clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3( 0, 0, 1), box.max); 
+
+    return clippedPoly;
+}
+
+vec3 Scale(const vec3&in a, const vec3&in b) {
+    return vec3(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+
+vec3 closest_point_on_segment_from_origin_native(const vec3&in a, const vec3&in b) {
+    vec3 ab = b - a;
+
+    float ab_len_sq = ab.LengthSquared();
+    if (ab_len_sq < 1e-12f) { 
+        return a;
+    }
+
+    float t = -Math::Dot(a, ab) / ab_len_sq;
+
+    t = Math::Clamp(t, 0.0f, 1.0f);
+    return a + ab * t;
+}
+
+GmVec3 closest_point_on_segment(const GmVec3&in p, const GmVec3&in a, const GmVec3&in b) {
+    GmVec3 ab = b - a;
+    float ab_len_sq = ab.LengthSquared();
+    if (ab_len_sq < EPSILON * EPSILON) {
+        return a;
+    }
+    float t = GmDot(p - a, ab) / ab_len_sq;
+    t = Math::Max(0.0f, Math::Min(1.0f, t));
+    return a + ab * t;
+}
+
+string vec3tostring(const vec3&in v) {
+    return "x: " + v.x + ", y: " + v.y + ", z: " + v.z;
 }
