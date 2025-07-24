@@ -1065,11 +1065,11 @@ void DistRender(){
     array<vec3> positions;
     array<string> texts;
     float size = 5;
-    for(uint i = 0; i < g_worldCheckpointAABBs.Length; ++i) {
+    for(uint i = 0; i < g_worldCheckpointAABBs.Length; i++) {
         AABB aabb = g_worldCheckpointAABBs[i];
         vec3 center = aabb.Center();
-        positions.Add(center);
         texts.Add(Text::FormatInt(i));
+        positions.Add(center);
     }
     drawTriggers(positions, size, texts, GetVariableBool(g_distPluginPrefix + "_show_cp_numbers"));
 }
@@ -1092,7 +1092,7 @@ void drawTriggers(array<vec3> positions, float size, array<string> texts, bool d
     }
     if(positions.Length != texts.Length)
     {
-        print("Error: Positions and text arrays must have the same length.");
+        print("Error: Positions and text arrays must have the same length. Positions: " + positions.Length + ", Texts: " + texts.Length, Severity::Error);
         return;
     }
     string cachedTriggerIds = GetVariableString(g_distPluginPrefix + "_cached_triggers");
@@ -1448,8 +1448,8 @@ class GmIso4 {
     }
 }
 class AABB {
-    vec3 min = vec3(-1e9, -1e9, -1e9);
-    vec3 max = vec3(1e9, 1e9, 1e9);
+    vec3 min = vec3(1e9, 1e9, 1e9);
+    vec3 max = vec3(-1e9, -1e9, -1e9);
     AABB() {}
     AABB(const vec3&in min, const vec3&in max) {
         this.min = min;
@@ -2266,6 +2266,9 @@ void RenderBruteforceEvaluationSettingsUberbug() {
 
 void OnRunStep(SimulationManager@ simManager) {
     int raceTime = simManager.RaceTime;
+    if (!simManager.InRace || simManager.RaceTime < 0) {
+        return;
+    }
     TM::GameCtnChallenge@ challenge = GetCurrentChallenge();
     if (challenge !is null && challenge.Uid != g_cachedChallengeUid) {
         CacheCheckpointData();
