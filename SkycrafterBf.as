@@ -715,10 +715,10 @@ BFPhase g_bfPhase = BFPhase::Initial;
 
 void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target){
     int raceTime = simManager.RaceTime;
-    if(GetVariableString("bf_target") != g_bruteforceDistanceTargetIdentifier || GetVariableString("controller") != "bruteforce"){
+    if(!(GetVariableString("bf_target") == g_bruteforceDistanceTargetIdentifier && GetVariableString("controller") == "bruteforce")){
         return;
     }
-    if(current==target && raceTime <= bfTimeTo && raceTime >= bfTimeFrom && g_bfPhase == BFPhase::Search){
+    if(current==target && raceTime <= bfTimeTo && g_bfPhase == BFPhase::Search){
         if(GetVariableBool(g_distPluginPrefix + "_shift_finish_eval")){
             CommandList finish();
             finish.Content = simManager.InputEvents.ToCommandsText();
