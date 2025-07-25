@@ -109,7 +109,7 @@ void RenderEvalSettings()
         UI::SameLine();
         UI::CheckboxVar("##qdifbhj", "bf_ignore_same_speed");
 
-        UI::TextDimmed("Ignoring same speed improvements is particularly useful for bruteforcing air trajectories, where a different rotation but same speed would get rejectedm despite the car being seemingly closer to target. This avoids flooding inputs and preventing real distance gains.");
+        UI::TextDimmed("Ignoring same speed improvements is particularly useful for bruteforcing air trajectories, where a different rotation but same speed would get rejected, despite the car being seemingly closer to target. This avoids flooding inputs and preventing real distance gains.");
     }
 }
 
