@@ -1,19 +1,20 @@
-
-
 void RenderEvalSettings()
 {
     UI::SliderIntVar("Ratio", "bf_weight", 0, 100, "%d%%");
-    UI::SameLine();
-    UI::Text("❔");
-    if(UI::IsItemHovered()){
-        UI::BeginTooltip();
-        if(GetVariableDouble("bf_weight") <= 50){
-            UI::Text("This ratio means gaining 1m is worth sacrificing speed until " + Text::FormatFloat(100/GetVariableDouble("bf_weight")-1, "", 0, 3) + "m/s.");
-        }else{
-            UI::Text("This ratio means gaining 1m/s is worth sacrificing distance until " + Text::FormatFloat(100/(100-GetVariableDouble("bf_weight"))-1, "", 0, 3) + "m.");
+    if(!(GetVariableDouble("bf_weight") < 1.0f || GetVariableDouble("bf_weight") > 99.0f)){
+        UI::SameLine();
+        UI::Text("❔");
+        if(UI::IsItemHovered()){
+            UI::BeginTooltip();
+            if(GetVariableDouble("bf_weight") <= 50){
+                UI::Text("This ratio means gaining 1m is worth sacrificing speed until " + Text::FormatFloat(100/GetVariableDouble("bf_weight")-1, "", 0, 3) + "m/s.");
+            }else{
+                UI::Text("This ratio means gaining 1m/s is worth sacrificing distance until " + Text::FormatFloat(100/(100-GetVariableDouble("bf_weight"))-1, "", 0, 3) + "m.");
+            }
+            UI::EndTooltip();
         }
-        UI::EndTooltip();
     }
+    
     UI::Text("Distance");
     UI::SameLine();
     UI::Dummy(vec2(188, 0));
@@ -96,6 +97,21 @@ void RenderEvalSettings()
             SetVariable("bf_condition_distance", 0.0f);
         }
 
+        if(GetVariableDouble("bf_condition_cps") > 0.0f){
+            UI::Text("Min. cps");
+        }else{
+            UI::BeginDisabled();
+            UI::Text("Min. cps");
+            UI::EndDisabled();
+        }
+        UI::SameLine();
+        UI::Dummy(vec2(39, 0));
+        UI::SameLine();
+        UI::InputIntVar("##iujheq2", "bf_condition_cps");
+        if(GetVariableDouble("bf_condition_cps") < 0.0f){
+            SetVariable("bf_condition_cps", 0.0f);
+        }
+
         UI::Dummy(vec2(0, 0));
         if(GetVariableBool("bf_ignore_same_speed")){
             UI::Text("Ignore same speed improvements");
@@ -131,7 +147,8 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         if (isEvalTime) {
             float d = dist();
             float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
-            if(isBetter(d, speed)){
+            int cps = simManager.PlayerInfo.CurCheckpointCount;
+            if(isBetter(d, speed, cps)){
                 bestDist = d;
                 bestSpeed = speed;
                 bestTime = raceTime;
@@ -144,7 +161,7 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
                 if(bestSpeed < 0.0f){
                     print("Base run: -1.000000000 m, -1.000000000 km/h at invalid");
                 }else{
-                    print("Base run: " + bestDist + " m, " + Text::FormatFloat(bestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
+                    print("Base run: " + Text::FormatFloat(bestDist,"", 0, 9) + " m, " + Text::FormatFloat(bestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
                 }
             }else{
                 print("Found better distance/speed: " + Text::FormatFloat(bestDist, "", 0, 9) + " m, " + Text::FormatFloat(bestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2) + ", iterations: " + info.Iterations, Severity::Success);
@@ -155,7 +172,8 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         if(isEvalTime){
             float d = dist();
             float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
-            if(isBetter(d, speed)){
+            int cps = simManager.PlayerInfo.CurCheckpointCount;
+            if(isBetter(d, speed, cps)){
                 resp.Decision = BFEvaluationDecision::Accept;
                 improvedYet = false;
             }
@@ -174,13 +192,14 @@ float k = 0.0f;
 float speedCondition = 0.0f;
 float distCondition = 0.0f;
 int ignoreSameSpeed = 0;
+int cpsCondition = 0;
 
-bool meetsConditions(float dist, float speed){
-    return dist < distCondition && speed > speedCondition/3.6f;
+bool meetsConditions(float dist, float speed, int cps = 0) {
+    return dist < distCondition && speed > speedCondition/3.6f && cps >= cpsCondition;
 }
 
-bool isBetter(float dist, float speed){
-    if(meetsConditions(dist, speed)){
+bool isBetter(float dist, float speed, int cps) {
+    if(meetsConditions(dist, speed, cps)){
         if(!improvedYet){
             improvedYet = true;
             return true;
@@ -214,6 +233,7 @@ void OnSimulationBegin(SimulationManager@ simManager) {
     speedCondition = GetVariableDouble("bf_condition_speed");
     distCondition = GetVariableDouble("bf_condition_distance") > 0.0f ? GetVariableDouble("bf_condition_distance") : 1e18f;
     ignoreSameSpeed = GetVariableBool("bf_ignore_same_speed") ? 1 : 0;
+    cpsCondition = int(GetVariableDouble("bf_condition_cps"));
 }
 
 float dist(){
@@ -230,6 +250,7 @@ void Main() {
     RegisterBruteforceEvaluation(bfid, "Single point (better)", OnEvaluate, RenderEvalSettings);
     RegisterVariable("bf_condition_distance", 0.0f);
     RegisterVariable("bf_ignore_same_speed", false);
+    RegisterVariable("bf_condition_cps", 0);
 }
 PluginInfo@ GetPluginInfo() {
     auto info = PluginInfo();
