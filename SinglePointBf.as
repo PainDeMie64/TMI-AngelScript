@@ -134,6 +134,10 @@ float bestSpeed = 0.0f;
 int bestTime = 0;
 bool base = false;
 bool improvedYet = false;
+float currentBestDist = 1e18f;
+float currentBestSpeed = 0.0f;
+int currentBestTime = 0;
+bool isRunBetter = false;
 BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
 {
     int raceTime = simManager.RaceTime;
@@ -163,8 +167,6 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
                 }else{
                     print("Base run: " + Text::FormatFloat(bestDist,"", 0, 9) + " m, " + Text::FormatFloat(bestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
                 }
-            }else{
-                print("Found better distance/speed: " + Text::FormatFloat(bestDist, "", 0, 9) + " m, " + Text::FormatFloat(bestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2) + ", iterations: " + info.Iterations, Severity::Success);
             }
         }
     } else {
@@ -173,13 +175,39 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
             float d = dist();
             float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
             int cps = simManager.PlayerInfo.CurCheckpointCount;
+
             if(isBetter(d, speed, cps)){
-                resp.Decision = BFEvaluationDecision::Accept;
-                improvedYet = false;
+                bool isBestInThisRun;
+                if (!isRunBetter) {
+                    isBestInThisRun = true;
+                } else {
+                    if (weight <= 50) {
+                        isBestInThisRun = (d - k * speed) < (currentBestDist - k * currentBestSpeed);
+                    } else {
+                        isBestInThisRun = (speed - k * d) > (currentBestSpeed - k * currentBestSpeed);
+                    }
+                }
+
+                if (isBestInThisRun) {
+                    currentBestDist = d;
+                    currentBestSpeed = speed;
+                    currentBestTime = raceTime;
+                }
+                isRunBetter = true;
             }
         }
+
         if(isPastEvalTime){
-            resp.Decision = BFEvaluationDecision::Reject;
+            if(isRunBetter){
+                string text = "Found better distance/speed: " + Text::FormatFloat(currentBestDist, "", 0, 9) + " m, " + Text::FormatFloat(currentBestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(currentBestTime/1000.0, "", 0, 2) + ", iterations: " + info.Iterations;
+                print(text, Severity::Success);
+                resp.ResultFileStartContent ="# " + text;
+                resp.Decision = BFEvaluationDecision::Accept;
+                improvedYet = false;
+            }else{
+                resp.Decision = BFEvaluationDecision::Reject;
+            }
+            isRunBetter = false;
         }
     }
 
@@ -189,9 +217,9 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
 vec3 target();
 int weight = 0;
 float k = 0.0f;
+int ignoreSameSpeed = 0;
 float speedCondition = 0.0f;
 float distCondition = 0.0f;
-int ignoreSameSpeed = 0;
 int cpsCondition = 0;
 
 bool meetsConditions(float dist, float speed, int cps = 0) {
