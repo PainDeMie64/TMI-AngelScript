@@ -935,22 +935,10 @@ void Main()
     );
     RegisterSettingsPage("Uberbug BF", UberbugPageSettings);
 
+    RegisterCustomCommand("clear_uberbugs", "Clear all stored uberbugs", OnClearUberbugs);
+
     string trajectoryTriggerCache = GetVariableString(g_uberPluginPrefix + "_trajectory_trigger_cache");
-    if (trajectoryTriggerCache != "") {
-        array<string> triggerIds = trajectoryTriggerCache.Split(",");
-        for (uint i = 0; i < triggerIds.Length; ++i) {
-            int triggerId = Text::ParseInt(triggerIds[i]);
-            RemoveTrigger(triggerId);
-        }
-    }
     string cachedTriggers = GetVariableString(g_uberPluginPrefix + "_uberbugs_trigger_cache");
-    if (cachedTriggers != "") {
-        array<string> triggerIds = cachedTriggers.Split(",");
-        for (uint i = 0; i < triggerIds.Length; ++i) {
-            int triggerId = Text::ParseInt(triggerIds[i]);
-            RemoveTrigger(triggerId);
-        }
-    }
 }
 PluginInfo@ GetPluginInfo()
 {
@@ -2039,6 +2027,7 @@ BFEvaluationResponse@ OnEvaluateUberbug(SimulationManager@ simManager, const BFE
     int raceTime = simManager.RaceTime;
     bool isEvalTime = raceTime >= GetVariableDouble(g_uberPluginPrefix + "_bf_time_from") && 
                         raceTime <= GetVariableDouble(g_uberPluginPrefix + "_bf_time_to");
+    bool isLastTick = raceTime == GetVariableDouble(g_uberPluginPrefix + "_bf_time_to");
     bool isPastEvalTime = raceTime > GetVariableDouble(g_uberPluginPrefix + "_bf_time_to");
     if(currentUberMode != "Find"){
         resp.Decision == BFEvaluationDecision::Stop;
@@ -2081,16 +2070,16 @@ BFEvaluationResponse@ OnEvaluateUberbug(SimulationManager@ simManager, const BFE
             }else if(currentFindMode == "Keep best"){
                 vec3 desiredTraj = Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point2")) - 
                     Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point1"));
-                vec3 uberTraj = GetUberbugTrajectory(simManager)*100*3.6f;
+                vec3 uberTraj = simManager.Dyna.CurrentState.LinearSpeed;
                 float length = uberTraj.Length();
                 if(length > 1000.0f){
                     uberTraj = uberTraj.Normalized() * 1000.0f;
                 }
-                float k = uberTraj.Length() *Math::Dot(uberTraj.Normalized(), desiredTraj.Normalized());
-                if(k > bestProj){
+                float k = Math::Acos(Math::Dot(uberTraj.Normalized(), desiredTraj.Normalized()))/3.14159f * 180.0f;
+                if(k < bestProj){
                     bestProj = k;
                     SaveCurrentInputs(simManager);
-                    print("Found a better uberbug at time " + Text::FormatInt(raceTime) + ". Matches desired trajectory with a projected speed of " + Text::FormatFloat(bestProj,"",0,3) + " km/h.", Severity::Success);
+                    print("Found a better uberbug at time " + Text::FormatInt(raceTime) + ". " + Text::FormatFloat(bestProj,"",0,9) + " degrees away from trajectory", Severity::Success);
                     resp.Decision = BFEvaluationDecision::Reject;
                 }
             }
@@ -2152,6 +2141,29 @@ void OnUberSimulationBegin(SimulationManager@ simManager) {
     if(GetVariableString("controller") != "bruteforce"){
         return;
     }
+    string cachedTriggerIds = GetVariableString(g_uberPluginPrefix + "_uberbugs_trigger_cache");
+    if (g_uberbugDrawTriggerIds.Length == 0 && cachedTriggerIds != "") {
+        array<string> ids = cachedTriggerIds.Split(",");
+        for (uint i = 0; i < ids.Length; ++i) {
+            g_uberbugDrawTriggerIds.Add(Text::ParseInt(ids[i]));
+        }
+        SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
+    }
+    for(uint i = 0; i < g_uberbugDrawTriggerIds.Length; ++i) {
+        RemoveTrigger(g_uberbugDrawTriggerIds[i]);
+    }
+    
+    string cachedTrajIds = GetVariableString(g_uberPluginPrefix + "_trajectory_trigger_cache");
+    if (g_trajectoryDrawTriggerIds.Length == 0 && cachedTrajIds != "") {
+        array<string> ids = cachedTrajIds.Split(",");
+        for (uint i = 0; i < ids.Length; ++i) {
+            g_trajectoryDrawTriggerIds.Add(Text::ParseInt(ids[i]));
+        }
+        SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", "");
+    }
+    for(uint i = 0; i < g_trajectoryDrawTriggerIds.Length; ++i) {
+        RemoveTrigger(g_trajectoryDrawTriggerIds[i]);
+    }
     totalAmountCollected = 0;
     uberbugStates = array<array<iso4>>();
     currentRunStates.Clear();
@@ -2161,7 +2173,9 @@ void OnUberSimulationBegin(SimulationManager@ simManager) {
     maxDur = int(simManager.EventsDuration);
     stop = false;
     closestInputFile="";
-    bestProj = 0.0f;
+    bestProj = 1e18f;
+    g_uberbugDrawTriggerIds.Clear();
+    SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
 }
 
 string currentUberMode = "Find";
@@ -2287,14 +2301,24 @@ vec3 prev2();
 
 void drawTrajectory(vec3 p1, vec3 p2){
 
+    TM::GameState gameState = GetCurrentGameState();
+    string cachedTriggerIds = GetVariableString(g_uberPluginPrefix + "_trajectory_trigger_cache");
+    if (g_trajectoryDrawTriggerIds.Length == 0 && cachedTriggerIds != "") {
+        array<string> ids = cachedTriggerIds.Split(",");
+        for (uint i = 0; i < ids.Length; ++i) {
+            g_trajectoryDrawTriggerIds.Add(Text::ParseInt(ids[i]));
+        }
+        SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", "");
+    }
+    if(!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_trajectory") || gameState != TM::GameState::LocalRace) {
+        for(uint i = 0; i < g_trajectoryDrawTriggerIds.Length; i++) {
+            RemoveTrigger(g_trajectoryDrawTriggerIds[i]);
+        }
+        g_trajectoryDrawTriggerIds.Clear();
+        return;
+    }
     if(p1 == prev1 && p2 == prev2){
-        if(!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_trajectory")) {
-            for(uint i = 0; i < g_trajectoryDrawTriggerIds.Length; i++) {
-                RemoveTrigger(g_trajectoryDrawTriggerIds[i]);
-            }
-            g_trajectoryDrawTriggerIds.Clear();
-            return;
-        }else if(g_trajectoryDrawTriggerIds.Length != 0) {
+        if(g_trajectoryDrawTriggerIds.Length != 0) {
             return;
         }
     }
@@ -2311,31 +2335,32 @@ void drawTrajectory(vec3 p1, vec3 p2){
     vec3 size = vec3(s, s, s);
     vec3 max();
     vec3 min();
-    if(p1.Length()> p2.Length()){
-        max = p1;
-        min = p2;
-    }else{
-        max = p2;
-        min = p1;
-    }
-    while(max.Length() - min.Length() > 0) {
+    max = p2;
+    min = p1;
+    string cache="";
+    while(Math::Dot(max - min, dir) > 0){
         int id = SetTrigger(Trigger3D(min - size, size));
         g_trajectoryDrawTriggerIds.Add(id);
         min += dir * s * spacing;
-    }
-    string cache="";
-    for(uint i = 0; i < g_trajectoryDrawTriggerIds.Length; i++) {
-        cache += Text::FormatInt(g_trajectoryDrawTriggerIds[i]) + ",";
+        cache += Text::FormatInt(id) + ",";
     }
     if(cache.Length > 0) {
         cache.Erase(cache.Length - 1, 1);
+        SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", cache);
     }
-    SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", cache);
 }
 
+uint64 startTime = 0;
+
 void UberRender(){
+    if(GetCurrentGameState() == TM::GameState::StartUp){
+        startTime = Time::get_Now();
+        return;
+    }
+    if(Time::get_Now() - startTime < 2000){
+        return;
+    }
     SimulationManager@ simManager = GetSimulationManager();
-    if(!simManager.InRace) { return; }
     int raceTime = simManager.RaceTime;
     if(GetVariableBool(g_uberPluginPrefix + "_uberbug_viz_follow_race")) {
         drawUberTriggers(raceTime);
@@ -2349,6 +2374,25 @@ void UberRender(){
 }
 
 void drawUberTriggers(int time){
+    
+    TM::GameState gameState = GetCurrentGameState();
+
+    string cachedTriggerIds = GetVariableString(g_uberPluginPrefix + "_uberbugs_trigger_cache");
+    if (g_uberbugDrawTriggerIds.Length == 0 && cachedTriggerIds != "") {
+        array<string> ids = cachedTriggerIds.Split(",");
+        for (uint i = 0; i < ids.Length; ++i) {
+            g_uberbugDrawTriggerIds.Add(Text::ParseInt(ids[i]));
+        }
+        SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
+    }
+
+    if(!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_visualization") || gameState != TM::GameState::LocalRace) {
+        for(uint i = 0; i < g_uberbugDrawTriggerIds.Length; i++) {
+            RemoveTrigger(g_uberbugDrawTriggerIds[i]);
+        }
+        g_uberbugDrawTriggerIds.Clear();
+        return;
+    }
 
     if(time == prevTime){
         if(!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_visualization")) {
@@ -2459,14 +2503,27 @@ void UberbugPageSettings(){
             list.Process();
             SetCurrentCommandList(list);
         }
+        try{
+            if(GetVariableBool("plugin_inputsloa_enabled")){
+                if(UI::Button("Loa inputs")){
+                    ExecuteCommand("loa " + closestInputFile);
+                }
+            }
+        }catch{}
     }
     UI::Dummy(vec2(0, 1));
     UI::CheckboxVar("Show trajectory preview", g_uberPluginPrefix + "_uberbug_show_trajectory");
 
-    UI::Dummy(vec2(0, 150));
-    if(UI::Button("Clear stored states (PERMANENT)")){
-        uberbugStates.Clear();
+}
+
+void OnClearUberbugs(int fromTime, int toTime, const string&in commandLine, const array<string>&in args) {
+    
+    for(uint i = 0; i < g_uberbugDrawTriggerIds.Length; ++i) {
+        RemoveTrigger(g_uberbugDrawTriggerIds[i]);
     }
+    g_uberbugDrawTriggerIds.Clear();
+    SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
+    uberbugStates.Clear();
 }
 
 vec3 Mat3MultVec3(const mat3&in M, const vec3&in v) {
