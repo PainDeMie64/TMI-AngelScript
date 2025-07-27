@@ -354,7 +354,56 @@ void RenderEvalSettings(){
     UI::InputTimeVar("##Nothggrtzetgrz2", id+"_bf_eval_max_time");
     UI::Dummy(vec2(0, 0));
     UI::TextDimmed("Reducing the maximum evaluation time will make the bruteforcing process faster.");
-    UI::Dummy(vec2(0, 1));
+    UI::Dummy(vec2(0, 12));
+
+    if(UI::CollapsingHeader("Advanced")){
+        UI::PushItemWidth(160);
+        UI::Dummy(vec2(0, 15));
+        if(GetVariableDouble("bf_condition_speed") > 0.0f){
+            UI::Text("Min. speed ");
+        }else{
+            UI::BeginDisabled();
+            UI::Text("Min. speed ");
+            UI::EndDisabled();
+        }
+        UI::SameLine();
+        UI::Dummy(vec2(18, 0));
+        UI::SameLine();
+        UI::InputFloatVar("##iujhqdf", "bf_condition_speed");
+        if(GetVariableDouble("bf_condition_speed") < 0.0f){
+            SetVariable("bf_condition_speed", 0.0f);
+        }
+
+        if(GetVariableDouble("bf_condition_distance") > 0.0f){
+            UI::Text("Max. distance ");
+        }else{
+            UI::BeginDisabled();
+            UI::Text("Max. distance ");
+            UI::EndDisabled();
+        }
+        UI::SameLine();
+        UI::Dummy(vec2(0, 0));
+        UI::SameLine();
+        UI::InputFloatVar("##iujheqdf2", "bf_condition_distance");
+        if(GetVariableDouble("bf_condition_distance") < 0.0f){
+            SetVariable("bf_condition_distance", 0.0f);
+        }
+
+        if(GetVariableDouble("bf_condition_cps") > 0.0f){
+            UI::Text("Min. cps");
+        }else{
+            UI::BeginDisabled();
+            UI::Text("Min. cps");
+            UI::EndDisabled();
+        }
+        UI::SameLine();
+        UI::Dummy(vec2(39, 0));
+        UI::SameLine();
+        UI::InputIntVar("##iujheq2", "bf_condition_cps");
+        if(GetVariableDouble("bf_condition_cps") < 0.0f){
+            SetVariable("bf_condition_cps", 0.0f);
+        }
+    }
 }
 
 
@@ -377,7 +426,10 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         if (isEvalTime) {
             float d = dist();
             float r = rotDiff();
-            if(isBetter(d, r)){
+            float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
+            int cps = simManager.PlayerInfo.CurCheckpointCount;
+
+            if(isBetter(d, speed, cps, r)){
                 bestDist = d;
                 bestRot = r;
                 bestTime = raceTime;
@@ -388,13 +440,13 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
             if(base){
                 base = false;
                 if(bestTime == 0){
-                    print("Base run: -1.000000000 m, -1.000000000 km/h at invalid");
+                    print("Base run: -1.000000000 m, -1.000000000 rad at invalid");
                 }else{
-                    print("Base run: " + Text::FormatFloat(bestDist,"", 0, 9) + " m, " + Text::FormatFloat(bestRot*3.6, "", 0, 9) + " rad at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
+                    print("Base run: " + Text::FormatFloat(bestDist,"", 0, 9) + " m, " + Text::FormatFloat(Math::ToDeg(bestRot), "", 0, 9) + " deg at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
                 }
             }else{
                 float score = Math::Sqrt(bestDist * bestDist + k * k * bestRot * bestRot);
-                print("Found better result: " + Text::FormatFloat(bestDist, "", 0, 9) + " m, " + Text::FormatFloat(bestRot*3.6, "", 0, 9) + " rad (score: " + Text::FormatFloat(score, "", 0, 9) + ") at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2)+ ", iterations: " + info.Iterations, Severity::Success);
+                print("Found better result: " + Text::FormatFloat(bestDist, "", 0, 9) + " m, " + Text::FormatFloat(Math::ToDeg(bestRot), "", 0, 9) + " deg (score: " + Text::FormatFloat(score, "", 0, 9) + ") at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2)+ ", iterations: " + info.Iterations, Severity::Success);
             }
         }
     } else {
@@ -402,7 +454,10 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         if(isEvalTime){
             float d = dist();
             float r = rotDiff();
-            if(isBetter(d, r)){
+            float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
+            int cps = simManager.PlayerInfo.CurCheckpointCount;
+
+            if(isBetter(d, speed, cps, r)){
                 resp.Decision = BFEvaluationDecision::Accept;
                 improvedYet = false;
             }
@@ -459,14 +514,21 @@ void OnSimulationBegin(SimulationManager@ simManager) {
         Math::ToRad(GetVariableDouble(id + "_bf_target_rotation_roll"))
     );
     base = true;
+    speedCondition = GetVariableDouble("bf_condition_speed");
+    distCondition = GetVariableDouble("bf_condition_distance") > 0.0f ? GetVariableDouble("bf_condition_distance") : 1e18f;
+    cpsCondition = int(GetVariableDouble("bf_condition_cps"));
 }
 
-bool meetsConditions() {
-    return true;
+float speedCondition = 0.0f;
+float distCondition = 0.0f;
+int cpsCondition = 0;
+
+bool meetsConditions(float dist, float speed, int cps = 0) {
+    return dist < distCondition && speed > speedCondition/3.6f && cps >= cpsCondition;
 }
 
-bool isBetter(float dist, float rotDiff) {
-    if(meetsConditions()){
+bool isBetter(float dist, float speed, int cps, float rotDiff) {
+    if(meetsConditions(dist, speed, cps)){
         if(!improvedYet){
             improvedYet = true;
             return true;
@@ -519,6 +581,4 @@ void Main() {
     preset = int(GetVariableDouble(id+"_car_render_quality"));
     RENDER_INTERVAL_MS = int(1000/GetVariableDouble(id+"_car_render_rate"));
     RegisterBruteforceEvaluation(id, "Car Location", OnEvaluate, RenderEvalSettings);
-
-    
 }
