@@ -330,14 +330,14 @@ void RenderEvalSettings(){
     }
     UI::Dummy(vec2(0, 19));
 
-    UI::PushItemWidth(161);
-    UI::Text("K factor");
+    UI::PushItemWidth(300);
+    UI::Text("Weight");
     UI::SameLine();
-    UI::Dummy(vec2(40, 0));
-    UI::SameLine();
-    UI::InputFloatVar("##injsdqf", id+"_bf_condition_k", 0.5f);
+    int bal = int(GetVariableDouble(id+"_bf_weight"));
+    string balText = Text::FormatInt(100 - bal) + "%% Position, " + Text::FormatInt(bal) + "%% Rotation";
+    UI::SliderIntVar("##injsdqf", id+"_bf_weight", 0, 100, balText);
     UI::Dummy(vec2(0, 0));
-    UI::TextDimmed("The K factor is used to weight the rotation difference against the distance. A higher value will make the bruteforcing process more sensitive to rotation differences.");
+    UI::TextDimmed("This parameter is used to weight the rotation difference against the distance. A higher value will make the bruteforcing process more sensitive to rotation differences.");
     UI::Dummy(vec2(0, 17));
 
     UI::Text("From");
@@ -445,7 +445,7 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
                     print("Base run: " + Text::FormatFloat(bestDist,"", 0, 9) + " m, " + Text::FormatFloat(Math::ToDeg(bestRot), "", 0, 9) + " deg at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
                 }
             }else{
-                float score = Math::Sqrt(bestDist * bestDist + k * k * bestRot * bestRot);
+                float score = Math::Sqrt(bestDist * bestDist * balance * balance + bestRot * bestRot * (1.0f - balance) * (1.0f - balance));
                 print("Found better result: " + Text::FormatFloat(bestDist, "", 0, 9) + " m, " + Text::FormatFloat(Math::ToDeg(bestRot), "", 0, 9) + " deg (score: " + Text::FormatFloat(score, "", 0, 9) + ") at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2)+ ", iterations: " + info.Iterations, Severity::Success);
             }
         }
@@ -472,7 +472,7 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
 
 vec3 targetP();
 quat targetR();
-float k = 1.0f;
+float balance = 0;
 
 float dist(){
     return Math::Distance(pos(), targetP);
@@ -517,6 +517,7 @@ void OnSimulationBegin(SimulationManager@ simManager) {
     speedCondition = GetVariableDouble("bf_condition_speed");
     distCondition = GetVariableDouble("bf_condition_distance") > 0.0f ? GetVariableDouble("bf_condition_distance") : 1e18f;
     cpsCondition = int(GetVariableDouble("bf_condition_cps"));
+    balance = (100 - int(GetVariableDouble(id + "_bf_weight"))) / 100.0f;
 }
 
 float speedCondition = 0.0f;
@@ -533,7 +534,7 @@ bool isBetter(float dist, float speed, int cps, float rotDiff) {
             improvedYet = true;
             return true;
         }
-        return Math::Sqrt(dist * dist + k * k * rotDiff * rotDiff) < Math::Sqrt(bestDist * bestDist + k * k * bestRot * bestRot);
+        return dist * dist * balance * balance + rotDiff * rotDiff * (1.0f - balance) * (1.0f - balance) < bestDist * bestDist * balance * balance + bestRot * bestRot * (1.0f - balance) * (1.0f - balance);
     }
     return false;
 }
@@ -574,11 +575,16 @@ void Main() {
     RegisterVariable(id+"_bf_target_rotation_roll", 0.0);
     RegisterVariable(id+"_bf_eval_min_time", 0.0);
     RegisterVariable(id+"_bf_eval_max_time", 0.0);
-    RegisterVariable(id+"_bf_condition_k", 1.0f);
     RegisterVariable(id+"_bf_trigger_cache", "");
     RegisterVariable(id+"_car_visual_enabled", true);
+    RegisterVariable(id + "_bf_weight", 0);
+    RegisterVariable("bf_condition_distance", 0.0f);
+    RegisterVariable("bf_ignore_same_speed", false);
+    RegisterVariable("bf_condition_cps", 0);
     RegisterSettingsPage("Car Visual", CarVisualSettingsPage);
     preset = int(GetVariableDouble(id+"_car_render_quality"));
     RENDER_INTERVAL_MS = int(1000/GetVariableDouble(id+"_car_render_rate"));
     RegisterBruteforceEvaluation(id, "Car Location", OnEvaluate, RenderEvalSettings);
+
+    
 }
