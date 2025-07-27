@@ -2504,7 +2504,15 @@ void UberbugPageSettings(){
             SetCurrentCommandList(list);
         }
         try{
-            if(GetVariableBool("plugin_inputsloa_enabled")){
+            array<VariableInfo>@ vars = ListVariables();
+            bool hasLoa = false;
+            for(uint i = 0; i < vars.Length; ++i) {
+                if(vars[i].Name == "plugin_inputsloa_enabled") {
+                    hasLoa = GetVariableBool("plugin_inputsloa_enabled");
+                    break;
+                }
+            }
+            if(hasLoa){
                 if(UI::Button("Loa inputs")){
                     ExecuteCommand("loa " + closestInputFile);
                 }
