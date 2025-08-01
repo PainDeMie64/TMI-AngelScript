@@ -203,7 +203,6 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
                 print(text, Severity::Success);
                 resp.ResultFileStartContent ="# " + text;
                 resp.Decision = BFEvaluationDecision::Accept;
-                improvedYet = false;
             }else{
                 resp.Decision = BFEvaluationDecision::Reject;
             }
