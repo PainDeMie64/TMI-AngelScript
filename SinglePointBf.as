@@ -133,7 +133,6 @@ float bestDist = 1e18f;
 float bestSpeed = 0.0f;
 int bestTime = 0;
 bool base = false;
-bool improvedYet = false;
 float currentBestDist = 1e18f;
 float currentBestSpeed = 0.0f;
 int currentBestTime = 0;
@@ -227,8 +226,7 @@ bool meetsConditions(float dist, float speed, int cps = 0) {
 
 bool isBetter(float dist, float speed, int cps) {
     if(meetsConditions(dist, speed, cps)){
-        if(!improvedYet){
-            improvedYet = true;
+        if(bestSpeed < 0.0f){
             return true;
         }
         if (weight <= 50) {
@@ -248,7 +246,6 @@ void OnSimulationBegin(SimulationManager@ simManager) {
     bestSpeed = -1.0f;
     bestDist = -1.0f;
     bestTime = 0;
-    improvedYet = false;
     weight = int(GetVariableDouble("bf_weight"));
     target = Text::ParseVec3(GetVariableString("bf_target_point"));
     if (weight <= 50) {
