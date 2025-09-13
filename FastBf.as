@@ -1,7 +1,7 @@
 BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
 {
     auto resp = BFEvaluationResponse();
-    if (info.Phase!=BFPhase::Initial) resp.Decision = BFEvaluationDecision::Reject;
+    resp.Decision = BFEvaluationDecision::Reject;
     return resp;
 }
 void Main() {
@@ -14,4 +14,5 @@ PluginInfo@ GetPluginInfo() {
     info.Version = "1.0.0";
     info.Description = "Vrooom.";
     return info;
+
 }
