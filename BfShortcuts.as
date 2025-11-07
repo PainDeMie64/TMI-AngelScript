@@ -51,6 +51,7 @@ bool notAccurate=false;
 
 void Render()
 {
+    if(!UI::IsMainDockVisible()) return;
     SimulationManager@ simManager = GetSimulationManager();
     if(UI::Begin("Bf settings shortcut")){
         UI::BeginTabBar("Tabs");
