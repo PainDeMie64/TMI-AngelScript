@@ -26,6 +26,7 @@ void Main()
 
 void Render()
 {
+    if(!UI::IsMainDockVisible()) return;
     if (UI::Begin("Advance a frame")) {
         if(UI::Button("Advance")){
             GetSimulationManager().SetSpeed(0.2);
