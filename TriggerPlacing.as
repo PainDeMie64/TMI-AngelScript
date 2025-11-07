@@ -58,7 +58,8 @@ void OnPos2(int fromTime, int toTime, const string&in commandLine, const array<s
 }
 
 void Render()
-{
+{    
+    if(!UI::IsMainDockVisible()) return;
     if(GetVariableBool("skycrafter_triggerplacing_display")){
         if (UI::Begin("Trigger placing")) {
             if(UI::Button("Place point 1")){
