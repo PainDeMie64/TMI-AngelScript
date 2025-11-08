@@ -29,7 +29,8 @@ void cOption(string option)
     if (UI::Selectable(option, false)) SetVariable("skycrafter_themes_currenttheme", option);
 }
 
-void RenderThemesSettings(){
+void RenderThemesSettings()
+{
     if (current == "")
     {
         SetVariable("skycrafter_themes_currenttheme", "Default");
@@ -119,6 +120,9 @@ void SetupTwinkieImGuiStyle()
     SetVariable("ui_color_nav_windowing_highlight", "255,255,255,255");
     SetVariable("ui_color_nav_windowing_dim_bg", "204,204,204,255");
     SetVariable("ui_color_modal_window_dim_bg", "204,204,204,76");
+
+    // inserted from ui_color_button
+    SetVariable("ui_color_sidebar_button", "166,38,88,255");
 }
 
 void SetupOpenplanetImGuiStyle()
@@ -173,6 +177,9 @@ void SetupOpenplanetImGuiStyle()
     SetVariable("ui_color_nav_windowing_highlight", "15,15,15,178");
     SetVariable("ui_color_nav_windowing_dim_bg", "70,70,70,51");
     SetVariable("ui_color_modal_window_dim_bg", "15,15,15,229");
+
+    // inserted from ui_color_button
+    SetVariable("ui_color_sidebar_button", "86,106,255,102");
 }
 
 void SetupTMInterfaceImGuiStyle()
@@ -236,8 +243,5 @@ void SetupTMInterfaceImGuiStyle()
     SetVariable("ui_color_nav_highlight", "153,153,153,255");
     SetVariable("ui_color_nav_windowing_highlight", "255,255,255,178");
     SetVariable("ui_color_modal_window_dim_bg", "0,0,0,127");
-
-    // already exist, but are not in any other theme
-    SetVariable("ui_color_text_disabled", "127,127,127,255");
     SetVariable("ui_color_sidebar_button", "17,40,44,255");
 }
