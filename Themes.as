@@ -226,7 +226,7 @@ void SetupTMInterfaceImGuiStyle()
     SetVariable("ui_color_resize_grip_active", "117,117,117,242");
     
     // inserted manually via screenshot
-    SetVariable("ui_color_tab", "46,78,79,255");
+    SetVariable("ui_color_tab", "27,62,68,255");
 
     // already exist
     SetVariable("ui_color_tab_unfocused", "2,3,3,255");
