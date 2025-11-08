@@ -3,26 +3,25 @@ string current = "";
 void Render()
 {
     current = GetVariableString("skycrafter_themes_currenttheme");
-    if(current == "Default")
-    {
-        UI::PopStyleColor(999);
-    }
-    else if (current == "Transparent")
-    {
-        string AlreadyUsedColor = GetVariableString("ui_color_window_bg");
-        int AlphaIdx = AlreadyUsedColor.FindLastOf(",");
-        string NoAlphaColor = AlreadyUsedColor.Substr(0, AlphaIdx);
-        
-        SetVariable("ui_color_window_bg", NoAlphaColor + "," + int((GetVariableDouble("skycrafter_themes_transparent_opacity") / 100) * 255));
-    }
-    else if (current == "Openplanet")
+
+    if (current == "Openplanet")
     {
         SetupOpenplanetImGuiStyle();
     }
-    else
+    else if (current == "Twinkie")
     {
         SetupTwinkieImGuiStyle();
     }
+    else if (current == "Default")
+    {
+        SetupTMInterfaceImGuiStyle();
+    }
+
+    string AlreadyUsedColor = GetVariableString("ui_color_window_bg");
+    int AlphaIdx = AlreadyUsedColor.FindLastOf(",");
+    string NoAlpha = AlreadyUsedColor.Substr(0, AlphaIdx);
+    
+    SetVariable("ui_color_window_bg", NoAlpha + "," + int((GetVariableDouble("skycrafter_themes_transparent_opacity") / 100) * 255));
 }
 
 void cOption(string option)
@@ -31,30 +30,28 @@ void cOption(string option)
 }
 
 void RenderThemesSettings(){
-    if(current == "")
+    if (current == "")
     {
-        SetVariable("skycrafter_themes_currenttheme","Default");
+        SetVariable("skycrafter_themes_currenttheme", "Default");
     }
     if (UI::BeginCombo("Current theme", current)) 
     {
         cOption("Default");
-        cOption("Transparent");
         cOption("Openplanet");
         cOption("Twinkie");
         UI::EndCombo();
     }
-    if (current == "Transparent")
-    {
-        UI::SliderFloatVar("Opacity", "skycrafter_themes_transparent_opacity", 0.0, 100.0, "%.1f");
-    }
+
+    UI::SliderFloatVar("Opacity", "skycrafter_themes_transparent_opacity", 0.0, 100.0, "%.1f");
+
     UI::TextDimmed("More to come later!");
 }
 
 void Main()
 {
     RegisterSettingsPage("Themes", RenderThemesSettings);
-    RegisterVariable("skycrafter_themes_currenttheme","");
-    RegisterVariable("skycrafter_themes_transparent_opacity",50.0);
+    RegisterVariable("skycrafter_themes_currenttheme", "");
+    RegisterVariable("skycrafter_themes_transparent_opacity", 50.0);
 }
 
 PluginInfo@ GetPluginInfo()
@@ -176,4 +173,71 @@ void SetupOpenplanetImGuiStyle()
     SetVariable("ui_color_nav_windowing_highlight", "15,15,15,178");
     SetVariable("ui_color_nav_windowing_dim_bg", "70,70,70,51");
     SetVariable("ui_color_modal_window_dim_bg", "15,15,15,229");
+}
+
+void SetupTMInterfaceImGuiStyle()
+{
+    // already exist
+    SetVariable("ui_color_text", "255,255,255,255");
+    SetVariable("ui_color_window_bg", "3,19,20,255");
+    SetVariable("ui_color_child_bg", "255,255,255,0");
+    SetVariable("ui_color_popup_bg", "20,20,20,239");
+    SetVariable("ui_color_border", "109,109,127,127");
+    SetVariable("ui_color_border_shadow", "0,0,0,0");
+    SetVariable("ui_color_frame_bg", "51,53,56,137");
+    SetVariable("ui_color_frame_bg_hovered", "102,102,102,102");
+    SetVariable("ui_color_frame_bg_active", "45,45,45,170");
+    SetVariable("ui_color_title_bg", "10,10,10,255");
+    SetVariable("ui_color_title_bg_active", "0,143,145,255");
+    SetVariable("ui_color_title_bg_collapsed", "0,0,0,130");
+    SetVariable("ui_color_menu_bar_bg", "35,35,35,255");
+    SetVariable("ui_color_scrollbar_bg", "5,5,5,135");
+    SetVariable("ui_color_scrollbar_grab", "79,79,79,255");
+    SetVariable("ui_color_scrollbar_grab_hovered", "104,104,104,255");
+    SetVariable("ui_color_scrollbar_grab_active", "130,130,130,255");
+    SetVariable("ui_color_check_mark", "239,239,239,255");
+    SetVariable("ui_color_slider_grab", "130,130,130,255");
+    SetVariable("ui_color_slider_grab_active", "219,219,219,255");
+    SetVariable("ui_color_button", "0,143,145,255");
+    SetVariable("ui_color_button_hovered", "15,153,130,255");
+    SetVariable("ui_color_button_active", "0,99,83,255");
+    SetVariable("ui_color_header", "0,78,79,255");
+    SetVariable("ui_color_header_hovered", "76,130,145,198");
+    SetVariable("ui_color_header_active", "76,130,145,198");
+    SetVariable("ui_color_separator", "109,109,127,127");
+    SetVariable("ui_color_separator_hovered", "183,183,183,198");
+    SetVariable("ui_color_separator_active", "130,130,130,255");
+    SetVariable("ui_color_resize_grip", "232,232,232,63");
+    SetVariable("ui_color_resize_grip_hovered", "206,206,206,170");
+    SetVariable("ui_color_resize_grip_active", "117,117,117,242");
+    
+    // inserted manually via screenshot
+    SetVariable("ui_color_tab", "46,78,79,255");
+
+    // already exist
+    SetVariable("ui_color_tab_unfocused", "2,3,3,255");
+    SetVariable("ui_color_tab_hovered", "76,130,145,198");
+    SetVariable("ui_color_tab_active", "0,20,24,255");
+    SetVariable("ui_color_plot_lines", "155,155,155,255");
+    SetVariable("ui_color_plot_lines_hovered", "255,109,89,255");
+    SetVariable("ui_color_plot_histogram", "186,153,38,255");
+    SetVariable("ui_color_plot_histogram_hovered", "255,153,0,255");
+
+    // inserted from imgui default theme
+    SetVariable("ui_color_table_header_bg", "48,48,51,165");
+    SetVariable("ui_color_table_border_strong", "79,79,89,255");
+    SetVariable("ui_color_table_border_light", "59,59,64,255");
+    SetVariable("ui_color_table_row_bg", "43,43,43,0");
+    SetVariable("ui_color_table_row_bg_alt", "255,255,255,15");
+
+    // already exist
+    SetVariable("ui_color_text_selected_bg", "221,221,221,89");
+    SetVariable("ui_color_drag_drop_target", "255,255,0,229");
+    SetVariable("ui_color_nav_highlight", "153,153,153,255");
+    SetVariable("ui_color_nav_windowing_highlight", "255,255,255,178");
+    SetVariable("ui_color_modal_window_dim_bg", "0,0,0,127");
+
+    // already exist, but are not in any other theme
+    SetVariable("ui_color_text_disabled", "127,127,127,255");
+    SetVariable("ui_color_sidebar_button", "17,40,44,255");
 }
