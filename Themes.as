@@ -1,20 +1,24 @@
 string current = "";
+string prevCurrent = "";
 
 void Render()
 {
     current = GetVariableString("skycrafter_themes_currenttheme");
 
-    if (current == "Openplanet")
+    if (prevCurrent != current)
     {
-        SetupOpenplanetImGuiStyle();
-    }
-    else if (current == "Twinkie")
-    {
-        SetupTwinkieImGuiStyle();
-    }
-    else if (current == "Default")
-    {
-        SetupTMInterfaceImGuiStyle();
+        if (current == "Openplanet")
+        {
+            SetupOpenplanetImGuiStyle();
+        }
+        else if (current == "Twinkie")
+        {
+            SetupTwinkieImGuiStyle();
+        }
+        else if (current == "Default")
+        {
+            SetupTMInterfaceImGuiStyle();
+        }
     }
 
     string AlreadyUsedColor = GetVariableString("ui_color_window_bg");
@@ -22,6 +26,8 @@ void Render()
     string NoAlpha = AlreadyUsedColor.Substr(0, AlphaIdx);
     
     SetVariable("ui_color_window_bg", NoAlpha + "," + int((GetVariableDouble("skycrafter_themes_transparent_opacity") / 100) * 255));
+
+    prevCurrent = current;
 }
 
 void cOption(string option)
@@ -161,6 +167,7 @@ void SetupOpenplanetImGuiStyle()
     SetVariable("ui_color_resize_grip_hovered", "86,106,255,170");
     SetVariable("ui_color_resize_grip_active", "86,106,255,242");
     SetVariable("ui_color_tab", "66,76,177,219");
+    SetVariable("ui_color_tab_active", "50,104,173,255");
     SetVariable("ui_color_tab_hovered", "86,106,255,204");
     SetVariable("ui_color_plot_lines", "186,186,186,255");
     SetVariable("ui_color_plot_lines_hovered", "255,174,105,255");
