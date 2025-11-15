@@ -182,6 +182,223 @@ void CacheCheckpointData() {
 
 }
 
+namespace Drawing {
+    int counter=0;
+    const vec2 padFix = vec2(-8, -8);
+    bool dimensionsInitialized = false;
+
+    const array<string> NUMBER_PATTERNS = {
+        "111101101101111", // 0
+        "010110010010111", // 1
+        "111001111100111", // 2
+        "111001111001111", // 3
+        "101101111001001", // 4
+        "111100111001111", // 5
+        "111100111101111", // 6
+        "111001010010010", // 7
+        "111101111101111", // 8
+        "111101111001111"  // 9
+    };
+
+    void square(int x, int y, uint dimension){
+        string title = "##Window for pixel" + counter++;
+
+        UI::SetNextWindowPos(vec2(x-dimension/2, y-dimension/2) + padFix);
+        UI::SetNextWindowSize(vec2(dimension+12, dimension+12));
+
+        UI::Begin(title,
+            UI::WindowFlags::NoBackground
+            | UI::WindowFlags::NoDecoration
+            | UI::WindowFlags::NoInputs
+            | UI::WindowFlags::NoMouseInputs
+            | UI::WindowFlags::NoNavInputs
+            | UI::WindowFlags::NoFocusOnAppearing
+            | UI::WindowFlags::NoBringToFrontOnFocus
+            | UI::WindowFlags::NoNavFocus
+        );
+
+        UI::Button(title, vec2(float(dimension), float(dimension)));
+
+        UI::End();
+    }
+
+    void number(int x, int y, uint dimension, uint numberValue) {
+        if (dimension == 0) return;
+
+        string digits = "" + numberValue;
+        if (digits.Length == 0) digits = "0";
+
+        uint cellSize = dimension;
+        int digitWidth = int(cellSize) * 3;
+        int digitSpacing = int(cellSize);
+        int totalWidth = int(digits.Length) * digitWidth;
+        if (digits.Length > 1) {
+            totalWidth += (int(digits.Length) - 1) * digitSpacing;
+        }
+        int totalHeight = int(cellSize) * 5;
+
+        int startX = x - totalWidth / 2;
+        int startY = y - totalHeight / 2;
+
+        for (uint i = 0; i < digits.Length; ++i) {
+            int digitIndex = digits[i] - '0';
+            if (digitIndex < 0 || digitIndex >= int(NUMBER_PATTERNS.Length)) continue;
+
+            string pattern = NUMBER_PATTERNS[digitIndex];
+            int digitX = startX + int(i) * (digitWidth + digitSpacing);
+
+            for (uint row = 0; row < 5; ++row) {
+                for (uint col = 0; col < 3; ++col) {
+                    uint patternIndex = row * 3 + col;
+                    if (patternIndex >= pattern.Length) continue;
+                    if (pattern[patternIndex] != '1') continue;
+
+                    float centerX = float(digitX) + (float(col) + 0.5f) * float(cellSize);
+                    float centerY = float(startY) + (float(row) + 0.5f) * float(cellSize);
+                    square(int(Math::Round(centerX)), int(Math::Round(centerY)), cellSize);
+                }
+            }
+        }
+    }
+
+
+    dictionary dimensionsMapping;
+    void InitializeDimensions() {
+        if (dimensionsInitialized) return;
+        dimensionsMapping = dictionary();
+        dimensionsMapping.Set("1228800", vec2(640,480));
+        dimensionsMapping.Set("1920000", vec2(800,600));
+        dimensionsMapping.Set("4915200", vec2(1280,960));
+        dimensionsMapping.Set("8294400", vec2(1920,1080));
+        dimensionsMapping.Set("14745600", vec2(2560,1440));
+        dimensionsMapping.Set("33177600", vec2(3840, 2160));
+        dimensionsInitialized = true;
+    }
+
+    int screenWidth=1920;
+    int screenHeight=1080;
+
+    uint64 timeOfLastCapture=0;
+    uint64 captureInterval=2000;
+
+    vec3 lastCamPos=vec3(0,0,0);
+    mat3 lastCamRot=mat3();
+    vec2 lastScreenPos=vec2(0,0);
+    void UpdateScreenSize() {
+        InitializeDimensions();
+        uint64 currentTime = Time::Now;
+        if(currentTime - timeOfLastCapture <= captureInterval){
+            return;
+        }
+        timeOfLastCapture = currentTime;
+        array<uint8>@ screenshot = Graphics::CaptureScreenshot(vec2(0,0));
+        string key = screenshot.Length + "";
+        if(!dimensionsMapping.Exists(key)){
+            return;
+        }
+        vec2 dim;
+        dimensionsMapping.Get(key,dim);
+        screenWidth=int(dim.x);
+        screenHeight=int(dim.y);
+    }
+
+    void BeginFrame() {
+        counter = 0;
+        UpdateScreenSize();
+    }
+
+    vec2 GetScreenSize() {
+        return vec2(float(screenWidth), float(screenHeight));
+    }
+
+    void Draw(SimulationManager@ simManager){
+        BeginFrame();
+
+        TM::GameCamera@ gameCamera = GetCurrentCamera();
+        vec3 camPos = gameCamera.Location.Position;
+        mat3 camRot = gameCamera.Location.Rotation;
+        float camFov = gameCamera.Fov; // Varies between 70 and 90 degrees
+        UpdateScreenSize();
+
+        vec2 screenPos;
+        if(camPos == lastCamPos && camRot.x==lastCamRot.x && camRot.y==lastCamRot.y && camRot.z==lastCamRot.z){
+            screenPos = lastScreenPos;
+        } else {
+            screenPos = WorldToScreen(vec3(0,0,0), camPos, camRot, camFov, vec2(screenWidth,screenHeight));
+            lastScreenPos = screenPos;
+        }
+        lastCamPos = camPos;
+        lastCamRot = camRot;
+        lastScreenPos = screenPos;
+
+        vec3 rgb=HSVToRGB(GetRainbowHue(), 1.0f, 1.0f);
+        vec4 rainbowColor = vec4(rgb.x, rgb.y, rgb.z, 1.0f);
+        UI::PushStyleColor(UI::Col::Button, rainbowColor);
+        number(int(screenPos.x),int(screenPos.y),30, int(Math::Round(camFov)));
+        UI::PopStyleColor(1);
+        
+    }
+
+    vec2 WorldToScreen(vec3 worldPos, vec3 camPos, mat3 camRot, float camFov, vec2 screenSize){
+        vec3 dir = worldPos - camPos;
+
+        camRot.Transpose();
+        vec3 localDir = matTimesVec(camRot, dir);
+
+        if (localDir.z <= 0) return vec2(-1, -1);
+
+        float fovRad      = camFov * (3.14159265 / 180.0);
+        float aspectRatio = screenSize.x / screenSize.y;
+        float tanHalfFov  = Math::Tan(fovRad * 0.5);
+
+        float ndcX = -(localDir.x / localDir.z) / (tanHalfFov * aspectRatio);
+        float ndcY =  (localDir.y / localDir.z) /  tanHalfFov;
+
+        float screenX = (ndcX * 0.5 + 0.5) * screenSize.x;
+        float screenY = (-ndcY * 0.5 + 0.5) * screenSize.y;
+
+        return vec2(screenX, screenY);
+    }
+
+
+    vec3 matTimesVec(mat3 m, vec3 v){
+        return vec3(
+            m.x.x*v.x + m.x.y*v.y + m.x.z*v.z,
+            m.y.x*v.x + m.y.y*v.y + m.y.z*v.z,
+            m.z.x*v.x + m.z.y*v.y + m.z.z*v.z
+        );
+    }
+
+    float GetRainbowHue() {
+        float t = float(Time::Now % 6000) / 6000.0f;
+        return t * 360.0f;
+    }
+
+    vec3 HSVToRGB(float h, float s, float v) {
+        while (h < 0.0f) h += 360.0f;
+        while (h >= 360.0f) h -= 360.0f;
+
+        float hPrime = h / 60.0f;
+        float hFloor = Math::Floor(hPrime);
+        int segment = int(hFloor) % 6;
+        if (segment < 0) segment += 6;
+        float f = hPrime - hFloor;
+
+        float p = v * (1.0f - s);
+        float q = v * (1.0f - f * s);
+        float t = v * (1.0f - (1.0f - f) * s);
+
+        if (segment == 0) return vec3(v, t, p);
+        if (segment == 1) return vec3(q, v, p);
+        if (segment == 2) return vec3(p, v, t);
+        if (segment == 3) return vec3(p, q, v);
+        if (segment == 4) return vec3(t, p, v);
+        return vec3(v, p, q);
+    }
+
+}
+
+
 void RenderBruteforceEvaluationSettingssss() {
     g_bfTargetType = int(GetVariableDouble(g_distPluginPrefix + "_target_type"));
     g_bfTargetCpIndex = int(GetVariableDouble(g_distPluginPrefix + "_target_cp_index"));
@@ -898,7 +1115,6 @@ void Main()
     RegisterVariable(g_distPluginPrefix + "_target_type", 0);
     RegisterVariable(g_distPluginPrefix + "_target_cp_index", 0);
     RegisterVariable(g_distPluginPrefix + "_show_cp_numbers", false);
-    RegisterVariable(g_distPluginPrefix + "_cached_triggers", "");
     RegisterVariable(g_distPluginPrefix + "_bf_time_from", 0);
     RegisterVariable(g_distPluginPrefix + "_bf_time_to", 0);
     RegisterVariable(g_distPluginPrefix + "_constraint_trigger_index", -1);
@@ -950,206 +1166,41 @@ PluginInfo@ GetPluginInfo()
     return info;
 }
 
-array<array<vec2>> initDigitFont()
-{
-    array<array<vec2>> digitShapes(10);
-    digitShapes[0] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                       vec2(0,1),               vec2(2,1),
-                       vec2(0,2),               vec2(2,2),
-                       vec2(0,3),               vec2(2,3),
-                       vec2(0,4), vec2(1,4), vec2(2,4) };
-    digitShapes[1] = { vec2(1,0),
-                       vec2(1,1),
-                       vec2(1,2),
-                       vec2(1,3),
-                       vec2(1,4) };
-    digitShapes[2] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                                             vec2(2,1),
-                       vec2(0,2), vec2(1,2), vec2(2,2),
-                       vec2(0,3),
-                       vec2(0,4), vec2(1,4), vec2(2,4) };
-    digitShapes[3] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                                             vec2(2,1),
-                                   vec2(1,2), vec2(2,2),
-                                             vec2(2,3),
-                       vec2(0,4), vec2(1,4), vec2(2,4) };
-    digitShapes[4] = { vec2(0,0),            vec2(2,0),
-                       vec2(0,1),            vec2(2,1),
-                       vec2(0,2), vec2(1,2), vec2(2,2),
-                                             vec2(2,3),
-                                             vec2(2,4) };
-    digitShapes[5] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                       vec2(0,1),
-                       vec2(0,2), vec2(1,2), vec2(2,2),
-                                             vec2(2,3),
-                       vec2(0,4), vec2(1,4), vec2(2,4) };
-    digitShapes[6] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                       vec2(0,1),
-                       vec2(0,2), vec2(1,2), vec2(2,2),
-                       vec2(0,3),            vec2(2,3),
-                       vec2(0,4), vec2(1,4), vec2(2,4) };
-    digitShapes[7] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                                             vec2(2,1),
-                                             vec2(2,2),
-                                             vec2(2,3),
-                                             vec2(2,4) };
-    digitShapes[8] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                       vec2(0,1),            vec2(2,1),
-                       vec2(0,2), vec2(1,2), vec2(2,2),
-                       vec2(0,3),            vec2(2,3),
-                       vec2(0,4), vec2(1,4), vec2(2,4) };
-    digitShapes[9] = { vec2(0,0), vec2(1,0), vec2(2,0),
-                       vec2(0,1),            vec2(2,1),
-                       vec2(0,2), vec2(1,2), vec2(2,2),
-                                             vec2(2,3),
-                       vec2(0,4), vec2(1,4), vec2(2,4) };
-    return digitShapes;
-}
-array<Trigger3D> GetTextTriggers(const vec3&in camPos, const vec3&in textPos, const string&in text)
-{
-    array<array<vec2>> digitShapes = initDigitFont();
-    float scale = 3.0f;
-    float digitSpacing = 2.5f;
-    vec3 forward = (camPos - textPos);
-    forward = forward / forward.Length();
-    vec3 right = Cross(vec3(0, 1, 0), forward);
-    right = right / right.Length();
-    vec3 up = Cross(forward, right);
-    up = up / up.Length();
-    float digitWidth  = 3.0f * scale;
-    float digitHeight = 5.0f * scale;
-    vec2 centerOffset = vec2(digitWidth * 0.5f, digitHeight * 0.5f);
-    vec3 currentDigitPos = textPos;
-    array<Trigger3D> triggers;
-    for(uint i = 0; i < text.Length; i++)
-    {
-        string c = text.Substr(i, 1);
-        if(c < "0" || c > "9")
-            continue;
-        int digit = Text::ParseInt(c);
-        array<vec2> shape = digitShapes[digit];
-
-        for(uint j = 0; j < shape.Length; j++)
-        {
-            vec2 gridPos = shape[j];
-
-            float offsetX = (gridPos.x * scale) - centerOffset.x;
-            float offsetY = (gridPos.y * scale) - centerOffset.y;
-
-            vec3 worldOffset = right * offsetX + up * (-offsetY);
-
-            vec3 cuboidPos = currentDigitPos + worldOffset;
-
-            Trigger3D trig = Trigger3D(cuboidPos, scale);
-            triggers.Add(trig);
-        }
-
-        currentDigitPos = currentDigitPos + right * (digitWidth + digitSpacing);
-    }
-    return triggers;
-}
-
 void DistRender(){
-    array<vec3> positions;
-    array<string> texts;
-    float size = 5;
-    for(uint i = 0; i < g_worldCheckpointAABBs.Length; i++) {
-        AABB aabb = g_worldCheckpointAABBs[i];
-        vec3 center = aabb.Center();
-        texts.Add(Text::FormatInt(i));
-        positions.Add(center);
+    if(!GetVariableBool(g_distPluginPrefix + "_show_cp_numbers")){
+        return;
     }
-    drawTriggers(positions, size, texts, GetVariableBool(g_distPluginPrefix + "_show_cp_numbers"));
+
+    SimulationManager@ simManager = GetSimulationManager();
+    if(simManager is null || !simManager.InRace) {
+        return;
+    }
+
+    TM::GameCamera@ gameCamera = GetCurrentCamera();
+    if(gameCamera is null) {
+        return;
+    }
+
+    Drawing::BeginFrame();
+    vec3 camPos = gameCamera.Location.Position;
+    mat3 camRot = gameCamera.Location.Rotation;
+    float camFov = gameCamera.Fov;
+    vec2 screenSize = Drawing::GetScreenSize();
+
+    vec3 rainbow = Drawing::HSVToRGB(Drawing::GetRainbowHue(), 1.0f, 1.0f);
+    UI::PushStyleColor(UI::Col::Button, vec4(rainbow.x, rainbow.y, rainbow.z, 1.0f));
+    for(uint i = 0; i < g_worldCheckpointAABBs.Length; i++) {
+        vec3 center = g_worldCheckpointAABBs[i].Center();
+        vec2 screenPos = Drawing::WorldToScreen(center, camPos, camRot, camFov, screenSize);
+        Drawing::number(int(Math::Round(screenPos.x)), int(Math::Round(screenPos.y)), 14, i);
+    }
+    UI::PopStyleColor(1);
 }
 
 void Render()
 {
     DistRender();
     UberRender();   
-}
-uint64 last_update=0;
-array<vec3> g_textTriggersPositions;
-array<string> g_textTriggersTexts;
-array<int> g_triggerIds;
-vec3 g_textTriggersCamPos;
-void drawTriggers(array<vec3> positions, float size, array<string> texts, bool doDraw=true)
-{
-    TM::GameState gameState = GetCurrentGameState();
-    if(gameState == TM::GameState::StartUp){
-        return;
-    }
-    if(positions.Length != texts.Length)
-    {
-        print("Error: Positions and text arrays must have the same length. Positions: " + positions.Length + ", Texts: " + texts.Length, Severity::Error);
-        return;
-    }
-    string cachedTriggerIds = GetVariableString(g_distPluginPrefix + "_cached_triggers");
-    if (g_triggerIds.Length == 0 && cachedTriggerIds != "") {
-        array<string> ids = cachedTriggerIds.Split(",");
-        for (uint i = 0; i < ids.Length; ++i) {
-            g_triggerIds.Add(Text::ParseInt(ids[i]));
-        }
-        SetVariable(g_distPluginPrefix + "_cached_triggers", "");
-    }
-    if(!doDraw)
-    {
-        for (uint i = 0; i < g_triggerIds.Length; ++i) {
-            RemoveTrigger(g_triggerIds[i]);
-        }
-        g_triggerIds.Clear();
-        g_textTriggersPositions.Clear();
-        g_textTriggersTexts.Clear();
-        return;
-    }
-
-    if(gameState != TM::GameState::LocalRace) {
-        for (uint i = 0; i < g_triggerIds.Length; ++i) {
-            RemoveTrigger(g_triggerIds[i]);
-        }
-        SetVariable(g_distPluginPrefix + "_cached_triggers", "");
-        g_triggerIds.Clear();
-        return;
-    }
-    uint64 current_time = Time::get_Now();
-    if(current_time-last_update>50){
-        last_update=Time::get_Now();
-        bool different = false || g_textTriggersPositions.Length == 0;
-        TM::GameCamera@ camera = GetCurrentCamera();
-        SimulationManager@ simManager = GetSimulationManager();
-        if(g_textTriggersCamPos != camera.Location.Position) {
-            different = true;
-            g_textTriggersCamPos = camera.Location.Position;
-        }else{
-            for(uint i = 0; i < g_textTriggersPositions.Length; ++i) {
-                if(g_textTriggersPositions[i] != positions[i] || g_textTriggersTexts[i] != texts[i]) {
-                    different = true;
-                    break;
-                }
-            }
-        }
-        if(different) {
-            for (uint i = 0; i < g_triggerIds.Length; ++i) {
-                RemoveTrigger(g_triggerIds[i]);
-            }
-            g_triggerIds.Clear();
-            g_textTriggersPositions.Clear();
-            g_textTriggersTexts.Clear();
-            g_textTriggersPositions = positions;
-            g_textTriggersTexts = texts;
-            string triggerIds = "";
-            for (uint i = 0; i < positions.Length; ++i) {
-                array<Trigger3D> triggers = GetTextTriggers(camera.Location.Position, positions[i], texts[i]);
-                for (uint j = 0; j < triggers.Length; ++j) {
-                    Trigger3D trigger = triggers[j];
-                    int triggerId = SetTrigger(trigger);
-                    g_triggerIds.Add(triggerId);
-                    triggerIds += triggerId + ",";
-                }
-            }
-            triggerIds = triggerIds.Substr(0, triggerIds.Length - 1);
-            SetVariable(g_distPluginPrefix + "_cached_triggers", triggerIds);
-        }
-    }
 }
 class GmVec3 {
     float x = 0.0f;
