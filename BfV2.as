@@ -584,8 +584,8 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
         SaveBestInputs(simManager, false); 
 
         print("Restarting Bruteforce for reasons: ");
-        if(r1) restartInfos.Add("- Reached max iterations before restart: " + restartIterations);
-        if(r2) restartInfos.Add("- Restart condition script returned true.");
+        if(r1) print("- Reached max iterations before restart: " + restartIterations);
+        if(r2) print("- Restart condition script returned true.");
         restartInfos.Add(ResultFileStartContent);
         ResultFileStartContent = "";
         print("Total restarts so far: " + restartCount);
@@ -1876,7 +1876,7 @@ namespace Scripting
         else if ((idx = FindTopLevel(code, "=")) != -1)  { op = CmpOp::Eq; }
 
         if (idx == -1) {
-            print("Script Error: No comparison operator in '" + source + "'");
+            // print("Script Error: No comparison operator in '" + source + "'");
             return null;
         }
 
@@ -2023,7 +2023,7 @@ namespace Scripting
             return FloatGetter(c.Get);
         }
 
-        print("Script Error: Unknown float term '" + t + "'");
+        // print("Script Error: Unknown float term '" + t + "'");
         return null;
     }
 
@@ -2053,7 +2053,7 @@ namespace Scripting
         if (lower == "car.position" || lower == "car.pos") return GetCarPos;
         if (lower == "car.velocity" || lower == "car.vel") return GetCarVel;
 
-        print("Script Error: Unknown vec3 term '" + t + "'");
+        // print("Script Error: Unknown vec3 term '" + t + "'");
         return null;
     }
 }
