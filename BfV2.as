@@ -163,6 +163,7 @@ BruteforceEvaluation@ GetBruteforceTarget(){
 void Main(){
     RegisterValidationHandler("bfv2", "Bruteforce V2", BruteforceV2Settings);
     RegisterVariable("bf_iterations_before_restart", 0);
+    RegisterVariable("bf_result_folder","");
     PreciseFinishBf::Main();
     PreciseTriggerBf::Main();
     SinglePointBf::Main();
