@@ -3,7 +3,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.0";
+    info.Version = "1.1";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -11,6 +11,17 @@ PluginInfo@ GetPluginInfo()
 void coption(string name, string currentId, string identifier){
     if(UI::Selectable(name, currentId == identifier)){
         SetVariable("bf_target", identifier);
+    }
+}
+
+void toolTip(int width, array<string> args){
+    if(UI::IsItemHovered()){
+        UI::SetNextWindowSize(vec2(width, -1));
+        UI::BeginTooltip(); 
+        for(uint i = 0; i < args.Length; i++){
+            UI::TextDimmed(args[i]);
+        }
+        UI::EndTooltip();    
     }
 }
 
@@ -25,21 +36,48 @@ int restartCount = 0;
 
 void BruteforceV2Settings(){
     UI::Dummy(vec2(0,15));
+    UI::PushStyleColor(UI::Col::Header, vec4(1,0,0,0.3));
+    UI::PushStyleColor(UI::Col::HeaderHovered, vec4(1,0,0,0.4));
+    UI::PushStyleColor(UI::Col::HeaderActive, vec4(1,0,0,0.5));
+    UI::PushStyleColor(UI::Col::Button, vec4(1,0,0,0.3));
+    UI::PushStyleColor(UI::Col::ButtonHovered, vec4(1,0,0,0.4));
+    UI::PushStyleColor(UI::Col::ButtonActive, vec4(1,0,0,0.5));
+    UI::PushStyleColor(UI::Col::PopupBg, vec4(0,0,0,0.8));
+    UI::PushStyleColor(UI::Col::Border, vec4(1,0,0.2, 1));
     if(UI::CollapsingHeader("Behavior")){
-        UI::Dummy(vec2(0,15)); // UI::Dummy(vec2(0,65)); to match built-in UI spacing
+        UI::Dummy(vec2(0,2));
         UI::PushItemWidth(300);
         UI::InputTextVar("Filename used for saving results", "bf_result_filename");
-        UI::Dummy(vec2(0,10));
+
+        toolTip(300, {
+            "Use {i} in the filename if you enabled the auto restart. It will be replaced by the restart number when saving inputs. If not present, the filename will be prefixed with 'passX_' where X is the number of restarts done so far. Example:",
+            "'best_run_{i}.txt' will produce files like 'best_run_1.txt', 'best_run_2.txt', etc. for every restart."
+        });
+        
+        UI::Dummy(vec2(0,2));
         UI::InputIntVar("Iterations before restart", "bf_iterations_before_restart", 0);
-        UI::TextDimmed("Setting this to 0 will disable restarts.");
-        UI::Dummy(vec2(0,10));
+        if(UI::IsItemHovered()){
+            UI::BeginTooltip();
+            UI::Dummy(vec2(300,0));
+            UI::TextDimmed("After this many iterations, the bruteforce process will restart from the beginning, with the base run's inputs. This can help escape local minima. Set to 0 to disable restarts.");
+            UI::PopStyleColor(2);
+            UI::EndTooltip();
+        }
+        UI::Dummy(vec2(0,2));
         UI::InputTextVar("Result files folder", "bf_result_folder");
-        UI::TextDimmed("Leave empty to use the root folder.");
-        UI::Dummy(vec2(0,15));
+        if(UI::IsItemHovered()){
+            UI::BeginTooltip();
+            UI::Dummy(vec2(300,0));
+            UI::TextDimmed("Folder where the result files will be saved. Leave empty to use the root folder. Example:");
+            UI::TextDimmed("'results' will save files in "+GetVariableString("scripts_folder")+"\\results\\");
+            UI::EndTooltip();
+        }
+        UI::Dummy(vec2(0,2));
                 
     }
 
     if(UI::CollapsingHeader("Optimization")){
+        UI::Dummy(vec2(0, 2));
         @current = @GetBruteforceTarget();
         if(current is null){
             SetVariable("bf_target", evaluations[0].identifier);
@@ -53,11 +91,12 @@ void BruteforceV2Settings(){
             UI::EndCombo();
         }
         if(current.renderCallback !is null) current.renderCallback();
+        UI::Dummy(vec2(0, 2));
     }
 
     if(UI::CollapsingHeader("Conditions")){
         UI::PushItemWidth(160);
-        UI::Dummy(vec2(0, 15));
+        UI::Dummy(vec2(0, 2));
         if(GetVariableDouble("bf_condition_speed") > 0.0f){
             UI::Text("Min. speed ");
         }else{
@@ -87,66 +126,71 @@ void BruteforceV2Settings(){
         if(GetVariableDouble("bf_condition_cps") < 0.0f){
             SetVariable("bf_condition_cps", 0.0f);
         }
-        UI::Dummy(vec2(0,15));
+        UI::Dummy(vec2(0,2));
     }
     
     if(UI::CollapsingHeader("Input Modification")){
         UI::PushItemWidth(300);
+        UI::Dummy(vec2(0, 2));
         UI::InputIntVar("Input Modify Count", "bf_modify_count", 1);
-        UI::TextDimmed("At most " + int(GetVariableDouble("bf_modify_count")) + " inputs will be changed each attempt.");
+        toolTip(300,
+            {"At most " + int(GetVariableDouble("bf_modify_count")) + " inputs will be changed each attempt."});
 
-        UI::Dummy(vec2(0,15));
+        UI::Dummy(vec2(0,0));
 
-        UI::Text("Time frame in which inputs can be changed:");
 
-        UI::Text("From");
-        UI::SameLine();
-        UI::Dummy(vec2(18,0));
-        UI::SameLine();
-        UI::PushItemWidth(195);
-        UI::InputTimeVar("##bf_inputs_min_time", "bf_inputs_min_time");
-        UI::PopItemWidth();
+        if(UI::BeginTable("##hack_for_the_tooltip_to_show_while_hovering_anything_of_the_below", 1)){
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(18,0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_inputs_min_time", "bf_inputs_min_time");
+            UI::PopItemWidth();
 
-        UI::Text("To");
-        UI::SameLine();
-        UI::Dummy(vec2(37,0));
-        UI::SameLine();
-        UI::PushItemWidth(195);
-        UI::InputTimeVar("##bf_inputs_max_time", "bf_inputs_max_time");
-        UI::PopItemWidth();
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(37,0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_inputs_max_time", "bf_inputs_max_time");
+            UI::PopItemWidth();
+            UI::EndDisabled();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which inputs can be changed", "Limiting this time frame will make the bruteforcing process faster."});
 
-        UI::TextDimmed("Limiting this time frame will make the bruteforcing process faster.");
-
-        UI::Dummy(vec2(0,15));
+        UI::Dummy(vec2(0,0));
 
         UI::PushItemWidth(300);
         int t = UI::SliderIntVar("Maximum Steering Difference", "bf_max_steer_diff", 0, 131072 );
 
-        UI::TextDimmed(
+        toolTip(300,{
             "Bruteforce will randomize a number between [-" + t + ", " + t
             + "] and add it to the current steering value."
-        );
+        });
 
-        UI::Dummy(vec2(0,15));
+        UI::Dummy(vec2(0,2));
 
 
         int timediff = UI::InputTimeVar("Maximum Time Difference", "bf_max_time_diff");
         UI::PopItemWidth();
 
-        UI::TextDimmed(
+        toolTip(300,{
             "Bruteforce will randomize a number between [-" + timediff + ", " + timediff
-            + "] and add it to the current time value."
-        );
-
-        UI::Dummy(vec2(0,15));
+            + "] milliseconds and add it to the current time value."
+        });
 
         // --- Fill Missing Steering Input ---
         UI::CheckboxVar("Fill Missing Steering Input", "bf_inputs_fill_steer");
-        UI::TextDimmed(
+        toolTip(300, {
             "Timestamps with no steering input changes will be filled with existing values "
             "resulting in more values that can be changed."
-        );
+        });
     }
+    UI::PopStyleColor(8);
 }
 
 BruteforceEvaluation@ GetBruteforceTarget(){
@@ -163,7 +207,7 @@ BruteforceEvaluation@ GetBruteforceTarget(){
 void Main(){
     RegisterValidationHandler("bfv2", "Bruteforce V2", BruteforceV2Settings);
     RegisterVariable("bf_iterations_before_restart", 0);
-    RegisterVariable("bf_result_folder","");
+    RegisterVariable("bf_result_folder", "");
     PreciseFinishBf::Main();
     PreciseTriggerBf::Main();
     SinglePointBf::Main();
@@ -324,12 +368,17 @@ bool GlobalConditionsMet(SimulationManager@ simManager) {
 }
 
 SimulationState rewindState;
+bool rewindStateAssigned = false;
+array<int> CheckpointStates;
 bool IsBfV2Active = false;
+bool running = false;
+array<string> restartInfos;
+string ResultFileStartContent = "";
 
 void OnSimulationBegin(SimulationManager@ simManager) {
     IsBfV2Active = GetVariableString("controller")=="bfv2";
     if (!IsBfV2Active) return;
-
+    
     @current = @GetBruteforceTarget();
     if (current is null) {
         SetVariable("bf_target", evaluations[0].identifier);
@@ -341,6 +390,10 @@ void OnSimulationBegin(SimulationManager@ simManager) {
     info.Rewinded = false;
     forceStop = false;
     restartCount = 0;
+    rewindStateAssigned = false;
+    running = true;
+    CheckpointStates=simManager.PlayerInfo.CheckpointStates; 
+    restartInfos.Clear();
 
     // Input modification settings
     inputCount = int(GetVariableDouble("bf_modify_count"));
@@ -382,7 +435,6 @@ void OnSimulationBegin(SimulationManager@ simManager) {
         current.onSimBegin(simManager);
 }
 
-int prevPrintedIteration = -1;
 
 void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
     if(!IsBfV2Active) return;
@@ -393,19 +445,33 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
         RestoreBestInputs(simManager);
         CommandList list();
         list.Content = simManager.InputEvents.ToCommandsText();
-        string path="";
+        
+        string filename=GetVariableString("bf_result_filename");
+        string fullpath="";
         if(resultFolder != ""){
-            path = resultFolder + "/";
+            fullpath = resultFolder + "/";
         }
-        path+="pass" + (restartCount)+"_"+GetVariableString("bf_result_filename");
-        list.Save(path)?print("Saved command list to: " + path):print("Failed to save command list to: " + path);
+
+        int indexPos = filename.FindLast("{i}");
+        if(indexPos != -1){
+            filename.Erase(indexPos, 3);
+            filename.Insert(indexPos, Text::FormatInt(restartCount));
+        }else{
+            filename="pass" + (restartCount)+"_"+filename;
+        }
+        fullpath += filename;
+        list.Save(fullpath)?print("Saved command list to: " + fullpath):print("Failed to save command list to: " + fullpath);
 
         RestoreBaseInputs(simManager, false);
         SaveBestInputs(simManager, false); 
 
-
         print("Restarting Bruteforce: Iteration limit reached (" + info.Iterations + ")");
-        
+        restartInfos.Add(ResultFileStartContent);
+        ResultFileStartContent = "";
+
+        for(uint i = 0 ; i < restartInfos.Length; i++){
+            print(" Restart N " + (i+1) + ": \"" + restartInfos[i] + "\"");
+        }
 
         if(current.onSimBegin !is null) {
             current.onSimBegin(simManager);
@@ -419,10 +485,6 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
         return;
     }
 
-    if(prevPrintedIteration != int(info.Iterations) && info.Iterations % 100 == 0 && info.Iterations > 0){
-        print("Bruteforce iteration: " + info.Iterations);
-        prevPrintedIteration = info.Iterations;
-    }
 
     int raceTime = simManager.RaceTime;
 
@@ -447,12 +509,13 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
             info.Rewinded = true;
             info.Phase = BFPhase::Search;
             info.Iterations++;
+            ResultFileStartContent = response.ResultFileStartContent;
             // print("Rewind due to no progress in time.");
             return;
         }
         info.Rewinded = false;
         if(info.Phase == BFPhase::Initial) {
-            if(raceTime == minInputsTime-10){
+            if(raceTime == minInputsTime-10 && !rewindStateAssigned){
                 rewindState = simManager.SaveState();
             }
             if(response.Decision == BFEvaluationDecision::Stop){
@@ -473,6 +536,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
                     info.Rewinded = true;
                     info.Phase = BFPhase::Search;
                     info.Iterations++;
+                    ResultFileStartContent = response.ResultFileStartContent;
                     // print("Rewind from initial phase because :" + (response.Decision == BFEvaluationDecision::Accept ? " accepted improvement." : " exceeded duration."));
                     // print("Duration: " + Time::Format(simManager.EventsDuration) + ", Race Time: " + Time::Format(raceTime));
                 }
@@ -506,6 +570,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
                 info.Rewinded = true;
                 info.Iterations++;
                 info.Phase = BFPhase::Initial;
+                ResultFileStartContent = response.ResultFileStartContent;
                 // print("Rewind from improvement acceptance.");
             } else if(response.Decision == BFEvaluationDecision::Reject){
                 simManager.RewindToState(rewindState);
@@ -548,7 +613,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
         }
         info.Rewinded = false;
         if(info.Phase == BFPhase::Initial) {
-            if(raceTime == minInputsTime-10){
+            if(raceTime == minInputsTime-10 && !rewindStateAssigned){
                 rewindState = simManager.SaveState();
             }
             if(response.Decision == BFEvaluationDecisionExplicitRewind::Stop){
@@ -569,10 +634,11 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
                     info.Rewinded = true;
                     info.Phase = BFPhase::Search;
                     info.Iterations++;
+                    ResultFileStartContent = response.ResultFileStartContent;
                     // print("Rewind from initial phase because :" + (response.Decision == BFEvaluationDecisionExplicitRewind::Accept ? " accepted improvement." : " exceeded duration."));
                     // print("Duration: " + Time::Format(simManager.EventsDuration) + ", Race Time: " + Time::Format(raceTime));
                 }else if(response.Decision == BFEvaluationDecisionExplicitRewind::Accept){
-                    // Do nothing, wait for next rewind
+                    // Do nothing for now
                 }else if(response.Decision == BFEvaluationDecisionExplicitRewind::RewindAndMutateInputs){
                     simManager.RewindToState(rewindState);
                     RestoreBestInputs(simManager);
@@ -630,6 +696,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
                 CommandList list;
                 RestoreBestInputs(simManager, false);
                 list.Content = simManager.InputEvents.ToCommandsText();
+                ResultFileStartContent = response.ResultFileStartContent;
                 list.Save(GetVariableString("bf_result_filename"))?void:print("Failed to save improved inputs.");
             } else if(response.Decision == BFEvaluationDecisionExplicitRewind::AcceptAndRewind){
                 SaveBestInputs(simManager, false);
@@ -642,6 +709,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
                 info.Rewinded = true;
                 info.Phase = BFPhase::Initial;
                 info.Iterations++;
+                ResultFileStartContent = response.ResultFileStartContent;
             } else if(response.Decision == BFEvaluationDecisionExplicitRewind::RewindAndMutateInputs || response.Decision == BFEvaluationDecisionExplicitRewind::RejectAndRewind){
                 simManager.RewindToState(rewindState);
                 RestoreBestInputs(simManager);
@@ -671,6 +739,10 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
 
 void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result) {
     if (!IsBfV2Active) return;
+    const array<TM::PlayerCheckpoint>@ checkpoints = simManager.PlayerInfo.Checkpoints;
+    print("Last cp time: " + checkpoints[checkpoints.Length-1].Time);
+    running = false;
+    // checkpoints[checkpoints.Length-1].Time=0;
 }
 
 namespace PreciseFinishBf {
@@ -699,6 +771,7 @@ namespace PreciseFinishBf {
                 bestTime = preciseTime;
                 bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime; 
                 resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
+                resp.ResultFileStartContent = "# Precise Finish Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
                 PreciseFinish::Reset();
             }
         } else {
@@ -860,14 +933,14 @@ namespace PreciseTriggerBf {
 
         if (triggerIndex >= triggerIds.Length) triggerIndex = 0;
 
-        Trigger3D selectedTrigger = GetTriggerByIndex(triggerIds[triggerIndex]);
+        Trigger3D selectedTrigger = GetTrigger(triggerIds[triggerIndex]);
         vec3 pos = selectedTrigger.Position;
         
         if(UI::BeginCombo("Trigger Index", (triggerIndex+1)+". Position: ("+pos.x+", "+pos.y+", "+pos.z+")")){
             for(uint i = 0; i < triggerIds.Length; i++){
-                Trigger3D trigger = GetTriggerByIndex(triggerIds[i]);
+                Trigger3D trigger = GetTrigger(triggerIds[i]);
                 pos = trigger.Position;
-                string triggerName = (triggerIds[i]+1)+". Position: ("+pos.x+", "+pos.y+", "+pos.z+")";
+                string triggerName = (i+1)+". Position: ("+pos.x+", "+pos.y+", "+pos.z+")";
                 if(UI::Selectable(triggerName, triggerIndex == i)){
                     SetVariable("bf_target_trigger", i);
                 }
@@ -900,6 +973,7 @@ namespace PreciseTriggerBf {
                 bestTime = preciseTime;
                 bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime; 
                 resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
+                resp.ResultFileStartContent = "# Precise Trigger Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
                 PreciseFinish::Reset();
             }
         } else {
@@ -950,7 +1024,7 @@ namespace PreciseTriggerBf {
         array<int>@ triggerIds = GetTriggerIds();
         
         if (triggerIds.Length > 0 && triggerIndex < int(triggerIds.Length)) {
-            targetTrigger = GetTriggerByIndex(triggerIds[triggerIndex]);
+            targetTrigger = GetTrigger(triggerIds[triggerIndex]);
         } else {
             print("Error: Invalid trigger index selected for bruteforce.", Severity::Error);
         }
@@ -976,29 +1050,36 @@ namespace SinglePointBf {
     bool isRunBetter = false;
     void RenderEvalSettings()
     {
-        UI::SliderIntVar("Ratio", "bf_weight", 0, 100, "%d%%");
-        if(!(GetVariableDouble("bf_weight") < 1.0f || GetVariableDouble("bf_weight") > 99.0f)){
-            UI::SameLine();
-            UI::Text("❔");
-            if(UI::IsItemHovered()){
-                UI::BeginTooltip();
-                if(GetVariableDouble("bf_weight") <= 50){
-                    UI::Text("This ratio means gaining 1m is worth sacrificing speed until " + Text::FormatFloat(100/GetVariableDouble("bf_weight")-1, "", 0, 3) + "m/s.");
-                }else{
-                    UI::Text("This ratio means gaining 1m/s is worth sacrificing distance until " + Text::FormatFloat(100/(100-GetVariableDouble("bf_weight"))-1, "", 0, 3) + "m.");
+        if(UI::BeginTable("##ratio_table", 1)){
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::PushItemWidth(300);
+            UI::SliderIntVar("Ratio", "bf_weight", 0, 100, "%d%%");
+            if(!(GetVariableDouble("bf_weight") < 1.0f || GetVariableDouble("bf_weight") > 99.0f)){
+                UI::SameLine();
+                UI::Text("❔");
+                if(UI::IsItemHovered()){
+                    UI::BeginTooltip();
+                    if(GetVariableDouble("bf_weight") <= 50){
+                        UI::Text("This ratio means gaining 1m is worth sacrificing speed until " + Text::FormatFloat(100/GetVariableDouble("bf_weight")-1, "", 0, 3) + "m/s.");
+                    }else{
+                        UI::Text("This ratio means gaining 1m/s is worth sacrificing distance until " + Text::FormatFloat(100/(100-GetVariableDouble("bf_weight"))-1, "", 0, 3) + "m.");
+                    }
+                    UI::EndTooltip();
                 }
-                UI::EndTooltip();
             }
+            
+            UI::Text("Distance");
+            UI::SameLine();
+            UI::Dummy(vec2(188, 0));
+            UI::SameLine();
+            UI::Text("Speed");
+            UI::EndTable();
         }
+
+        toolTip(300, {"The ratio slider determines which metric bruteforce should value more.\nSetting the slider fully to the left side (0%) will just optimize how close the vehicle gets to the point.\nSetting the slider fully to the right side (100%) will instead optimize vehicle speed without taking the point into account."});
         
-        UI::Text("Distance");
-        UI::SameLine();
-        UI::Dummy(vec2(188, 0));
-        UI::SameLine();
-        UI::Text("Speed");
-        UI::Dummy(vec2(0, 15));
-        UI::TextDimmed("The ratio slider determines which metric bruteforce should value more.\nSetting the slider fully to the left side (0%) will just optimize how close the vehicle gets to the point.\nSetting the slider fully to the right side (100%) will instead optimize vehicle speed without taking the point into account.");
-        UI::Dummy(vec2(0, 17));
+        UI::Dummy(vec2(0, 2));
         if(GetVariableDouble("bf_weight")<=99){
             UI::Dummy(vec2(9, 0));
             UI::SameLine();
@@ -1006,7 +1087,7 @@ namespace SinglePointBf {
             UI::SameLine();
             UI::DragFloat3Var("##bf_target_point", "bf_target_point", 0.1f, -100000.0f, 100000.0f, "%.3f");
             if(GetSimulationManager().InRace){
-                UI::Dummy(vec2(0, 2));
+                UI::Dummy(vec2(0, 5));
                 UI::Dummy(vec2(119, 0));
                 UI::SameLine();
                 if(GetCurrentCamera().NameId!=""){
@@ -1020,25 +1101,27 @@ namespace SinglePointBf {
                 }
                 
             }
-            UI::Dummy(vec2(0, 17));
+            UI::Dummy(vec2(0, 2));
         }
-        UI::Text("Time frame in which the distance and/or speed will be evaluated:");
+        if(UI::BeginTable("##time_table", 1)){
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(17, 0));
+            UI::SameLine();
+            UI::PushItemWidth(200);
+            UI::InputTimeVar("##bf_eval_min_time", "bf_eval_min_time");
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(36, 0));
+            UI::SameLine();
+            UI::PushItemWidth(200);
+            UI::InputTimeVar("##bf_eval_max_time", "bf_eval_max_time");
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which the distance and/or speed will be evaluated.", "Reducing the maximum evaluation time will make the bruteforcing process faster."});
         UI::Dummy(vec2(0, 0));
-        UI::Text("From");
-        UI::SameLine();
-        UI::Dummy(vec2(17, 0));
-        UI::SameLine();
-        UI::PushItemWidth(200);
-        UI::InputTimeVar("##bf_eval_min_time", "bf_eval_min_time");
-        UI::Text("To");
-        UI::SameLine();
-        UI::Dummy(vec2(36, 0));
-        UI::SameLine();
-        UI::PushItemWidth(200);
-        UI::InputTimeVar("##bf_eval_max_time", "bf_eval_max_time");
-        UI::Dummy(vec2(0, 0));
-        UI::TextDimmed("Reducing the maximum evaluation time will make the bruteforcing process faster.");
-        UI::Dummy(vec2(0, 1));
 
 
         UI::PushItemWidth(160);
@@ -1050,7 +1133,7 @@ namespace SinglePointBf {
             UI::EndDisabled();
         }
         UI::SameLine();
-        UI::Dummy(vec2(0, 0));
+        UI::Dummy(vec2(-2, 0));
         UI::SameLine();
         UI::InputFloatVar("##bf_condition_distance", "bf_condition_distance");
         if(GetVariableDouble("bf_condition_distance") < 0.0f){
@@ -1058,18 +1141,24 @@ namespace SinglePointBf {
         }
 
         UI::Dummy(vec2(0, 0));
-        if(GetVariableBool("bf_ignore_same_speed")){
-            UI::Text("Ignore same speed improvements");
-        }else{
-            UI::BeginDisabled();
-            UI::Text("Ignore same speed improvements");
-            UI::EndDisabled();
+        
+        if(UI::BeginTable("##ignore_speed_table", 1)){
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            if(GetVariableBool("bf_ignore_same_speed")){
+                UI::Text("Ignore same speed improvements");
+                }else{
+                    UI::BeginDisabled();
+                    UI::Text("Ignore same speed improvements");
+                    UI::EndDisabled();
+                }
+            UI::SameLine();
+            UI::Dummy(vec2(2, 0));
+            UI::SameLine();
+            UI::CheckboxVar("##bf_ignore_same_speed", "bf_ignore_same_speed");
+            UI::EndTable();
         }
-        UI::SameLine();
-        UI::Dummy(vec2(2, 0));
-        UI::SameLine();
-        UI::CheckboxVar("##bf_ignore_same_speed", "bf_ignore_same_speed");
-        UI::TextDimmed("Ignoring same speed improvements is particularly useful for bruteforcing air trajectories, where a different rotation but same speed would get rejected, despite the car being seemingly closer to target. This avoids flooding inputs and preventing real distance gains.");
+        toolTip(300, {"Ignoring same speed improvements is particularly useful for bruteforcing air trajectories, where a different rotation but same speed would get rejected, despite the car being seemingly closer to target. This avoids flooding inputs and preventing real distance gains."});
     }
 
         BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
@@ -1099,8 +1188,10 @@ namespace SinglePointBf {
                     base = false;
                     if(bestSpeed < 0.0f){
                         print("Base run: Invalid", Severity::Warning);
+                        resp.ResultFileStartContent = "# Base run: Invalid";
                     }else{
                         print("Base run: " + Text::FormatFloat(bestDist,"", 0, 9) + " m, " + Text::FormatFloat(bestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
+                        resp.ResultFileStartContent = "# Base run: " + Text::FormatFloat(bestDist,"", 0, 9) + " m, " + Text::FormatFloat(bestSpeed*3.6, "", 0, 9) + " km/h at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2);
                     }
                 }
             }
@@ -1303,8 +1394,10 @@ namespace VelocityBf {
                 resp.Decision = BFEvaluationDecision::Accept;
                 if(bestSpeed < 0.0f){
                     print("Base run: Invalid", Severity::Warning);
+                    resp.ResultFileStartContent = "# Base run: Invalid";
                 }else{
                     print("Base run: " + Text::FormatFloat(bestSpeed, "", 0, 9) + " m/s at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
+                    resp.ResultFileStartContent = "# Base run: " + Text::FormatFloat(bestSpeed, "", 0, 9) + " m/s at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2);
                 }
             }
         } else {
@@ -1527,5 +1620,5 @@ namespace InputModification {
 }
 void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target) {
     if (!(GetVariableString("controller")=="bfv2")) return;
-    simManager.PreventSimulationFinish();
+    if(running) simManager.PreventSimulationFinish();
 }
