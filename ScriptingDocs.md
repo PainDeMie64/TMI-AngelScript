@@ -12,6 +12,9 @@ This scripting language evaluates conditions based on the simulation state. Ever
 *   `car.x`, `car.position.x`
 *   `car.y`, `car.position.y`
 *   `car.z`, `car.position.z`
+*   `car.velocity.x`
+*   `car.velocity.y`
+*   `car.velocity.z`
 *   `car.speed` (m/s)
 
 **Vectors (vec3)**
