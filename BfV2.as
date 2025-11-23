@@ -470,7 +470,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
         ResultFileStartContent = "";
 
         for(uint i = 0 ; i < restartInfos.Length; i++){
-            print(" Restart N " + (i+1) + ": \"" + restartInfos[i] + "\"");
+            print("- Restart N " + (i+1) + ": \"" + restartInfos[i] + "\"");
         }
 
         if(current.onSimBegin !is null) {
@@ -739,10 +739,10 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
 
 void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result) {
     if (!IsBfV2Active) return;
-    const array<TM::PlayerCheckpoint>@ checkpoints = simManager.PlayerInfo.Checkpoints;
-    print("Last cp time: " + checkpoints[checkpoints.Length-1].Time);
+    for(uint i = 0 ; i < restartInfos.Length; i++){
+        print("- Restart N " + (i+1) + ": \"" + restartInfos[i] + "\"");
+    }
     running = false;
-    // checkpoints[checkpoints.Length-1].Time=0;
 }
 
 namespace PreciseFinishBf {
