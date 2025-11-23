@@ -3,7 +3,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.1";
+    info.Version = "1.2";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -30,9 +30,16 @@ BruteforceEvaluation@ current;
 BFEvaluationInfo info = BFEvaluationInfo();
 float minSpeed = 0.0f;
 int minCps = 0;
+Trigger3D conditionTrigger;
+bool hasConditionTrigger = false;
+Trigger3D targetTrigger;
 int restartIterations = 0;
 string resultFolder = "";
 int restartCount = 0;
+Scripting::ConditionCallback@ standardCondition;
+Scripting::ConditionCallback@ restartCondition;
+string linesRestartCondition="#DUJ12E3F 4G5H6I7J8K9L0M";
+string linesStandardCondition="416782R3021C7B 1467 1";
 
 void BruteforceV2Settings(){
     UI::Dummy(vec2(0,15));
@@ -56,24 +63,61 @@ void BruteforceV2Settings(){
         
         UI::Dummy(vec2(0,2));
         UI::InputIntVar("Iterations before restart", "bf_iterations_before_restart", 0);
-        if(UI::IsItemHovered()){
-            UI::BeginTooltip();
-            UI::Dummy(vec2(300,0));
-            UI::TextDimmed("After this many iterations, the bruteforce process will restart from the beginning, with the base run's inputs. This can help escape local minima. Set to 0 to disable restarts.");
-            UI::PopStyleColor(2);
-            UI::EndTooltip();
-        }
+        toolTip(300,{"After this many iterations, the bruteforce process will restart from the beginning, with the base run's inputs. This can help escape local minima. Set to 0 to disable restarts."});
         UI::Dummy(vec2(0,2));
         UI::InputTextVar("Result files folder", "bf_result_folder");
-        if(UI::IsItemHovered()){
-            UI::BeginTooltip();
-            UI::Dummy(vec2(300,0));
-            UI::TextDimmed("Folder where the result files will be saved. Leave empty to use the root folder. Example:");
-            UI::TextDimmed("'results' will save files in "+GetVariableString("scripts_folder")+"\\results\\");
-            UI::EndTooltip();
-        }
+        toolTip(300,{"Folder where the result files will be saved. Leave empty to use the root folder. Example:",
+            "'results' will save files in "+GetVariableString("scripts_folder")+"\\results\\"
+        });
         UI::Dummy(vec2(0,2));
-                
+        string lines = GetVariableString("bf_restart_condition_script");
+        int currentHeight = int(GetVariableDouble("bf_restart_condition_script_height"));
+        string t;
+        UI::PushItemWidth(245);
+        if(UI::InputTextMultiline("##bf_restart_condition_script", lines, vec2(0, currentHeight))){
+            SetVariable("bf_restart_condition_script", lines);
+        }
+        UI::SameLine();
+        if(UI::Button("^")){
+            if(currentHeight < 42) currentHeight = 42;
+            SetVariable("bf_restart_condition_script_height", currentHeight - 17);
+        }
+        UI::SameLine();
+        if(UI::Button("v")){
+            SetVariable("bf_restart_condition_script_height", currentHeight + 17);
+        }
+
+        UI::SameLine();
+        UI::Text("Condition script for restart");
+        UI::PopItemWidth();
+        
+        if(lines != linesRestartCondition){
+            linesRestartCondition = lines;
+            Scripting::ConditionCallback@ callback = Scripting::CompileMulti(lines.Split("\n"));
+            @restartCondition = @callback;
+        }
+
+        if(restartCondition is null){
+            bool isEmpty = true;
+            array<string> parts = lines.Split("\n");
+            for(uint i=0; i<parts.Length; i++) {
+                if(Scripting::CleanSource(parts[i]) != "") {
+                    isEmpty = false;
+                    break;
+                }
+            }
+            if(!isEmpty){
+                UI::PushStyleColor(UI::Col::Text, vec4(1,0,0,1));
+                UI::Text("Script has errors! Script has errors!");
+                UI::Text("Script has errors! Script has errors!");
+                UI::Text("Script has errors! Script has errors!");
+                UI::PopStyleColor();
+            } else {
+                UI::TextDimmed("No restart condition set.");
+            }
+        }else{
+            UI::TextDimmed("Script compiled successfully.");
+        }
     }
 
     if(UI::CollapsingHeader("Optimization")){
@@ -125,6 +169,93 @@ void BruteforceV2Settings(){
         UI::InputIntVar("##bf_condition_cps", "bf_condition_cps");
         if(GetVariableDouble("bf_condition_cps") < 0.0f){
             SetVariable("bf_condition_cps", 0.0f);
+        }
+        UI::Dummy(vec2(0,2));
+
+        if(int(GetVariableDouble("bf_condition_trigger")) > 0){
+            UI::Text("Trigger");
+        }else{
+            UI::BeginDisabled();
+            UI::Text("Trigger");
+            UI::EndDisabled();
+        }
+        UI::SameLine();
+        UI::Dummy(vec2(39, 0));
+        UI::SameLine();
+        uint triggerIndex = uint(GetVariableDouble("bf_condition_trigger"));
+        array<int>@ triggerIds = GetTriggerIds();
+
+        if (triggerIndex > triggerIds.Length) triggerIndex = 0;
+
+        string currentName = "None";
+        if(triggerIndex > 0){
+            Trigger3D selectedTrigger = GetTrigger(triggerIds[triggerIndex-1]);
+            vec3 pos = selectedTrigger.Position;
+            currentName = triggerIndex+". Position: ("+pos.x+", "+pos.y+", "+pos.z+")";
+        }
+
+        if(UI::BeginCombo("##bf_condition_trigger", currentName)){
+            if(UI::Selectable("None", triggerIndex == 0)){
+                SetVariable("bf_condition_trigger", 0);
+            }
+            for(uint i = 0; i < triggerIds.Length; i++){
+                Trigger3D trigger = GetTrigger(triggerIds[i]);
+                vec3 pos = trigger.Position;
+                string triggerName = (i+1)+". Position: ("+pos.x+", "+pos.y+", "+pos.z+")";
+                if(UI::Selectable(triggerName, triggerIndex == i+1)){
+                    SetVariable("bf_condition_trigger", i+1);
+                }
+            }
+            UI::EndCombo();
+        }
+
+        string lines = GetVariableString("bf_condition_script");
+        int currentHeight = int(GetVariableDouble("bf_condition_script_height"));
+        string t;
+        UI::PushItemWidth(245);
+        if(UI::InputTextMultiline("##bf_condition_script", lines, vec2(0, currentHeight))){
+            SetVariable("bf_condition_script", lines);
+        }
+        UI::SameLine();
+        if(UI::Button("^")){
+            if(currentHeight < 42) currentHeight = 42;
+            SetVariable("bf_condition_script_height", currentHeight - 17);
+        }
+        UI::SameLine();
+        if(UI::Button("v")){
+            SetVariable("bf_condition_script_height", currentHeight + 17);
+        }
+        UI::SameLine();
+        UI::Text("Condition script");
+
+        UI::PopItemWidth();
+
+        if(lines != linesStandardCondition){
+            linesStandardCondition = lines;
+            Scripting::ConditionCallback@ callback = Scripting::CompileMulti(lines.Split("\n"));
+            @standardCondition = @callback;
+        }
+
+        if(standardCondition is null){
+            bool isEmpty = true;
+            array<string> parts = lines.Split("\n");
+            for(uint i=0; i<parts.Length; i++) {
+                if(Scripting::CleanSource(parts[i]) != "") {
+                    isEmpty = false;
+                    break;
+                }
+            }
+            if(!isEmpty){
+                UI::PushStyleColor(UI::Col::Text, vec4(1,0,0,1));
+                UI::Text("Script has errors! Script has errors!");
+                UI::Text("Script has errors! Script has errors!");
+                UI::Text("Script has errors! Script has errors!");
+                UI::PopStyleColor();
+            } else {
+                UI::TextDimmed("No conditions set.");
+            }
+        }else{
+            UI::TextDimmed("Script compiled successfully.");
         }
         UI::Dummy(vec2(0,2));
     }
@@ -208,7 +339,13 @@ void Main(){
     RegisterValidationHandler("bfv2", "Bruteforce V2", BruteforceV2Settings);
     RegisterVariable("bf_iterations_before_restart", 0);
     RegisterVariable("bf_result_folder", "");
+    RegisterVariable("bf_condition_script", "");
+    RegisterVariable("bf_condition_script_height", 26);
+    RegisterVariable("bf_restart_condition_script", "");
+    RegisterVariable("bf_restart_condition_script_height", 26);
+    RegisterVariable("bf_condition_trigger",0);
     PreciseFinishBf::Main();
+    PreciseCheckpointBf::Main();
     PreciseTriggerBf::Main();
     SinglePointBf::Main();
     VelocityBf::Main();
@@ -224,23 +361,10 @@ BruteforceEvaluation@ RegisterBruteforceEval(const string&in identifier, const s
     return eval;
 }
 
-funcdef BFEvaluationResponseExplicitRewind@ OnBruteforceEvaluateExplicitRewind(SimulationManager@ simManager, const BFEvaluationInfo&in info);
 funcdef void OnSimulationBeginCallback(SimulationManager@ simManager);
-
-BruteforceEvaluation@ RegisterBruteforceEval(const string&in identifier, const string&in title, OnBruteforceEvaluateExplicitRewind@ callback, RenderBruteforceEvaluationSettings@ renderCallback = null){
-    BruteforceEvaluation eval;
-    eval.type = CallbackType::ExplicitRewind;
-    eval.identifier = identifier;
-    eval.title = title;
-    @eval.explicitRewindCallback = callback;
-    @eval.renderCallback = renderCallback;
-    evaluations.Add(eval);  
-    return eval;
-}
 
 enum CallbackType {
     Legacy,
-    ExplicitRewind,
     FullControl,
 }
 
@@ -248,27 +372,9 @@ class BruteforceEvaluation {
     string identifier;
     string title;
     OnBruteforceEvaluate@ callback;
-    OnBruteforceEvaluateExplicitRewind@ explicitRewindCallback;
     RenderBruteforceEvaluationSettings@ renderCallback;
     CallbackType type = CallbackType::Legacy;
     OnSimulationBeginCallback@ onSimBegin = null;
-}
-
-enum BFEvaluationDecisionExplicitRewind {
-    DoNothing,
-    Accept, // Saves only, does not rewind
-    AcceptAndRewind,
-    RejectAndRewind, // Cannot reject without rewinding in ExplicitRewind
-    RewindAndMutateInputs,
-    RewindOnly,
-    Stop,
-}
-
-class BFEvaluationResponseExplicitRewind {
-    
-    BFEvaluationDecisionExplicitRewind Decision;
-    int RewindTime;
-    string ResultFileStartContent;
 }
 
 /*
@@ -364,7 +470,8 @@ void RestoreBaseInputs(SimulationManager@ simManager, bool printRestored = false
 bool GlobalConditionsMet(SimulationManager@ simManager) {
     float currentSpeed = simManager.Dyna.CurrentState.LinearSpeed.Length();
     int currentCps = simManager.PlayerInfo.CurCheckpointCount;
-    return currentSpeed >= minSpeed && currentCps >= minCps;
+    bool triggerCondition = !hasConditionTrigger || conditionTrigger.ContainsPoint(simManager.Dyna.CurrentState.Location.Position);
+    return currentSpeed >= minSpeed && currentCps >= minCps && triggerCondition && (standardCondition is null || standardCondition(simManager));
 }
 
 SimulationState rewindState;
@@ -408,6 +515,16 @@ void OnSimulationBegin(SimulationManager@ simManager) {
     minSpeed = float(GetVariableDouble("bf_condition_speed"))/3.6f; // Convert from km/h to m/s
     minCps = int(GetVariableDouble("bf_condition_cps"));
 
+    int triggerIndex = int(GetVariableDouble("bf_condition_trigger"));
+    hasConditionTrigger = false;
+    if(triggerIndex > 0){
+        array<int>@ triggerIds = GetTriggerIds();
+        if(triggerIndex <= int(triggerIds.Length)){
+             conditionTrigger = GetTrigger(triggerIds[triggerIndex-1]);
+             hasConditionTrigger = true;
+        }
+    }
+
     restartIterations = int(GetVariableDouble("bf_iterations_before_restart"));
     resultFolder = GetVariableString("bf_result_folder");
 
@@ -439,8 +556,9 @@ void OnSimulationBegin(SimulationManager@ simManager) {
 void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
     if(!IsBfV2Active) return;
     if(forceStop || userCancelled) return;
-
-    if (restartIterations > 0 && int(info.Iterations) >= restartIterations) {
+    bool r1 = restartIterations > 0 && int(info.Iterations) >= restartIterations;
+    bool r2 = restartCondition !is null && restartCondition(simManager);
+    if (r1 || r2) {
         restartCount++;
         RestoreBestInputs(simManager);
         CommandList list();
@@ -465,10 +583,12 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
         RestoreBaseInputs(simManager, false);
         SaveBestInputs(simManager, false); 
 
-        print("Restarting Bruteforce: Iteration limit reached (" + info.Iterations + ")");
+        print("Restarting Bruteforce for reasons: ");
+        if(r1) restartInfos.Add("- Reached max iterations before restart: " + restartIterations);
+        if(r2) restartInfos.Add("- Restart condition script returned true.");
         restartInfos.Add(ResultFileStartContent);
         ResultFileStartContent = "";
-
+        print("Total restarts so far: " + restartCount);
         for(uint i = 0 ; i < restartInfos.Length; i++){
             print("- Restart N " + (i+1) + ": \"" + restartInfos[i] + "\"");
         }
@@ -592,149 +712,6 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
             }
         }
     } 
-    if(current.type == CallbackType::ExplicitRewind){
-        BFEvaluationResponseExplicitRewind response = current.explicitRewindCallback(simManager, info);
-        if(simManager.TickTime>simManager.RaceTime+20 && (response.Decision != BFEvaluationDecisionExplicitRewind::Accept && response.Decision != BFEvaluationDecisionExplicitRewind::AcceptAndRewind)){    
-            simManager.RewindToState(rewindState);
-            RestoreBestInputs(simManager);
-            InputModification::MutateInputs(
-                simManager.InputEvents,
-                inputCount,
-                minInputsTime,
-                maxInputsTime,
-                maxSteerDiff,
-                maxTimeDiff,
-                fillSteerInputs
-            );
-            info.Rewinded = true;
-            info.Phase = BFPhase::Search;
-            info.Iterations++;
-            return;
-        }
-        info.Rewinded = false;
-        if(info.Phase == BFPhase::Initial) {
-            if(raceTime == minInputsTime-10 && !rewindStateAssigned){
-                rewindState = simManager.SaveState();
-            }
-            if(response.Decision == BFEvaluationDecisionExplicitRewind::Stop){
-                forceStop = true;
-            }else{
-                if(raceTime > int(simManager.EventsDuration)+20 || response.Decision == BFEvaluationDecisionExplicitRewind::AcceptAndRewind){
-                    simManager.RewindToState(rewindState);
-                    RestoreBestInputs(simManager);
-                    InputModification::MutateInputs(
-                        simManager.InputEvents,
-                        inputCount,
-                        minInputsTime,
-                        maxInputsTime,
-                        maxSteerDiff,
-                        maxTimeDiff,
-                        fillSteerInputs
-                    );
-                    info.Rewinded = true;
-                    info.Phase = BFPhase::Search;
-                    info.Iterations++;
-                    ResultFileStartContent = response.ResultFileStartContent;
-                    // print("Rewind from initial phase because :" + (response.Decision == BFEvaluationDecisionExplicitRewind::Accept ? " accepted improvement." : " exceeded duration."));
-                    // print("Duration: " + Time::Format(simManager.EventsDuration) + ", Race Time: " + Time::Format(raceTime));
-                }else if(response.Decision == BFEvaluationDecisionExplicitRewind::Accept){
-                    // Do nothing for now
-                }else if(response.Decision == BFEvaluationDecisionExplicitRewind::RewindAndMutateInputs){
-                    simManager.RewindToState(rewindState);
-                    RestoreBestInputs(simManager);
-                    InputModification::MutateInputs(
-                        simManager.InputEvents,
-                        inputCount,
-                        minInputsTime,
-                        maxInputsTime,
-                        maxSteerDiff,
-                        maxTimeDiff,
-                        fillSteerInputs
-                    );
-                    info.Phase = BFPhase::Search;
-                    info.Rewinded = true;
-                    info.Iterations++;
-                }else if(response.Decision == BFEvaluationDecisionExplicitRewind::RejectAndRewind){
-                    simManager.RewindToState(rewindState);
-                    RestoreBestInputs(simManager);
-                    InputModification::MutateInputs(
-                        simManager.InputEvents,
-                        inputCount,
-                        minInputsTime,
-                        maxInputsTime,
-                        maxSteerDiff,
-                        maxTimeDiff,
-                        fillSteerInputs
-                    );
-                    info.Rewinded = true;
-                    info.Iterations++;
-                }else if(response.Decision == BFEvaluationDecisionExplicitRewind::RewindOnly){
-                    simManager.RewindToState(rewindState);
-                    RestoreBestInputs(simManager);
-                    info.Rewinded = true;
-                }
-            }
-        }else{
-            if(response.Decision == BFEvaluationDecisionExplicitRewind::DoNothing){
-                if(raceTime > int(simManager.EventsDuration)){
-                    simManager.RewindToState(rewindState);
-                    RestoreBestInputs(simManager);
-                    InputModification::MutateInputs(
-                        simManager.InputEvents,
-                        inputCount,
-                        minInputsTime,
-                        maxInputsTime,
-                        maxSteerDiff,
-                        maxTimeDiff,
-                        fillSteerInputs
-                    );
-                    info.Rewinded = true;
-                    info.Iterations++;
-                }
-            } else if(response.Decision == BFEvaluationDecisionExplicitRewind::Accept){
-                SaveBestInputs(simManager, false);
-                CommandList list;
-                RestoreBestInputs(simManager, false);
-                list.Content = simManager.InputEvents.ToCommandsText();
-                ResultFileStartContent = response.ResultFileStartContent;
-                list.Save(GetVariableString("bf_result_filename"))?void:print("Failed to save improved inputs.");
-            } else if(response.Decision == BFEvaluationDecisionExplicitRewind::AcceptAndRewind){
-                SaveBestInputs(simManager, false);
-                CommandList list;
-                RestoreBestInputs(simManager, false);
-                list.Content = simManager.InputEvents.ToCommandsText();
-                list.Save(GetVariableString("bf_result_filename"))?void:print("Failed to save improved inputs.");
-                simManager.RewindToState(rewindState);
-                RestoreBestInputs(simManager, false);
-                info.Rewinded = true;
-                info.Phase = BFPhase::Initial;
-                info.Iterations++;
-                ResultFileStartContent = response.ResultFileStartContent;
-            } else if(response.Decision == BFEvaluationDecisionExplicitRewind::RewindAndMutateInputs || response.Decision == BFEvaluationDecisionExplicitRewind::RejectAndRewind){
-                simManager.RewindToState(rewindState);
-                RestoreBestInputs(simManager);
-                InputModification::MutateInputs(
-                    simManager.InputEvents,
-                    inputCount,
-                    minInputsTime,
-                    maxInputsTime,
-                    maxSteerDiff,
-                    maxTimeDiff,
-                    fillSteerInputs
-                );
-                info.Rewinded = true;
-                info.Iterations++;
-                // print("Rewind and mutate inputs.");
-            } else if(response.Decision == BFEvaluationDecisionExplicitRewind::RewindOnly){
-                simManager.RewindToState(rewindState);
-                RestoreBestInputs(simManager);
-                info.Rewinded = true;
-                info.Iterations++;
-            } else if(response.Decision == BFEvaluationDecisionExplicitRewind::Stop){
-                forceStop = true;
-            }
-        }
-    }
 }
 
 void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result) {
@@ -747,68 +724,81 @@ void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result) {
 
 namespace PreciseFinishBf {
     void RenderEvalSettings(){}
+    
     double bestTime = -1;
     int bestTimeMsImprecise = -1;
 
-    BFEvaluationResponseExplicitRewind@ OnEvaluateExplicitRewind(SimulationManager@ simManager, const BFEvaluationInfo&in info)
+    BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
     {
+        auto resp = BFEvaluationResponse();
         int raceTime = simManager.RaceTime;
-        auto resp = BFEvaluationResponseExplicitRewind();
+        resp.Decision = BFEvaluationDecision::DoNothing;
 
-        if (info.Phase == BFPhase::Initial) {
-            double preciseTime;
-            if (PreciseFinish::Compute(simManager, simManager.PlayerInfo.RaceFinished, preciseTime)) {
-                if (!GlobalConditionsMet(simManager)) {
-                    print("Base run finished, but conditions not met. Search will require meeting these conditions.", Severity::Warning);    
-                }
-                if(bestTime != -1 && preciseTime >= bestTime + 1e-7){
-                    resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                    PreciseFinish::Reset();
-                    return resp;
-                }
-                if(bestTime != -1) print("Precise finish time: " + Text::FormatFloat(preciseTime, "", 0, 9));
-                else print("Base run finish time: " + Text::FormatFloat(preciseTime, "", 0, 9));
-                bestTime = preciseTime;
-                bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime; 
-                resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
-                resp.ResultFileStartContent = "# Precise Finish Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
-                PreciseFinish::Reset();
-            }
-        } else {
-            if(simManager.PlayerInfo.RaceFinished && raceTime < bestTimeMsImprecise){
-               if (GlobalConditionsMet(simManager)) {
-                    resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
-                } else {
-                    resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                }
+        // Fast Rejection
+        if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating && bestTimeMsImprecise != -1) {
+            if (raceTime > bestTimeMsImprecise + 50) {
+                resp.Decision = BFEvaluationDecision::Reject;
                 PreciseFinish::Reset();
                 return resp;
             }
             
-            if (raceTime > bestTimeMsImprecise + 50) {
-                resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                // print("Rewind due to exceeding imprecise best time: " + Time::Format(bestTimeMsImprecise));
+            if (simManager.PlayerInfo.RaceFinished && raceTime < bestTimeMsImprecise) {
+                 if (GlobalConditionsMet(simManager)) {
+                     resp.Decision = BFEvaluationDecision::Accept;
+                 } else {
+                     resp.Decision = BFEvaluationDecision::Reject;
+                 }
+                 PreciseFinish::Reset();
+                 return resp;
+            }
+        }
+
+        // Precise Computation
+        double preciseTime;
+        
+        bool calculationFinished = PreciseFinish::Compute(simManager, simManager.PlayerInfo.RaceFinished, preciseTime);
+
+        if (!calculationFinished) {
+            return resp;
+        }
+       if (!GlobalConditionsMet(simManager)) {
+            if (info.Phase == BFPhase::Initial) {
+                print("Base run finished, but conditions not met. Search will require meeting these conditions.", Severity::Warning);    
+            } else {
+                resp.Decision = BFEvaluationDecision::Reject;
+                PreciseFinish::Reset();
+                return resp;
+            }
+        }
+
+        if (info.Phase == BFPhase::Initial) {
+            if(bestTime != -1 && preciseTime >= bestTime + 1e-7){
+                resp.Decision = BFEvaluationDecision::Reject;
                 PreciseFinish::Reset();
                 return resp;
             }
 
-            if (raceTime >= bestTimeMsImprecise) {
-                double preciseTime;
-                if (PreciseFinish::Compute(simManager, simManager.PlayerInfo.RaceFinished, preciseTime)) {
-                    if(!GlobalConditionsMet(simManager)) {
-                         resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                         PreciseFinish::Reset();
-                         return resp;
-                    }
-                    if(preciseTime >= bestTime) {
-                        resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                        PreciseFinish::Reset();
-                    }else{
-                        resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
-                        PreciseFinish::Reset();    
-                    }
-                }
+            if(bestTime != -1) print("Precise finish time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+            else print("Base run finish time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+            
+            bestTime = preciseTime;
+            bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime; 
+            
+            resp.Decision = BFEvaluationDecision::Accept;
+            resp.ResultFileStartContent = "# Precise Finish Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
+            PreciseFinish::Reset();
+
+        } else {
+            if (preciseTime < bestTime) {
+                bestTime = preciseTime;
+                bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
+                
+                resp.Decision = BFEvaluationDecision::Accept;
+                resp.ResultFileStartContent = "# Precise Finish Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
+            } else {
+                resp.Decision = BFEvaluationDecision::Reject;
             }
+            PreciseFinish::Reset();
         }
 
         return resp;
@@ -821,10 +811,11 @@ namespace PreciseFinishBf {
     }
 
     void Main() {
-        auto bfEval = RegisterBruteforceEval("precisefinish", "Precise Finish Time", OnEvaluateExplicitRewind, RenderEvalSettings);
+        auto bfEval = RegisterBruteforceEval("precisefinish", "Precise Finish Time", OnEvaluate, RenderEvalSettings);
         @bfEval.onSimBegin = @OnSimulationBegin;
     }
 }
+
 namespace PreciseFinish
 {
     bool IsEstimating = false;
@@ -927,7 +918,7 @@ namespace PreciseTriggerBf {
         array<int>@ triggerIds = GetTriggerIds();
 
         if (triggerIds.Length == 0) {
-            UI::Text("No triggers found in map.");
+            UI::Text("No triggers found.");
             return;
         }
 
@@ -935,7 +926,7 @@ namespace PreciseTriggerBf {
 
         Trigger3D selectedTrigger = GetTrigger(triggerIds[triggerIndex]);
         vec3 pos = selectedTrigger.Position;
-        
+
         if(UI::BeginCombo("Trigger Index", (triggerIndex+1)+". Position: ("+pos.x+", "+pos.y+", "+pos.z+")")){
             for(uint i = 0; i < triggerIds.Length; i++){
                 Trigger3D trigger = GetTrigger(triggerIds[i]);
@@ -949,69 +940,85 @@ namespace PreciseTriggerBf {
         }
     }
 
-    BFEvaluationResponseExplicitRewind@ OnEvaluateExplicitRewind(SimulationManager@ simManager, const BFEvaluationInfo&in info)
+    BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
     {
         int raceTime = simManager.RaceTime;
-        auto resp = BFEvaluationResponseExplicitRewind();
+        auto resp = BFEvaluationResponse();
+
+        resp.Decision = BFEvaluationDecision::DoNothing;
 
         bool inTrigger = targetTrigger.ContainsPoint(simManager.Dyna.CurrentState.Location.Position);
 
-        if (info.Phase == BFPhase::Initial) {
-            double preciseTime;
-            if (PreciseFinish::Compute(simManager, inTrigger, preciseTime)) {
-                if (!GlobalConditionsMet(simManager)) {
-                    print("Base run hit trigger but conditions not met. Search will require meeting these conditions.", Severity::Warning);
-                }
-                if(bestTime != -1 && preciseTime >= bestTime + 1e-7){
-                    resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                    PreciseFinish::Reset();
-                    return resp;
-                }
-                if(bestTime != -1) print("Precise trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
-                else print("Base run trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
-                
-                bestTime = preciseTime;
-                bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime; 
-                resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
-                resp.ResultFileStartContent = "# Precise Trigger Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
-                PreciseFinish::Reset();
-            }
-        } else {
+        if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating && bestTimeMsImprecise != -1) {
+
             if(inTrigger && raceTime < bestTimeMsImprecise){
                 if (GlobalConditionsMet(simManager)) {
-                    resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
+                    resp.Decision = BFEvaluationDecision::Accept;
                 } else {
-                    resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
+                    resp.Decision = BFEvaluationDecision::Reject;
                 }
-                PreciseFinish::Reset();
-                return resp;
-            }
-            
-            if (raceTime > bestTimeMsImprecise + 50) {
-                resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
                 PreciseFinish::Reset();
                 return resp;
             }
 
-            if (raceTime >= bestTimeMsImprecise) {
-                double preciseTime;
-                if (PreciseFinish::Compute(simManager, inTrigger, preciseTime)) {
-                    if(!GlobalConditionsMet(simManager)) {
-                         resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                         PreciseFinish::Reset();
-                         return resp;
-                    }
-                    if(preciseTime >= bestTime) {
-                        resp.Decision = BFEvaluationDecisionExplicitRewind::RejectAndRewind;
-                        PreciseFinish::Reset();
-                    } else {
-                        resp.Decision = BFEvaluationDecisionExplicitRewind::AcceptAndRewind;
-                        PreciseFinish::Reset();    
-                    }
-                }
+            if (raceTime > bestTimeMsImprecise + 50) {
+                resp.Decision = BFEvaluationDecision::Reject;
+                PreciseFinish::Reset();
+                return resp;
             }
         }
 
+        double preciseTime;
+
+        bool calculationDone = PreciseFinish::Compute(simManager, inTrigger, preciseTime);
+
+        if (!calculationDone) {
+            return resp; 
+        }
+
+        if(!GlobalConditionsMet(simManager)) {
+            if (info.Phase == BFPhase::Initial) {
+                 print("Base run hit trigger but conditions not met. Search will require meeting these conditions.", Severity::Warning);
+            } else {
+                 resp.Decision = BFEvaluationDecision::Reject;
+                 PreciseFinish::Reset();
+                 return resp;
+            }
+        }
+
+        if (info.Phase == BFPhase::Initial) {
+
+            if(bestTime != -1 && preciseTime >= bestTime + 1e-7){
+                resp.Decision = BFEvaluationDecision::Reject;
+                PreciseFinish::Reset();
+                return resp;
+            }
+
+            if(bestTime != -1) print("Precise trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+            else print("Base run trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+
+            bestTime = preciseTime;
+            bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime; 
+
+            resp.Decision = BFEvaluationDecision::Accept;
+            resp.ResultFileStartContent = "# Precise Trigger Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
+
+        } else {
+
+            if(preciseTime < bestTime) {
+
+                bestTime = preciseTime;
+                bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
+
+                resp.Decision = BFEvaluationDecision::Accept;
+                resp.ResultFileStartContent = "# Precise Trigger Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
+            } else {
+
+                resp.Decision = BFEvaluationDecision::Reject;
+            }
+        }
+
+        PreciseFinish::Reset();
         return resp;
     }
 
@@ -1022,7 +1029,7 @@ namespace PreciseTriggerBf {
 
         int triggerIndex = int(GetVariableDouble("bf_target_trigger"));
         array<int>@ triggerIds = GetTriggerIds();
-        
+
         if (triggerIds.Length > 0 && triggerIndex < int(triggerIds.Length)) {
             targetTrigger = GetTrigger(triggerIds[triggerIndex]);
         } else {
@@ -1031,7 +1038,112 @@ namespace PreciseTriggerBf {
     }
 
     void Main() {
-        auto bfEval = RegisterBruteforceEval("precisetrigger", "Trigger", OnEvaluateExplicitRewind, RenderEvalSettings);
+
+        auto bfEval = RegisterBruteforceEval("precisetrigger", "Trigger", OnEvaluate, RenderEvalSettings);
+        @bfEval.onSimBegin = @OnSimulationBegin;
+    }
+}
+namespace PreciseCheckpointBf {
+    int targetCp;
+    double bestTime = -1;
+    int bestTimeMsImprecise = -1;
+
+    void RenderEvalSettings(){
+        targetCp = UI::InputIntVar("Target Checkpoint Index", "bf_target_cp");
+    }
+
+    BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
+    {
+        int raceTime = simManager.RaceTime;
+        auto resp = BFEvaluationResponse();
+
+        resp.Decision = BFEvaluationDecision::DoNothing;
+
+        bool hasCp = int(simManager.PlayerInfo.CurCheckpointCount) >= targetCp;
+
+        if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating && bestTimeMsImprecise != -1) {
+
+            if(hasCp && raceTime < bestTimeMsImprecise){
+                if (GlobalConditionsMet(simManager)) {
+                    resp.Decision = BFEvaluationDecision::Accept;
+                } else {
+                    resp.Decision = BFEvaluationDecision::Reject;
+                }
+                PreciseFinish::Reset();
+                return resp;
+            }
+
+            if (raceTime > bestTimeMsImprecise + 50) {
+                resp.Decision = BFEvaluationDecision::Reject;
+                PreciseFinish::Reset();
+                return resp;
+            }
+        }
+
+        double preciseTime;
+
+        bool calculationDone = PreciseFinish::Compute(simManager, hasCp, preciseTime);
+
+        if (!calculationDone) {
+            return resp; 
+        }
+
+        if(!GlobalConditionsMet(simManager)) {
+            if (info.Phase == BFPhase::Initial) {
+                 print("Base run hit checkpoint but conditions not met. Search will require meeting these conditions.", Severity::Warning);
+            } else {
+                 resp.Decision = BFEvaluationDecision::Reject;
+                 PreciseFinish::Reset();
+                 return resp;
+            }
+        }
+
+        if (info.Phase == BFPhase::Initial) {
+
+            if(bestTime != -1 && preciseTime >= bestTime + 1e-7){
+                resp.Decision = BFEvaluationDecision::Reject;
+                PreciseFinish::Reset();
+                return resp;
+            }
+
+            if(bestTime != -1) print("Precise checkpoint time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+            else print("Base run checkpoint time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+
+            bestTime = preciseTime;
+            bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime; 
+
+            resp.Decision = BFEvaluationDecision::Accept;
+            resp.ResultFileStartContent = "# Precise Checkpoint Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
+
+        } else {
+
+            if(preciseTime < bestTime) {
+
+                bestTime = preciseTime;
+                bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
+
+                resp.Decision = BFEvaluationDecision::Accept;
+                resp.ResultFileStartContent = "# Precise Checkpoint Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
+            } else {
+
+                resp.Decision = BFEvaluationDecision::Reject;
+            }
+        }
+
+        PreciseFinish::Reset();
+        return resp;
+    }
+
+    void OnSimulationBegin(SimulationManager@ simManager) {
+        PreciseFinish::Reset();
+        bestTime = -1;
+        bestTimeMsImprecise = -1;
+        targetCp = int(GetVariableDouble("bf_target_cp"));
+    }
+
+    void Main() {
+
+        auto bfEval = RegisterBruteforceEval("precisecheckpoint", "Checkpoint", OnEvaluate, RenderEvalSettings);
         @bfEval.onSimBegin = @OnSimulationBegin;
     }
 }
@@ -1450,37 +1562,6 @@ namespace VelocityBf {
     }
 }
 
-namespace FinishBf {
-    void RenderEvalSettings(){}
-    int bestTime = -1;
-    BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
-    {
-        int raceTime = simManager.RaceTime;
-
-        auto resp = BFEvaluationResponse();
-        if (info.Phase == BFPhase::Initial) {
-            if (simManager.PlayerInfo.RaceFinished) {
-                print("Base run: " + Time::Format(raceTime));
-                bestTime = raceTime;
-                resp.Decision = BFEvaluationDecision::Accept;
-            }
-        } else if (simManager.PlayerInfo.RaceFinished) {
-            if (raceTime < bestTime) {
-                resp.Decision = BFEvaluationDecision::Accept;
-                print("New time: " + Time::Format(raceTime));
-                resp.ResultFileStartContent = "# Found better simple finish time: " + Time::Format(raceTime);
-            }
-        }
-
-        return resp;
-    }
-
-    void Main() {
-        RegisterVariable("bf_velocity_type", "Global");
-        RegisterBruteforceEval("simplefinish", "Simple Finish Time", OnEvaluate, RenderEvalSettings);
-    }
-}
-
 namespace InputModification {
 
     void SortBufferManual(TM::InputEventBuffer@ buffer) {
@@ -1621,4 +1702,352 @@ namespace InputModification {
 void OnCheckpointCountChanged(SimulationManager@ simManager, int current, int target) {
     if (!(GetVariableString("controller")=="bfv2")) return;
     if(running) simManager.PreventSimulationFinish();
+}
+
+
+namespace Scripting
+{
+    // --- Helpers ---
+    
+    bool StartsWith(const string &in str, const string &in prefix) {
+        if (str.Length < prefix.Length) return false;
+        return str.Substr(0, prefix.Length) == prefix;
+    }
+
+    bool EndsWith(const string &in str, const string &in suffix) {
+        if (str.Length < suffix.Length) return false;
+        return str.Substr(str.Length - suffix.Length) == suffix;
+    }
+
+    string ToLower(const string &in input) {
+        string output = input; 
+        for(uint i = 0; i < output.Length; i++) {
+            uint8 c = output[i];
+            if (c >= 65 && c <= 90) output[i] = c + 32;
+        }
+        return output;
+    }
+
+    // --- Delegates ---
+    funcdef bool ConditionCallback(SimulationManager@ sim);
+    funcdef float FloatGetter(SimulationManager@ sim);
+    funcdef vec3 Vec3Getter(SimulationManager@ sim);
+
+    // --- Data Getters (Leaf Nodes) ---
+
+    float GetCarX(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position.x; }
+    float GetCarY(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position.y; }
+    float GetCarZ(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position.z; }
+    float GetCarSpeed(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.Length(); }
+    
+    vec3 GetCarPos(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position; }
+    vec3 GetCarVel(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed; }
+
+    class ConstantFloat {
+        float val;
+        ConstantFloat(float v) { val = v; }
+        float Get(SimulationManager@ sim) { return val; }
+    }
+
+    class ConstantVec3 {
+        vec3 val;
+        ConstantVec3(vec3 v) { val = v; }
+        vec3 Get(SimulationManager@ sim) { return val; }
+    }
+
+    class VarFloat {
+        string name;
+        VarFloat(const string &in n) { name = n; }
+        float Get(SimulationManager@ sim) { return float(GetVariableDouble(name)); }
+    }
+
+    class VarVec3 {
+        string name;
+        VarVec3(const string &in n) { name = n; }
+        vec3 Get(SimulationManager@ sim) { return Text::ParseVec3(GetVariableString(name)); }
+    }
+
+    // --- Operations ---
+
+    class MathOp {
+        FloatGetter@ left;
+        FloatGetter@ right;
+        string op; 
+
+        MathOp(FloatGetter@ l, FloatGetter@ r, const string &in o) {
+            @left = l; @right = r; op = o;
+        }
+
+        float Get(SimulationManager@ sim) {
+            float l = left(sim);
+            float r = right(sim);
+            if (op == "+") return l + r;
+            if (op == "-") return l - r;
+            if (op == "*") return l * r;
+            if (op == "/") return r != 0.0f ? l / r : 0.0f;
+            return 0.0f;
+        }
+    }
+
+    class FunctionKmh {
+        FloatGetter@ arg;
+        FunctionKmh(FloatGetter@ a) { @arg = a; }
+        float Get(SimulationManager@ sim) { return arg(sim) * 3.6f; }
+    }
+
+    class FunctionDistance {
+        Vec3Getter@ p1;
+        Vec3Getter@ p2;
+        FunctionDistance(Vec3Getter@ a, Vec3Getter@ b) { @p1 = a; @p2 = b; }
+        float Get(SimulationManager@ sim) { return Math::Distance(p1(sim), p2(sim)); }
+    }
+
+    enum CmpOp { Gt, Lt, GtEq, LtEq, Eq }
+
+    class Comparison {
+        FloatGetter@ left;
+        FloatGetter@ right;
+        CmpOp op;
+
+        Comparison(FloatGetter@ l, FloatGetter@ r, CmpOp o) {
+            @left = l; @right = r; op = o;
+        }
+
+        bool Evaluate(SimulationManager@ sim) {
+            float l = left(sim);
+            float r = right(sim);
+            switch(op) {
+                case CmpOp::Gt:   return l > r;
+                case CmpOp::Lt:   return l < r;
+                case CmpOp::GtEq: return l >= r;
+                case CmpOp::LtEq: return l <= r;
+                case CmpOp::Eq:   return l == r;
+            }
+            return false;
+        }
+    }
+
+    // --- Parser ---
+
+    string CleanSource(const string &in input) {
+        string output = "";
+        string temp = " ";
+        bool insideQuote = false;
+        for(uint i = 0; i < input.Length; i++) {
+            uint8 c = input[i];
+            if (c == 34) insideQuote = !insideQuote; 
+            if (insideQuote || c != 32) {
+                temp[0] = c;
+                output += temp;
+            }
+        }
+        return output;
+    }
+
+    int FindTopLevel(const string &in code, const string &in target, int start = 0) {
+        int depth = 0;
+        int targetLen = target.Length;
+        for(uint i = start; i < code.Length; i++) {
+            uint8 c = code[i];
+            if (c == 40) depth++; 
+            else if (c == 41) depth--;
+            else if (depth == 0) {
+                if (code.Substr(i, targetLen) == target) return i;
+            }
+        }
+        return -1;
+    }
+
+    ConditionCallback@ Compile(const string &in source) {
+        string code = CleanSource(source);
+        if (code == "") return null;
+
+        CmpOp op;
+        int idx = -1;
+        int len = 1;
+
+        if ((idx = FindTopLevel(code, ">=")) != -1) { op = CmpOp::GtEq; len = 2; }
+        else if ((idx = FindTopLevel(code, "<=")) != -1) { op = CmpOp::LtEq; len = 2; }
+        else if ((idx = FindTopLevel(code, ">")) != -1)  { op = CmpOp::Gt; }
+        else if ((idx = FindTopLevel(code, "<")) != -1)  { op = CmpOp::Lt; }
+        else if ((idx = FindTopLevel(code, "=")) != -1)  { op = CmpOp::Eq; }
+
+        if (idx == -1) {
+            print("Script Error: No comparison operator in '" + source + "'");
+            return null;
+        }
+
+        string lhs = code.Substr(0, idx);
+        string rhs = code.Substr(idx + len);
+
+        FloatGetter@ leftGetter = ParseExpression(lhs);
+        FloatGetter@ rightGetter = ParseExpression(rhs);
+
+        if (leftGetter is null || rightGetter is null) return null;
+
+        Comparison@ comp = Comparison(leftGetter, rightGetter, op);
+        return ConditionCallback(comp.Evaluate);
+    }
+
+    class MultiCondition {
+        array<ConditionCallback@> conditions;
+
+        void Add(ConditionCallback@ cb) {
+            conditions.Add(cb);
+        }
+
+        bool Evaluate(SimulationManager@ sim) {
+            for(uint i = 0; i < conditions.Length; i++) {
+                if(!conditions[i](sim)) return false;
+            }
+            return true;
+        }
+    }
+
+    ConditionCallback@ CompileMulti(const array<string> &in sources) {
+        MultiCondition@ multi = MultiCondition();
+        for(uint i = 0; i < sources.Length; i++) {
+            string s = sources[i];
+            if (CleanSource(s) == "") continue;
+            
+            ConditionCallback@ cb = Compile(s);
+            if (cb is null) return null;
+            multi.Add(cb);
+        }
+        if (multi.conditions.Length == 0) return null;
+        return ConditionCallback(multi.Evaluate);
+    }
+
+    FloatGetter@ ParseExpression(const string &in code) {
+        int idx = -1;
+        string opStr = "";
+        int depth = 0;
+
+        // Reverse search for + or -
+        for(int i = int(code.Length) - 1; i >= 0; i--) {
+            if(code[i] == 41) depth++;
+            else if(code[i] == 40) depth--;
+            else if(depth == 0) {
+                if(code[i] == 43) { idx = i; opStr = "+"; break; }
+                if(code[i] == 45 && i > 0) { idx = i; opStr = "-"; break; }
+            }
+        }
+
+        if (idx != -1) {
+            FloatGetter@ left = ParseExpression(code.Substr(0, idx));
+            FloatGetter@ right = ParseTerm(code.Substr(idx + 1));
+            if (left is null || right is null) return null;
+            MathOp@ math = MathOp(left, right, opStr);
+            return FloatGetter(math.Get);
+        }
+        return ParseTerm(code);
+    }
+
+    FloatGetter@ ParseTerm(const string &in code) {
+        int idx = -1;
+        string opStr = "";
+        int depth = 0;
+        
+        for(int i = int(code.Length) - 1; i >= 0; i--) {
+            if(code[i] == 41) depth++;
+            else if(code[i] == 40) depth--;
+            else if(depth == 0) {
+                if(code[i] == 42) { idx = i; opStr = "*"; break; }
+                if(code[i] == 47) { idx = i; opStr = "/"; break; }
+            }
+        }
+
+        if (idx != -1) {
+            FloatGetter@ left = ParseTerm(code.Substr(0, idx));
+            FloatGetter@ right = ParseFactor(code.Substr(idx + 1));
+            if (left is null || right is null) return null;
+            MathOp@ math = MathOp(left, right, opStr);
+            return FloatGetter(math.Get);
+        }
+        return ParseFactor(code);
+    }
+
+    FloatGetter@ ParseFactor(const string &in input) {
+        string t = input;
+        string lower = ToLower(t);
+
+        if (StartsWith(t, "(") && EndsWith(t, ")")) {
+            return ParseExpression(t.Substr(1, t.Length - 2));
+        }
+
+        if (StartsWith(lower, "kmh(") && EndsWith(t, ")")) {
+            string argStr = t.Substr(4, t.Length - 5);
+            FloatGetter@ arg = ParseExpression(argStr);
+            if (arg is null) return null;
+            FunctionKmh@ fn = FunctionKmh(arg);
+            return FloatGetter(fn.Get);
+        }
+
+        if (StartsWith(lower, "distance(") && EndsWith(t, ")")) {
+            string content = t.Substr(9, t.Length - 10);
+            int commaIdx = FindTopLevel(content, ",");
+            if (commaIdx == -1) return null;
+
+            string arg1 = content.Substr(0, commaIdx);
+            string arg2 = content.Substr(commaIdx + 1);
+
+            Vec3Getter@ v1 = ParseVec3(arg1);
+            Vec3Getter@ v2 = ParseVec3(arg2);
+            if (v1 is null || v2 is null) return null;
+            FunctionDistance@ fn = FunctionDistance(v1, v2);
+            return FloatGetter(fn.Get);
+        }
+
+        if (StartsWith(lower, "variable(") && EndsWith(t, ")")) {
+            string content = t.Substr(9, t.Length - 10); 
+            if (StartsWith(content, "\"") && EndsWith(content, "\"")) {
+                content = content.Substr(1, content.Length - 2);
+            }
+            VarFloat@ v = VarFloat(content);
+            return FloatGetter(v.Get);
+        }
+
+        if (lower == "car.position.x" || lower == "car.x") return GetCarX;
+        if (lower == "car.position.y" || lower == "car.y") return GetCarY;
+        if (lower == "car.position.z" || lower == "car.z") return GetCarZ;
+        if (lower == "car.speed") return GetCarSpeed;
+
+        if (lower.Length > 0 && lower.FindFirstNotOf("0123456789.-") == -1) {
+            ConstantFloat@ c = ConstantFloat(Text::ParseFloat(lower));
+            return FloatGetter(c.Get);
+        }
+
+        print("Script Error: Unknown float term '" + t + "'");
+        return null;
+    }
+
+    Vec3Getter@ ParseVec3(const string &in input) {
+        string t = input;
+        string lower = ToLower(t);
+
+        if (StartsWith(t, "(") && EndsWith(t, ")")) {
+            string content = t.Substr(1, t.Length - 2);
+            array<string> parts = content.Split(",");
+            if (parts.Length == 3) {
+                vec3 v(Text::ParseFloat(parts[0]), Text::ParseFloat(parts[1]), Text::ParseFloat(parts[2]));
+                ConstantVec3@ c = ConstantVec3(v);
+                return Vec3Getter(c.Get);
+            }
+        }
+
+        if (StartsWith(lower, "variable(") && EndsWith(t, ")")) {
+            string content = t.Substr(9, t.Length - 10); 
+            if (StartsWith(content, "\"") && EndsWith(content, "\"")) {
+                content = content.Substr(1, content.Length - 2);
+            }
+            VarVec3@ v = VarVec3(content);
+            return Vec3Getter(v.Get);
+        }
+
+        if (lower == "car.position" || lower == "car.pos") return GetCarPos;
+        if (lower == "car.velocity" || lower == "car.vel") return GetCarVel;
+
+        print("Script Error: Unknown vec3 term '" + t + "'");
+        return null;
+    }
 }
