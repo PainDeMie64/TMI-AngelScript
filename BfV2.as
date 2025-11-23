@@ -1738,6 +1738,9 @@ namespace Scripting
     float GetCarX(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position.x; }
     float GetCarY(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position.y; }
     float GetCarZ(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position.z; }
+    float GetCarVelX(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.x; }
+    float GetCarVelY(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.y; }
+    float GetCarVelZ(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.z; }
     float GetCarSpeed(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.Length(); }
     
     vec3 GetCarPos(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position; }
@@ -2010,6 +2013,9 @@ namespace Scripting
         if (lower == "car.position.x" || lower == "car.x") return GetCarX;
         if (lower == "car.position.y" || lower == "car.y") return GetCarY;
         if (lower == "car.position.z" || lower == "car.z") return GetCarZ;
+        if (lower == "car.velocity.x" || lower == "car.vel.x") return GetCarVelX;
+        if (lower == "car.velocity.y" || lower == "car.vel.y") return GetCarVelY;
+        if (lower == "car.velocity.z" || lower == "car.vel.z") return GetCarVelZ;
         if (lower == "car.speed") return GetCarSpeed;
 
         if (lower.Length > 0 && lower.FindFirstNotOf("0123456789.-") == -1) {
