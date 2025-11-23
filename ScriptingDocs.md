@@ -1,4 +1,4 @@
-# Scripting Reference
+# Scripting Docs
 
 This scripting language evaluates conditions based on the simulation state. Every script must resolve to a Boolean (True/False) comparison.
 
