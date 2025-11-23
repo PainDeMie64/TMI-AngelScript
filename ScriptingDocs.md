@@ -48,3 +48,9 @@ distance(car.pos, (105.5, 20.0, 300.0)) < 5.0
 ```javascript
 distance(car.pos, variable("bf_target_point")) < 3.0
 ```
+
+**Multiple lines**
+```javascript
+car.x < 3.0
+car.y > -53
+```
