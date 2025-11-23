@@ -492,6 +492,8 @@ void OnSimulationBegin(SimulationManager@ simManager) {
         @current = @evaluations[0];
     }
 
+    simManager.RemoveStateValidation();
+
     info.Iterations = 0;
     info.Phase = BFPhase::Initial;
     info.Rewinded = false;
