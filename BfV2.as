@@ -180,7 +180,7 @@ void BruteforceV2Settings(){
             UI::EndDisabled();
         }
         UI::SameLine();
-        UI::Dummy(vec2(39, 0));
+        UI::Dummy(vec2(48, 0));
         UI::SameLine();
         uint triggerIndex = uint(GetVariableDouble("bf_condition_trigger"));
         array<int>@ triggerIds = GetTriggerIds();
