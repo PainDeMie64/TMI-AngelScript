@@ -15,16 +15,26 @@ This scripting language evaluates conditions based on the simulation state. Ever
 *   `car.velocity.x`
 *   `car.velocity.y`
 *   `car.velocity.z`
+*   `car.rotation.yaw`
+*   `car.rotation.pitch`
+*   `car.rotation.roll`
 *   `car.speed` (m/s)
 
 **Vectors (vec3)**
 *   `car.pos`, `car.position`
 *   `car.vel`, `car.velocity`
 
+### Global properties
+**Floats**
+*   `last_improvement.time` (s)
+*   `last_restart.time` (s)
+*   `iterations`
+
 ### Functions
 *   **`kmh(value)`**: Multiplies `value` by 3.6 (m/s to km/h).
 *   **`distance(vec1, vec2)`**: Calculates Euclidean distance between two vectors.
 *   **`variable("name")`**: Fetches a global string variable and parses it as a float or vec3.
+*   **`time_since(timestamp)`**: Measures time passed since the provided timestamp. Timestamp and return value are in seconds.
 
 ### Data Types
 *   **Numbers:** `10.5`, `-50`, `0`
@@ -56,4 +66,15 @@ distance(car.pos, variable("bf_target_point")) < 3.0
 ```javascript
 car.x < 3.0
 car.y > -53
+```
+
+**Restart when no improvements for 60 seconds**
+```javascript
+time_since(last_improvement.time) > 60
+```
+
+
+**Restart every 5 minutes**
+```javascript
+time_since(last_restart.time) > 60*5
 ```
