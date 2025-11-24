@@ -3,7 +3,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.3";
+    info.Version = "1.4";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -36,6 +36,8 @@ Trigger3D targetTrigger;
 int restartIterations = 0;
 string resultFolder = "";
 int restartCount = 0;
+uint64 lastImprovementTime = 0;
+uint64 lastRestartTime = 0;
 Scripting::ConditionCallback@ standardCondition;
 Scripting::ConditionCallback@ restartCondition;
 string linesRestartCondition="#DUJ12E3F 4G5H6I7J8K9L0M";
@@ -505,6 +507,9 @@ void OnSimulationBegin(SimulationManager@ simManager) {
     running = true;
     CheckpointStates=simManager.PlayerInfo.CheckpointStates; 
     restartInfos.Clear();
+    uint64 now = Time::Now;
+    lastImprovementTime = now;
+    lastRestartTime = now;
 
     InputModification::cachedStartIndex = -1;
     InputModification::cachedMinTime = -1;
@@ -608,6 +613,10 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
         info.Phase = BFPhase::Initial;
         info.Rewinded = false;
 
+        uint64 now = Time::Now;
+        lastRestartTime = now;
+        lastImprovementTime = now;
+
         simManager.RewindToState(rewindState);
         return;
     }
@@ -620,6 +629,9 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled){
     }
 
     if(current.type == CallbackType::Legacy){
+        if(info.Phase == BFPhase::Initial){
+            lastImprovementTime = Time::Now;
+        }
         BFEvaluationResponse@ response = current.callback(simManager, info);
         if(simManager.TickTime>simManager.RaceTime+10 && !info.Rewinded && response.Decision != BFEvaluationDecision::Accept){    
             simManager.RewindToState(rewindState);
@@ -1792,10 +1804,40 @@ namespace Scripting
     float GetCarVelX(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.x; }
     float GetCarVelY(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.y; }
     float GetCarVelZ(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.z; }
+    float GetCarPitch(SimulationManager@ sim) { 
+        float x, y, z;
+        sim.Dyna.CurrentState.Quat.GetYawPitchRoll(x,y,z);
+        return y;
+    }
+    float GetCarYaw(SimulationManager@ sim) { 
+        float x, y, z;
+        sim.Dyna.CurrentState.Quat.GetYawPitchRoll(x,y,z);
+        return x;
+    }
+    float GetCarRoll(SimulationManager@ sim) {
+        float x, y, z;
+        sim.Dyna.CurrentState.Quat.GetYawPitchRoll(x,y,z);
+        return z;
+    }
+
     float GetCarSpeed(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed.Length(); }
+
     
     vec3 GetCarPos(SimulationManager@ sim) { return sim.Dyna.CurrentState.Location.Position; }
     vec3 GetCarVel(SimulationManager@ sim) { return sim.Dyna.CurrentState.LinearSpeed; }
+
+
+    float GetIterationCount(SimulationManager@ sim) {
+        return float(info.Iterations);
+    }
+
+    float GetTimeLastImprovement(SimulationManager@ sim) {
+        return float(lastImprovementTime/1000.0);
+    }
+
+    float GetTimeLastRestart(SimulationManager@ sim) {
+        return float(lastRestartTime/1000.0);
+    }
 
     class ConstantFloat {
         float val;
@@ -1854,6 +1896,14 @@ namespace Scripting
         Vec3Getter@ p2;
         FunctionDistance(Vec3Getter@ a, Vec3Getter@ b) { @p1 = a; @p2 = b; }
         float Get(SimulationManager@ sim) { return Math::Distance(p1(sim), p2(sim)); }
+    }
+
+    class FunctionTimeSince {
+        FloatGetter@ arg;
+        FunctionTimeSince(FloatGetter@ a) { @arg = a; }
+        float Get(SimulationManager@ sim) { 
+            return (float(Time::Now) / 1000.0f) - arg(sim); 
+        }
     }
 
     enum CmpOp { Gt, Lt, GtEq, LtEq, Eq }
@@ -1927,7 +1977,7 @@ namespace Scripting
         else if ((idx = FindTopLevel(code, "=")) != -1)  { op = CmpOp::Eq; }
 
         if (idx == -1) {
-            // print("Script Error: No comparison operator in '" + source + "'");
+            //print("Script Error: No comparison operator in '" + source + "'");
             return null;
         }
 
@@ -2052,6 +2102,14 @@ namespace Scripting
             return FloatGetter(fn.Get);
         }
 
+        if(StartsWith(lower, "time_since(") && EndsWith(t, ")")){
+            string content = t.Substr(11, t.Length - 12);
+            FloatGetter@ arg = ParseExpression(content);
+            if (arg is null) return null;
+            FunctionTimeSince@ fn = FunctionTimeSince(arg);
+            return FloatGetter(fn.Get);
+        }
+
         if (StartsWith(lower, "variable(") && EndsWith(t, ")")) {
             string content = t.Substr(9, t.Length - 10); 
             if (StartsWith(content, "\"") && EndsWith(content, "\"")) {
@@ -2067,14 +2125,21 @@ namespace Scripting
         if (lower == "car.velocity.x" || lower == "car.vel.x") return GetCarVelX;
         if (lower == "car.velocity.y" || lower == "car.vel.y") return GetCarVelY;
         if (lower == "car.velocity.z" || lower == "car.vel.z") return GetCarVelZ;
+        if (lower == "car.rotation.pitch" || lower == "car.pitch") return GetCarPitch;
+        if (lower == "car.rotation.yaw" || lower == "car.yaw") return GetCarYaw;
+        if (lower == "car.rotation.roll" || lower == "car.roll") return GetCarRoll;
         if (lower == "car.speed") return GetCarSpeed;
+        if (lower == "last_improvement.time") return GetTimeLastImprovement;
+        if (lower == "last_restart.time") return GetTimeLastRestart;
+
+        if (lower == "iterations") return GetIterationCount;
 
         if (lower.Length > 0 && lower.FindFirstNotOf("0123456789.-") == -1) {
             ConstantFloat@ c = ConstantFloat(Text::ParseFloat(lower));
             return FloatGetter(c.Get);
         }
 
-        // print("Script Error: Unknown float term '" + t + "'");
+        //print("Script Error: Unknown float term '" + t + "'");
         return null;
     }
 
@@ -3220,7 +3285,6 @@ namespace SkyBf {
     string g_uberbugTargetIdentifier = "uberbug_target";
     void Main()
     {
-        log("Skycrafter Bruteforce Targets v2 loaded.");
         InitializeTriggerData();
         InitializeCarEllipsoids();
 
