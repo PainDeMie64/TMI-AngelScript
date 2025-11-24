@@ -3,7 +3,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.2";
+    info.Version = "1.3";
     info.Description = "Next generation bruteforce";
     return info;
 }
