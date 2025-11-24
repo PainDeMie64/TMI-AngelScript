@@ -3,7 +3,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.4";
+    info.Version = "1.5";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -941,7 +941,10 @@ namespace PreciseTriggerBf {
             return;
         }
 
-        if (triggerIndex >= triggerIds.Length) triggerIndex = 0;
+        if (triggerIndex >= triggerIds.Length) {
+            triggerIndex = 0;
+            SetVariable("bf_target_trigger", 0);
+        }
 
         Trigger3D selectedTrigger = GetTrigger(triggerIds[triggerIndex]);
         vec3 pos = selectedTrigger.Position;
@@ -1477,6 +1480,15 @@ namespace VelocityBf {
         }
 
         UI::Dummy(vec2(0, 10));
+        float val = GetVariableDouble("bf_velocity_min_percent");
+        string valText = Text::FormatFloat(val*100.0f, "", 0, 1) + "%% Minimum matching velocity";
+        UI::SliderFloatVar("##bf_velocity_min_percent", "bf_velocity_min_percent", -1.0f, 1.0f, valText);
+        toolTip(300, {"Minimum percentage of the car's velocity that must match the target trajectory.", "A negative value means the velocity can be in the opposite direction.", "-100% minimum means any velocity is accepted, as it tells bruteforce the minimum it can accept is going in the complete opposite direction."});
+        
+/*
+    int bal = int(GetVariableDouble(id+"_bf_weight"));
+    string balText = Text::FormatInt(100 - bal) + "%% Position, " + Text::FormatInt(bal) + "%% Rotation";*/
+        UI::Dummy(vec2(0, 10));
         UI::Text("Time frame in which the distance and/or speed will be evaluated:");
         UI::Dummy(vec2(0, 0));
         UI::Text("From");
@@ -1500,8 +1512,18 @@ namespace VelocityBf {
         return GetSimulationManager().Dyna.CurrentState.Location.Position;
     }
 
-    float bestSpeed = -1.0f;
+    float bestSpeed = Math::PI;
     int bestTime = 0;
+    float bestMatchingPercnt = 0.0f;
+    float matchingPercnt = 0.0f;
+    float minMatchingPercnt = -1.0f;
+    VelocityType bfVelocityType;
+    
+    enum VelocityType {
+        Global,
+        Trajectory
+    }
+
     BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
     {
         int raceTime = simManager.RaceTime;
@@ -1515,26 +1537,56 @@ namespace VelocityBf {
         if (info.Phase == BFPhase::Initial) {
             if (isEvalTime) {
                 float v = computeVel(simManager);
-
-                if(conditionsMet && v > bestSpeed){
+                if(bfVelocityType == VelocityType::Trajectory){
+                    if(conditionsMet && v > bestSpeed && matchingPercnt >= minMatchingPercnt){
+                        bestSpeed = v;
+                        bestTime = raceTime;
+                        bestMatchingPercnt = matchingPercnt;
+                    }
+                }else if(conditionsMet && v > bestSpeed){
                     bestSpeed = v;
                     bestTime = raceTime;
+                    bestMatchingPercnt = matchingPercnt;
                 }
             }
             if(isPastEvalTime) {
                 resp.Decision = BFEvaluationDecision::Accept;
-                if(bestSpeed < 0.0f){
+                if(bestSpeed == Math::PI){
                     print("Base run: Invalid", Severity::Warning);
                     resp.ResultFileStartContent = "# Base run: Invalid";
                 }else{
-                    print("Base run: " + Text::FormatFloat(bestSpeed, "", 0, 9) + " m/s at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2));
-                    resp.ResultFileStartContent = "# Base run: " + Text::FormatFloat(bestSpeed, "", 0, 9) + " m/s at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2);
+                    if(bfVelocityType == VelocityType::Global){
+                        string t ="Base run: " + Text::FormatFloat(bestSpeed, "", 0, 3) + " m/s at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2);
+                        resp.ResultFileStartContent = "# " + t;
+                        print(t);
+                    }else{
+                        string t = "Base run: " + Text::FormatFloat(bestSpeed, "", 0, 3) + " m/s along trajectory at " + Text::FormatFloat(bestTime/1000.0, "", 0, 2) + " (" + Text::FormatFloat(bestMatchingPercnt*100.0f, "", 0, 2) + "% of global velocity matching trajectory)";
+                        resp.ResultFileStartContent = "# " + t;
+                        print(t);
+                    }
                 }
             }
         } else {
             if(isEvalTime){
                 float v = computeVel(simManager);
-                if(conditionsMet && v > bestSpeed){
+                if(bfVelocityType == VelocityType::Trajectory){
+                    if(conditionsMet && v > bestSpeed && matchingPercnt >= minMatchingPercnt){
+                        resp.Decision = BFEvaluationDecision::Accept;
+                    }else{
+                        /*print("Rejected because: ");
+                        if(!conditionsMet){
+                            print("- Global conditions not met");
+                        }
+                        if(v <= bestSpeed){
+                            print("- Velocity " + Text::FormatFloat(v, "", 0, 9)
+                                + " m/s not greater than best velocity " + Text::FormatFloat(bestSpeed, "", 0, 9) + " m/s");
+                        }
+                        if(matchingPercnt < minMatchingPercnt){
+                            print("- Matching percentage " + Text::FormatFloat(matchingPercnt*100.0f, "", 0, 2)
+                                + "% less than minimum required " + Text::FormatFloat(minMatchingPercnt*100.0f, "", 0, 2) + "%");
+                        }*/
+                    }
+                }else if(conditionsMet && v > bestSpeed){
                     resp.Decision = BFEvaluationDecision::Accept;
                 }
             }
@@ -1548,13 +1600,14 @@ namespace VelocityBf {
     }
 
     float computeVel(SimulationManager@ simManager) {
-        if(currentVelocityType == "Global"){
+        if(bfVelocityType == VelocityType::Global){
             return simManager.Dyna.CurrentState.LinearSpeed.Length();
-        }else if(currentVelocityType == "Trajectory"){
+        }else if(bfVelocityType == VelocityType::Trajectory){
             float denom = targetVelocity.Length();
             if(denom > 1e-7f){
                 vec3 vel = simManager.Dyna.CurrentState.LinearSpeed;
-                return Math::Dot(vel.Normalized(), targetVelocity) * vel.Length();
+                matchingPercnt = Math::Dot(vel.Normalized(), targetVelocity);
+                return matchingPercnt * vel.Length();
             }else{
                 return -9e8f;
             }
@@ -1565,17 +1618,27 @@ namespace VelocityBf {
     }
 
     void OnSimulationBegin(SimulationManager@ simManager) {
-        bestSpeed = -1.0f;
+        bestSpeed = Math::PI;
         minTime = int(GetVariableDouble("bf_eval_min_time"));
         maxTime = int(GetVariableDouble("bf_eval_max_time"));
         targetVelocity = Text::ParseVec3(GetVariableString("bf_velocity_to")) - Text::ParseVec3(GetVariableString("bf_velocity_from"));
         targetVelocity = targetVelocity.Normalized();
+        if(GetVariableString("bf_velocity_type") == "Global"){
+            bfVelocityType = VelocityType::Global;
+            minMatchingPercnt = -1.0f;
+        }else{
+            bfVelocityType = VelocityType::Trajectory;
+            minMatchingPercnt = GetVariableDouble("bf_velocity_min_percent");
+        }
+        bestMatchingPercnt = 0.0f;
+        matchingPercnt = 0.0f;
     }
 
     void Main() {
         RegisterVariable("bf_velocity_type", "Global");
         RegisterVariable("bf_velocity_from", "0 0 0");
         RegisterVariable("bf_velocity_to", "0 0 0");
+        RegisterVariable("bf_velocity_min_percent", -1.0f);
         auto eval = RegisterBruteforceEval("velocity", "Velocity", OnEvaluate, RenderEvalSettings);
         @eval.onSimBegin = @OnSimulationBegin;
     }
@@ -2907,7 +2970,6 @@ namespace SkyBf {
                     const Polyhedron@ targetPoly = g_worldFinishPolys[i];
                     if (targetPoly is null) continue;
                     const AABB targetAABB = g_worldFinishAABBs[i];
-                    log("Trigger AABB: " + triggerAABB.ToString());
                     Polyhedron clippedPoly = ClipPolyhedronByAABB(targetPoly, triggerAABB);
                     g_worldClippedFinishPolys.Add(clippedPoly);
                     g_worldClippedFinishAABBs.Add(targetAABB);
