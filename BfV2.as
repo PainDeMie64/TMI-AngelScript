@@ -3,7 +3,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.5";
+    info.Version = "1.5.1";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -272,6 +272,7 @@ void BruteforceV2Settings(){
         UI::Dummy(vec2(0,0));
 
 
+        
         if(UI::BeginTable("##hack_for_the_tooltip_to_show_while_hovering_anything_of_the_below", 1)){
             UI::TableNextRow();
             UI::TableSetColumnIndex(0);
@@ -290,7 +291,6 @@ void BruteforceV2Settings(){
             UI::PushItemWidth(195);
             UI::InputTimeVar("##bf_inputs_max_time", "bf_inputs_max_time");
             UI::PopItemWidth();
-            UI::EndDisabled();
             UI::EndTable();
         }
         toolTip(300, {"Time frame in which inputs can be changed", "Limiting this time frame will make the bruteforcing process faster."});
@@ -740,6 +740,83 @@ void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result) {
     }
     running = false;
 }
+
+string Replace(const string &in text, const string &in charFrom, const string &in charTo)
+{
+    if (charFrom.IsEmpty() || charFrom == charTo)
+        return text;
+
+    const uint lenText     = text.Length;
+    const uint lenFrom     = charFrom.Length;
+    const uint lenTo       = charTo.Length;
+
+    uint count = 0;
+    uint searchStart = 0;
+    int pos = text.FindFirst(charFrom, searchStart);
+
+    while (pos != -1)
+    {
+        count++;
+        uint uPos = uint(pos);
+        searchStart = uPos + lenFrom;
+        if (searchStart >= lenText)
+            break;
+        pos = text.FindFirst(charFrom, searchStart);
+    }
+
+    if (count == 0)
+        return text;
+
+    int64 diff      = int64(lenTo) - int64(lenFrom);
+    int64 newLen64  = int64(lenText) + diff * int64(count);
+    if (newLen64 < 0)
+        newLen64 = 0;
+
+    uint newLen = uint(newLen64);
+
+    string result;
+    result.Resize(newLen);
+
+    uint src = 0;
+    uint dst = 0;
+
+    while (true)
+    {
+        int found = text.FindFirst(charFrom, src);
+        if (found == -1)
+        {
+            while (src < lenText)
+            {
+                result[dst] = text[src];
+                dst++;
+                src++;
+            }
+            break;
+        }
+
+        uint uFound = uint(found);
+
+        while (src < uFound)
+        {
+            result[dst] = text[src];
+            dst++;
+            src++;
+        }
+
+        for (uint i = 0; i < lenTo; i++)
+        {
+            result[dst] = charTo[i];
+            dst++;
+        }
+
+        src += lenFrom;
+        if (src >= lenText)
+            break;
+    }
+
+    return result;
+}
+
 
 namespace PreciseFinishBf {
     void RenderEvalSettings(){}
@@ -1359,7 +1436,7 @@ namespace SinglePointBf {
     float distCondition = 0.0f;
 
     bool meetsConditions(float dist) {
-        return dist < distCondition;
+        return dist < distCondition && GlobalConditionsMet(GetSimulationManager());
     }
 
     bool isBetter(float dist, float speed) {
