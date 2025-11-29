@@ -104,8 +104,8 @@ void Render()
         }else{
             UI::Text("Not in race.");
         }
-        UI::End();
     }
+    UI::End();
 }
 
 PluginInfo@ GetPluginInfo()
