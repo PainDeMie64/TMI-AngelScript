@@ -163,7 +163,7 @@ void OnCommandListChanged(CommandList@ prev, CommandList@ current, CommandListCh
     time = 0;
 
     SimulationManager@ sim = GetSimulationManager();
-    if (sim !is null) {
+    if (sim.InputEvents !is null) {
         lastInputEventsLength = sim.InputEvents.Length;
     } else {
         lastInputEventsLength = 0;
