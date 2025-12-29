@@ -2554,7 +2554,7 @@ void OnCheckpointCountChanged(SimulationManager @simManager, int curr, int targe
 }
 
 void OnRunStep(SimulationManager@ simManager){
-    if(current.onRunStep !is null)
+    if(current !is null && current.onRunStep !is null)
         current.onRunStep(simManager);
 }
 
