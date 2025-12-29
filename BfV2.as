@@ -1354,7 +1354,7 @@ namespace PreciseFinishBf
 
     void Main()
     {
-        auto bfEval = RegisterBruteforceEval("precisefinish", "Precise Finish Time", OnEvaluate, RenderEvalSettings);
+        auto bfEval = RegisterBruteforceEval("finish", "Precise Finish Time", OnEvaluate, RenderEvalSettings);
         @bfEval.onSimBegin = @OnSimulationBegin;
     }
 }
