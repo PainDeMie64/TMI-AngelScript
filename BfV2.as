@@ -3,7 +3,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.6.0";
+    info.Version = "1.6.1";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -958,6 +958,47 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             print("- Restart N " + (idx + 1) + ": \"" + restartInfos[idx] + "\"");
         }
 
+
+        int savedCount = int(GetVariableDouble("bf_input_mod_count"));
+        if (savedCount < 1) savedCount = 1;
+        
+        while (int(g_inputModSettings.Length) < savedCount)
+        {
+            InputModificationSettings @settings = InputModificationSettings();
+            g_inputModSettings.Add(settings);
+        }
+        while (int(g_inputModSettings.Length) > savedCount)
+        {
+            g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
+        }
+        
+        for (uint im = 0; im < g_inputModSettings.Length; im++)
+        {
+            string varSuffix = GetInputModVarSuffix(im);
+            InputModificationSettings @settings = g_inputModSettings[im];
+            
+            settings.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
+            settings.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
+            settings.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
+            settings.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
+            settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
+            settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+            settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
+            
+            if (settings.maxInputsTime == 0)
+                settings.maxInputsTime = int(simManager.EventsDuration);
+        }
+    
+        if (g_inputModSettings.Length > 0)
+        {
+            inputCount = g_inputModSettings[0].inputCount;
+            minInputsTime = g_inputModSettings[0].minInputsTime;
+            maxInputsTime = g_inputModSettings[0].maxInputsTime;
+            maxSteerDiff = g_inputModSettings[0].maxSteerDiff;
+            maxTimeDiff = g_inputModSettings[0].maxTimeDiff;
+            fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
+        }
+
         if (current.onSimBegin !is null)
         {
             current.onSimBegin(simManager);
@@ -1054,7 +1095,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                     InputModificationSettings @settings = g_inputModSettings[im];
                     if (raceTime < settings.maxInputsTime)
                     {
-                        print("Clamping Input Modification #" + (im + 1) + " max time from " + Time::Format(settings.maxInputsTime) + " to " + Time::Format(raceTime));
                         settings.maxInputsTime = raceTime;
                     }
                 }
