@@ -19,6 +19,14 @@ This scripting language evaluates conditions based on the simulation state. Ever
 *   `car.rotation.pitch`
 *   `car.rotation.roll`
 *   `car.speed` (m/s)
+*   `car.freewheel` (0 = not freewheeling, 1 = freewheeling)
+*   `car.lateralcontact` (0 = no lateral contact, 1 = has lateral contact)
+*   `car.sliding` (0 = not sliding, 1 = sliding)
+*   `car.gear` (current gear, -1 = reverse)
+*   `car.wheels.frontleft.groundcontact` (0 = no ground contact, 1 = has ground contact)
+*   `car.wheels.frontright.groundcontact` (0 = no ground contact, 1 = has ground contact)
+*   `car.wheels.backleft.groundcontact` (0 = no ground contact, 1 = has ground contact)
+*   `car.wheels.backright.groundcontact` (0 = no ground contact, 1 = has ground contact)
 
 **Vectors (vec3)**
 *   `car.pos`, `car.position`
@@ -32,6 +40,7 @@ This scripting language evaluates conditions based on the simulation state. Ever
 
 ### Functions
 *   **`kmh(value)`**: Multiplies `value` by 3.6 (m/s to km/h).
+*   **`deg(value)`**: Converts radians to degrees (e.g., for yaw/pitch/roll).
 *   **`distance(vec1, vec2)`**: Calculates Euclidean distance between two vectors.
 *   **`variable("name")`**: Fetches a global string variable and parses it as a float or vec3.
 *   **`time_since(timestamp)`**: Measures time passed since the provided timestamp. Timestamp and return value are in seconds.
@@ -50,6 +59,13 @@ kmh(car.speed) > 500
 **Position Check**
 ```javascript
 car.z < 10.5
+```
+
+**Nosepos Check**
+```javascript
+deg(car.pitch) > 80
+car.wheels.frontleft.groundcontact = 1
+car.wheels.frontright.groundcontact = 1
 ```
 
 **Distance to fixed point**
