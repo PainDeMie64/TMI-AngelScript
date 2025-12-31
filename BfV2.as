@@ -3,7 +3,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.6.1";
+    info.Version = "1.6.2";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -1354,7 +1354,7 @@ namespace PreciseFinishBf
 
     void Main()
     {
-        auto bfEval = RegisterBruteforceEval("finish", "Precise Finish Time", OnEvaluate, RenderEvalSettings);
+        auto bfEval = RegisterBruteforceEval("precisefinish", "Precise Finish Time", OnEvaluate, RenderEvalSettings);
         @bfEval.onSimBegin = @OnSimulationBegin;
     }
 }
@@ -5678,7 +5678,7 @@ namespace SkyBf
             {
                 initialRunStates.InsertAt(raceTime / 10, simManager.Dyna.CurrentState.Location);
             }
-            if (isEvalTime && isUberbug(simManager))
+            if (isEvalTime && isUberbug(simManager) && GlobalConditionsMet(simManager))
             {
                 if (currentFindMode == "Single")
                 {
@@ -5698,7 +5698,7 @@ namespace SkyBf
                 currentRunStates.RemoveAt(raceTime / 10);
                 currentRunStates.InsertAt(raceTime / 10, simManager.Dyna.CurrentState.Location);
             }
-            if (isEvalTime && isUberbug(simManager) && !runAccepted)
+            if (isEvalTime && isUberbug(simManager) && !runAccepted && GlobalConditionsMet(simManager))
             {
                 if (currentFindMode == "Collect many")
                 {
