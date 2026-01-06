@@ -8,7 +8,7 @@ The BfV2 plugin works by:
 1. Loading a base run (from validated replay)
 2. Running the simulation with the base inputs (Initial phase)
 3. Mutating inputs and re-running to find improvements (Search phase)
-4. Repeating until stopped or conditions are met
+4. Repeating until stopped or target decides to stop.
 
 ## Core Concepts
 
