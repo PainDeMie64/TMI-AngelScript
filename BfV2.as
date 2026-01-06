@@ -3,7 +3,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.6.2";
+    info.Version = "1.7.0";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -29,6 +29,14 @@ void toolTip(int width, array<string> args)
         UI::EndTooltip();
     }
 }
+string ReplaceI(const string&in str, int i){
+    return str.Substr(0, str.FindFirst("{i}")) + i + str.Substr(str.FindFirst("{i}") + 3);
+}
+void SaveReplay(string name){
+    CommandList saveReplayCmd;
+    saveReplayCmd.Content="save_replay " + name;
+    saveReplayCmd.Process(CommandListProcessOption::ExecuteImmediately);
+}
 
 array<BruteforceEvaluation @> evaluations;
 BruteforceEvaluation @current;
@@ -43,6 +51,7 @@ string resultFolder = "";
 int restartCount = 0;
 uint64 lastImprovementTime = 0;
 uint64 lastRestartTime = 0;
+uint64 lastWindowTitleUpdateTime = 0;
 Scripting::ConditionCallback @standardCondition;
 Scripting::ConditionCallback @restartCondition;
 string linesRestartCondition = "#DUJ12E3F 4G5H6I7J8K9L0M";
@@ -465,6 +474,7 @@ void Main()
     VelocityBf::Main();
     SkyBf::Main();
     CarLocationBf::Main();
+    TimeBf::Main();
 }
 
 void Render()
@@ -865,6 +875,9 @@ void OnSimulationBegin(SimulationManager @simManager)
     print("Restarting every " + restartIterations + " Iterations");
     print("Storing results to folder: " + resultFolder);
 
+    
+    SetConsoleWindowTitle("BfV2 - " + current.title + " starting...");
+
     bestInputEvents.Clear();
     hasBestInputs = false;
     SaveBestInputs(simManager);
@@ -887,6 +900,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
     
     bool r1 = restartIterations > 0 && int(info.Iterations) >= restartIterations;
     bool r2 = restartCondition !is null && restartCondition(simManager);
+    uint64 now = Time::Now;
     if (r1 || r2)
     {
         restartCount++;
@@ -917,20 +931,15 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         RestoreBaseInputs(simManager, false);
         SaveBestInputs(simManager, false);
 
+
+        SetConsoleWindowTitle("BfV2 - " + current.title  + " | Restarts: " + restartCount + " | restarting...");
+
         print("Restarting Bruteforce for reasons: ");
         if (r1)
             print("- Reached max iterations before restart: " + restartIterations);
         if (r2)
             print("- Restart condition script returned true.");
         
-        
-        uint64 now = Time::Now;
-        float elapsedSeconds = (now - lastRestartTime) / 1000.0f;
-        if (elapsedSeconds > 0)
-        {
-            float iterPerSec = info.Iterations / elapsedSeconds;
-            print("Iterations/second: " + Text::FormatFloat(iterPerSec, "", 0, 2));
-        }
         
         restartInfos.Add(ResultFileStartContent);
     
@@ -1013,6 +1022,19 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
 
         simManager.RewindToState(rewindState);
         return;
+    }
+
+    if(now - lastWindowTitleUpdateTime > 1000)
+    {
+        lastWindowTitleUpdateTime = now;
+        float elapsedSeconds = (now - lastRestartTime) / 1000.0f;
+        if (elapsedSeconds > 0)
+        {
+            float iterPerSec = info.Iterations / elapsedSeconds;
+            SetConsoleWindowTitle("BfV2 - " + current.title + " | Restarts: " + restartCount + " | Iterations: " + info.Iterations + " | Iterations/second: " + Text::FormatFloat(iterPerSec, "", 0, 2));
+        }else{
+            SetConsoleWindowTitle("BfV2 - " + current.title + " | Restarts: " + restartCount + " | Iterations: " + info.Iterations);
+        }
     }
 
     int raceTime = simManager.RaceTime;
@@ -2581,6 +2603,7 @@ namespace InputModification
     }
 
 }
+
 void OnCheckpointCountChanged(SimulationManager @simManager, int curr, int target)
 {
     if(GetCurrentGameState() == TM::GameState::LocalRace)
@@ -3309,6 +3332,8 @@ namespace SkyBf
     int g_bfTargetCpIndex = -1;
     float g_bestBfDistance = 1e18f;
     string g_cachedChallengeUid = "";
+
+
     void CacheCheckpointData()
     {
         TM::GameCtnChallenge @challenge = GetCurrentChallenge();
@@ -3660,6 +3685,7 @@ namespace SkyBf
             UI::Text("Target Checkpoint Settings:");
             UI::Dummy(vec2(0, 5));
             UI::CheckboxVar("Show Checkpoint Numbers", g_distPluginPrefix + "_show_cp_numbers");
+            UI::CheckboxVar("Shift checkpoint eval after reached", g_distPluginPrefix + "_shift_cp_eval");
             UI::PushItemWidth(120);
             UI::InputIntVar("Target Index##CPIndex", g_distPluginPrefix + "_target_cp_index", 1);
             UI::PopItemWidth();
@@ -4294,6 +4320,37 @@ namespace SkyBf
                 g_forceAccept = true;
             }
         }
+        if (g_bfTargetType == 0 && g_bfTargetCpIndex >= 0 && raceTime <= bfTimeTo && g_bfPhase == BFPhase::Search)
+        {
+            array<int> cpStates = simManager.PlayerInfo.CheckpointStates;
+            if (g_bfTargetCpIndex < int(cpStates.Length) && cpStates[g_bfTargetCpIndex] == 1)
+            {
+                if (GetVariableBool(g_distPluginPrefix + "_shift_cp_eval"))
+                {
+                    CommandList cpReached();
+                    cpReached.Content = simManager.InputEvents.ToCommandsText();
+                    g_bfPrinter.PrintTargetAchieved();
+                    print("");
+                    print("Checkpoint " + g_bfTargetCpIndex + " reached at " + (raceTime) + "ms (or before), shifting checkpoint evaluation earlier...", Severity::Warning);
+                    print("File saved: " + cpReached.Save(GetVariableString("bf_result_filename").Split(".")[0] + "_restart" + restartCount + "_bestcp.txt"));
+                    bfTimeTo = raceTime - 10;
+                    if (bfTimeFrom > bfTimeTo)
+                    {
+                        bfTimeFrom = bfTimeTo;
+                    }
+                    g_bestBfDistance = 1e18f;
+                    g_currentWindowMinDistance = 1e18f;
+                    g_conditionsMetAtMinDistance = false;
+                    g_windowResultProcessed = false;
+                    g_forceAccept = true;
+                }
+                else
+                {
+                    g_isEarlyStop = true;
+                    g_forceAccept = true;
+                }
+            }
+        }
         if (raceTime < bfTimeFrom || raceTime >= bfTimeTo)
         {
             return;
@@ -4502,6 +4559,7 @@ namespace SkyBf
         RegisterVariable(g_distPluginPrefix + "_bf_time_to", 0);
         RegisterVariable(g_distPluginPrefix + "_constraint_trigger_index", -1);
         RegisterVariable(g_distPluginPrefix + "_shift_finish_eval", true);
+        RegisterVariable(g_distPluginPrefix + "_shift_cp_eval", true);
         auto eval1 = RegisterBruteforceEval(
             g_bruteforceDistanceTargetIdentifier,
             "Distance to Target (CP/Finish)",
@@ -4528,6 +4586,8 @@ namespace SkyBf
         RegisterVariable(g_uberPluginPrefix + "_uberbug_find_mode", "Single");
         RegisterVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
         RegisterVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", "");
+        RegisterVariable(g_uberPluginPrefix + "_replaysaving_filename_format", "uberbug{i}.txt");
+        RegisterVariable(g_uberPluginPrefix + "_replaysaving_time_limit", 20000);
         currentUberMode = GetVariableString(g_uberPluginPrefix + "_uberbug_mode");
         currentFindMode = GetVariableString(g_uberPluginPrefix + "_uberbug_find_mode");
         auto eval2 = RegisterBruteforceEval(
@@ -5964,19 +6024,44 @@ namespace SkyBf
         UI::PopItemWidth();
     }
 
+    string replaySavingFilenameFormat = "";
+    int record = 0;
+    int currentReplay = 1;
+    int replaySavingTime = 0;
+    SimulationState baseState;
+
     void OnRunStep(SimulationManager @simManager)
     {
-        int raceTime = simManager.RaceTime;
-        if (!simManager.InRace || simManager.RaceTime < 0)
-        {
-            return;
-        }
-        TM::GameCtnChallenge @challenge = GetCurrentChallenge();
-        if (challenge !is null && challenge.Uid != g_cachedChallengeUid)
-        {
-            CacheCheckpointData();
-            if (challenge.Uid != g_cachedChallengeUid)
-                return;
+        CacheCheckpointData();
+
+        if(record==1){
+            simManager.GiveUp();
+            record=2;
+        }else if(record==2){
+            simManager.SimulationOnly = true;
+            baseState = simManager.SaveState();
+            record = 3;
+        }else if(record==3){
+            string filename = ReplaceI(replaySavingFilenameFormat, currentReplay);
+            CommandList list(filename);
+            if(list is null) {
+                record=0;
+                currentReplay=1;
+                simManager.SimulationOnly = false;
+                print("No more input files found, stopping recording.", Severity::Info);
+            }else{
+                simManager.RewindToState(baseState);
+                list.Process(CommandListProcessOption::OnlyParse);
+                SetCurrentCommandList(list);
+                record=4;
+            }
+        }else if(record==4){
+            if(simManager.RaceTime >= int(Math::Ceil(replaySavingTime/1000.0))*1000+currentReplay*10){
+                SaveReplay(ReplaceI(replaySavingFilenameFormat, currentReplay));
+                print("Saved replay " + (currentReplay-1), Severity::Success);
+                currentReplay += 1;
+                record=3;
+            }
         }
     }
     uint64 last_ubertriggers_update = 0;
@@ -6266,7 +6351,36 @@ namespace SkyBf
             {
             }
         }
+
+        UI::Dummy(vec2(0, 3));
+        UI::Separator();
+        UI::Dummy(vec2(0, 3));
+        UI::TextWrapped("Replay generation from input files");
         UI::Dummy(vec2(0, 1));
+
+        if(GetSimulationManager().InRace){
+            replaySavingFilenameFormat = UI::InputTextVar("Filename format", g_uberPluginPrefix + "_replaysaving_filename_format");
+            replaySavingTime = UI::InputTimeVar("Time limit", g_uberPluginPrefix + "_replaysaving_time_limit");
+            if(replaySavingFilenameFormat.FindFirst("{i}") == -1){
+                UI::TextDimmed("Filename format should contain {i} to match the uberbug bruteforce result files.");
+            }else if(UI::Button("Generate replays")){
+                record = 1;
+            }
+            
+            UI::TextDimmed("This will go through every input file with a name matching the pattern. Every replay will be saved with a different time, so that they can be differentiated in mediatracker.");
+            float root = Math::Ceil(replaySavingTime/1000.0);
+            UI::TextDimmed("Given the current time limit, replays will start from: " + root + ".01 s for the first replay, " + root + ".02 s for the second, and so on.");
+            UI::PushStyleColor(UI::Col::Text, vec4(1, 0, 0, 1));
+            UI::TextWrapped("Make sure to have the Uberbug selected as bruteforce target, otherwise it won't work.");
+            UI::PopStyleColor();
+        }else{
+            UI::TextDimmed("You need to be in a race to generate replays from input files.");
+        }
+
+        UI::Dummy(vec2(0, 3));
+        UI::Separator();
+        UI::Dummy(vec2(0, 3));
+
         UI::CheckboxVar("Show trajectory preview", g_uberPluginPrefix + "_uberbug_show_trajectory");
     }
 
@@ -7360,6 +7474,79 @@ namespace CarLocationBf {
         preset = int(GetVariableDouble(id+"_car_render_quality"));
         RENDER_INTERVAL_MS = int(1000/GetVariableDouble(id+"_car_render_rate"));
         auto eval = RegisterBruteforceEval(id, "Car Location", OnEvaluate, RenderEvalSettings);
+        @eval.onSimBegin = @OnSimulationBegin;
+    }
+}
+
+namespace TimeBf
+{
+    int minTime = 0;
+    int bestTime = -1;
+    bool base = false;
+
+    void RenderEvalSettings()
+    {
+        UI::PushItemWidth(200);
+        UI::Text("Minimum Time");
+        UI::SameLine();
+        UI::Dummy(vec2(10, 0));
+        UI::SameLine();
+        UI::InputTimeVar("##timebf_min_time", "timebf_min_time");
+        UI::PopItemWidth();
+        toolTip(300, {"Optional minimum time threshold. Only times at or after this point will be considered. Set to 0 to disable."});
+    }
+
+    BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
+    {
+        int raceTime = simManager.RaceTime;
+        auto resp = BFEvaluationResponse();
+        resp.Decision = BFEvaluationDecision::DoNothing;
+
+        bool conditionsMet = GlobalConditionsMet(simManager);
+        bool isPastMinTime = raceTime >= minTime;
+
+        if (info.Phase == BFPhase::Initial)
+        {
+            if (conditionsMet && isPastMinTime)
+            {
+                if (bestTime == -1 || raceTime < bestTime)
+                {
+                    bestTime = raceTime;
+                    resp.Decision = BFEvaluationDecision::Accept;
+                    if (base)
+                    {
+                        base = false;
+                        print("Base run time: " + Text::FormatFloat(bestTime / 1000.0, "", 0, 3) + " s");
+                        resp.ResultFileStartContent = "# Base run time: " + Text::FormatFloat(bestTime / 1000.0, "", 0, 3) + " s";
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (conditionsMet && isPastMinTime && raceTime < bestTime)
+            {
+                bestTime = raceTime;
+                resp.Decision = BFEvaluationDecision::Accept;
+                print("New best time: " + Text::FormatFloat(bestTime / 1000.0, "", 0, 3) + " s");
+                resp.ResultFileStartContent = "# Best time: " + Text::FormatFloat(bestTime / 1000.0, "", 0, 3) + " s";
+            }
+        }
+
+        return resp;
+    }
+
+    void OnSimulationBegin(SimulationManager @simManager)
+    {
+        minTime = int(GetVariableDouble("timebf_min_time"));
+        bestTime = -1;
+        base = true;
+    }
+
+    void Main()
+    {
+        RegisterVariable("timebf_min_time", 0);
+        auto eval = RegisterBruteforceEval("time", "Time", OnEvaluate, RenderEvalSettings);
         @eval.onSimBegin = @OnSimulationBegin;
     }
 }
