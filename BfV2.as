@@ -7,7 +7,6 @@ PluginInfo @GetPluginInfo()
     info.Description = "Next generation bruteforce";
     return info;
 }
-
 void coption(string name, string currentId, string identifier)
 {
     if (UI::Selectable(name, currentId == identifier))
@@ -15,7 +14,6 @@ void coption(string name, string currentId, string identifier)
         SetVariable("bf_target", identifier);
     }
 }
-
 void toolTip(int width, array<string> args)
 {
     if (UI::IsItemHovered())
@@ -37,7 +35,6 @@ void SaveReplay(string name){
     saveReplayCmd.Content="save_replay " + name;
     saveReplayCmd.Process(CommandListProcessOption::ExecuteImmediately);
 }
-
 array<BruteforceEvaluation @> evaluations;
 BruteforceEvaluation @current;
 BFEvaluationInfo info = BFEvaluationInfo();
@@ -56,7 +53,6 @@ Scripting::ConditionCallback @standardCondition;
 Scripting::ConditionCallback @restartCondition;
 string linesRestartCondition = "#DUJ12E3F 4G5H6I7J8K9L0M";
 string linesStandardCondition = "416782R3021C7B 1467 1";
-
 void BruteforceV2Settings()
 {
     UI::Dummy(vec2(0, 15));
@@ -73,10 +69,8 @@ void BruteforceV2Settings()
         UI::Dummy(vec2(0, 2));
         UI::PushItemWidth(300);
         UI::InputTextVar("Filename used for saving results", "bf_result_filename");
-
         toolTip(300, {"Use {i} in the filename if you enabled the auto restart. It will be replaced by the restart number when saving inputs. If not present, the filename will be prefixed with 'passX_' where X is the number of restarts done so far. Example:",
                       "'best_run_{i}.txt' will produce files like 'best_run_1.txt', 'best_run_2.txt', etc. for every restart."});
-
         UI::Dummy(vec2(0, 2));
         UI::InputIntVar("Iterations before restart", "bf_iterations_before_restart", 0);
         toolTip(300, {"After this many iterations, the bruteforce process will restart from the beginning, with the base run's inputs. This can help escape local minima. Set to 0 to disable restarts."});
@@ -105,18 +99,15 @@ void BruteforceV2Settings()
         {
             SetVariable("bf_restart_condition_script_height", currentHeight + 17);
         }
-
         UI::SameLine();
         UI::Text("Condition script for restart");
         UI::PopItemWidth();
-
         if (lines != linesRestartCondition)
         {
             linesRestartCondition = lines;
             Scripting::ConditionCallback @callback = Scripting::CompileMulti(lines.Split("\n"));
             @restartCondition = @callback;
         }
-
         if (restartCondition is null)
         {
             bool isEmpty = true;
@@ -147,7 +138,6 @@ void BruteforceV2Settings()
             UI::TextDimmed("Script compiled successfully.");
         }
     }
-
     if (UI::CollapsingHeader("Optimization"))
     {
         UI::Dummy(vec2(0, 2));
@@ -170,7 +160,6 @@ void BruteforceV2Settings()
             current.renderCallback();
         UI::Dummy(vec2(0, 2));
     }
-
     if (UI::CollapsingHeader("Conditions"))
     {
         UI::PushItemWidth(160);
@@ -193,7 +182,6 @@ void BruteforceV2Settings()
         {
             SetVariable("bf_condition_speed", 0.0f);
         }
-
         if (GetVariableDouble("bf_condition_cps") > 0.0f)
         {
             UI::Text("Min. cps");
@@ -213,7 +201,6 @@ void BruteforceV2Settings()
             SetVariable("bf_condition_cps", 0.0f);
         }
         UI::Dummy(vec2(0, 2));
-
         if (int(GetVariableDouble("bf_condition_trigger")) > 0)
         {
             UI::Text("Trigger");
@@ -229,10 +216,8 @@ void BruteforceV2Settings()
         UI::SameLine();
         uint triggerIndex = uint(GetVariableDouble("bf_condition_trigger"));
         array<int> @triggerIds = GetTriggerIds();
-
         if (triggerIndex > triggerIds.Length)
             triggerIndex = 0;
-
         string currentName = "None";
         if (triggerIndex > 0)
         {
@@ -240,7 +225,6 @@ void BruteforceV2Settings()
             vec3 pos = selectedTrigger.Position;
             currentName = triggerIndex + ". Position: (" + pos.x + ", " + pos.y + ", " + pos.z + ")";
         }
-
         if (UI::BeginCombo("##bf_condition_trigger", currentName))
         {
             if (UI::Selectable("None", triggerIndex == 0))
@@ -259,7 +243,6 @@ void BruteforceV2Settings()
             }
             UI::EndCombo();
         }
-
         string lines = Replace(GetVariableString("bf_condition_script"), ":", "\n");
         int currentHeight = int(GetVariableDouble("bf_condition_script_height"));
         string t;
@@ -282,16 +265,13 @@ void BruteforceV2Settings()
         }
         UI::SameLine();
         UI::Text("Condition script");
-
         UI::PopItemWidth();
-
         if (lines != linesStandardCondition)
         {
             linesStandardCondition = lines;
             Scripting::ConditionCallback @callback = Scripting::CompileMulti(lines.Split("\n"));
             @standardCondition = @callback;
         }
-
         if (standardCondition is null)
         {
             bool isEmpty = true;
@@ -323,15 +303,12 @@ void BruteforceV2Settings()
         }
         UI::Dummy(vec2(0, 2));
     }
-    
     UI::Dummy(vec2(0, 3));
     UI::Separator();
     UI::Dummy(vec2(0, 3));
-    
-    
+    InitializeInputModAlgorithms();
     int savedCount = int(GetVariableDouble("bf_input_mod_count"));
     if (savedCount < 1) savedCount = 1;
-    
     while (int(g_inputModSettings.Length) < savedCount)
     {
         InputModificationSettings @settings = InputModificationSettings();
@@ -341,13 +318,17 @@ void BruteforceV2Settings()
     {
         g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
     }
-    
+    for (uint im = 0; im < g_inputModSettings.Length; im++)
+    {
+        string varSuffix = GetInputModVarSuffix(im);
+        string savedAlgoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+        if (savedAlgoId == "") savedAlgoId = "basic";
+        g_inputModSettings[im].algorithmIndex = GetInputModAlgorithmIndex(savedAlgoId);
+    }
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
         string suffix = "##inputmod" + im;
         string varSuffix = GetInputModVarSuffix(im);
-        
-        
         if (im > 0)
         {
             RegisterVariable("bf_modify_count" + varSuffix, 0);
@@ -357,9 +338,8 @@ void BruteforceV2Settings()
             RegisterVariable("bf_max_time_diff" + varSuffix, 0);
             RegisterVariable("bf_inputs_fill_steer" + varSuffix, false);
             RegisterVariable("bf_input_mod_enabled" + varSuffix, true);
+            RegisterVariable("bf_input_mod_algorithm" + varSuffix, "basic");
         }
-        
-        
         if (im == 0)
         {
             if (UI::Button("+" + suffix, vec2(0, 0)))
@@ -382,66 +362,38 @@ void BruteforceV2Settings()
         {
             UI::PushItemWidth(300);
             UI::Dummy(vec2(0, 2));
-            
-            
             if (im > 0)
             {
                 UI::CheckboxVar("Enabled" + suffix, "bf_input_mod_enabled" + varSuffix);
                 UI::Dummy(vec2(0, 2));
             }
-            
-            UI::InputIntVar("Input Modify Count" + suffix, "bf_modify_count" + varSuffix, 1);
-            toolTip(300,
-                    {"At most " + int(GetVariableDouble("bf_modify_count" + varSuffix)) + " inputs will be changed each attempt."});
-
-            UI::Dummy(vec2(0, 0));
-
-            if (UI::BeginTable("##hack_for_the_tooltip" + suffix, 1))
+            InputModificationSettings @settings = g_inputModSettings[im];
+            InputModificationAlgorithm @currentAlgo = settings.GetAlgorithm();
+            string currentAlgoName = (currentAlgo !is null) ? currentAlgo.name : "Unknown";
+            if (UI::BeginCombo("Algorithm" + suffix, currentAlgoName))
             {
-                UI::TableNextRow();
-                UI::TableSetColumnIndex(0);
-                UI::Text("From");
-                UI::SameLine();
-                UI::Dummy(vec2(18, 0));
-                UI::SameLine();
-                UI::PushItemWidth(195);
-                UI::InputTimeVar("##bf_inputs_min_time" + suffix, "bf_inputs_min_time" + varSuffix);
-                UI::PopItemWidth();
-
-                UI::Text("To");
-                UI::SameLine();
-                UI::Dummy(vec2(37, 0));
-                UI::SameLine();
-                UI::PushItemWidth(195);
-                UI::InputTimeVar("##bf_inputs_max_time" + suffix, "bf_inputs_max_time" + varSuffix);
-                UI::PopItemWidth();
-                UI::EndTable();
+                for (uint algoIdx = 0; algoIdx < g_inputModAlgorithms.Length; algoIdx++)
+                {
+                    InputModificationAlgorithm @algo = g_inputModAlgorithms[algoIdx];
+                    bool isSelected = (settings.algorithmIndex == int(algoIdx));
+                    if (UI::Selectable(algo.name, isSelected))
+                    {
+                        settings.algorithmIndex = int(algoIdx);
+                        SetVariable("bf_input_mod_algorithm" + varSuffix, algo.identifier);
+                    }
+                }
+                UI::EndCombo();
             }
-            toolTip(300, {"Time frame in which inputs can be changed", "Limiting this time frame will make the bruteforcing process faster."});
-
-            UI::Dummy(vec2(0, 0));
-
-            UI::PushItemWidth(300);
-            int t = UI::SliderIntVar("Maximum Steering Difference" + suffix, "bf_max_steer_diff" + varSuffix, 0, 131072);
-
-            toolTip(300, {"Bruteforce will randomize a number between [-" + t + ", " + t + "] and add it to the current steering value."});
-
+            toolTip(300, {"Select the input modification algorithm to use for this settings block."});
             UI::Dummy(vec2(0, 2));
-
-            int timediff = UI::InputTimeVar("Maximum Time Difference" + suffix, "bf_max_time_diff" + varSuffix);
-            UI::PopItemWidth();
-
-            toolTip(300, {"Bruteforce will randomize a number between [-" + timediff + ", " + timediff + "] milliseconds and add it to the current time value."});
-
-            
-            UI::CheckboxVar("Fill Missing Steering Input" + suffix, "bf_inputs_fill_steer" + varSuffix);
-            toolTip(300, {"Timestamps with no steering input changes will be filled with existing values "
-                          "resulting in more values that can be changed."});
+            if (currentAlgo !is null && currentAlgo.renderUICallback !is null)
+            {
+                currentAlgo.renderUICallback(settings, im, suffix, varSuffix);
+            }
         }
     }
     UI::PopStyleColor(8);
 }
-
 BruteforceEvaluation @GetBruteforceTarget()
 {
     string current = GetVariableString("bf_target");
@@ -455,9 +407,9 @@ BruteforceEvaluation @GetBruteforceTarget()
     }
     return null;
 }
-
 void Main()
 {
+    InitializeInputModAlgorithms();
     RegisterValidationHandler("bfv2", "Bruteforce V2", BruteforceV2Settings);
     RegisterVariable("bf_iterations_before_restart", 0);
     RegisterVariable("bf_result_folder", "");
@@ -467,6 +419,7 @@ void Main()
     RegisterVariable("bf_restart_condition_script_height", 26);
     RegisterVariable("bf_condition_trigger", 0);
     RegisterVariable("bf_input_mod_count", 1);
+    RegisterVariable("bf_input_mod_algorithm", "basic"); 
     PreciseFinishBf::Main();
     PreciseCheckpointBf::Main();
     PreciseTriggerBf::Main();
@@ -476,13 +429,11 @@ void Main()
     CarLocationBf::Main();
     TimeBf::Main();
 }
-
 void Render()
 {
     if (current !is null && current.onRender !is null)
         current.onRender();
 }
-
 BruteforceEvaluation @RegisterBruteforceEval(const string &in identifier, const string &in title, OnBruteforceEvaluate @callback, RenderBruteforceEvaluationSettings @renderCallback = null)
 {
     BruteforceEvaluation eval;
@@ -493,19 +444,16 @@ BruteforceEvaluation @RegisterBruteforceEval(const string &in identifier, const 
     evaluations.Add(eval);
     return eval;
 }
-
 funcdef void OnSimulationBeginCallback(SimulationManager @simManager);
 funcdef void OnSimulationEndCallback(SimulationManager @simManager, SimulationResult result);
 funcdef void OnCheckpointCountChangedCallback(SimulationManager @simManager, int current, int target);
 funcdef void OnRunStepCallback(SimulationManager @simManager);
 funcdef void OnRenderCallback();
-
 enum CallbackType
 {
     Legacy,
     FullControl,
 }
-
 class BruteforceEvaluation
 {
     string identifier;
@@ -519,13 +467,249 @@ class BruteforceEvaluation
     OnRunStepCallback @onRunStep = null;
     OnRenderCallback @onRender = null;
 }
-
-/*
-
-bool meetsConditions(float dist, float speed, int cps = 0) { 
-    return dist < distCondition && speed*3.6f > speedCondition && cps >= cpsCondition;
-}*/
 ;
+funcdef void InputModAlgorithmCallback(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex);
+funcdef void InputModAlgorithmUICallback(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix);
+class InputModificationAlgorithm
+{
+    string identifier;
+    string name;
+    InputModAlgorithmCallback @mutateCallback;
+    InputModAlgorithmUICallback @renderUICallback;
+    InputModificationAlgorithm() {}
+    InputModificationAlgorithm(const string &in id, const string &in displayName, InputModAlgorithmCallback @mutate, InputModAlgorithmUICallback @renderUI)
+    {
+        identifier = id;
+        name = displayName;
+        @mutateCallback = @mutate;
+        @renderUICallback = @renderUI;
+    }
+}
+array<InputModificationAlgorithm@> g_inputModAlgorithms;
+void RegisterInputModAlgorithm(const string &in identifier, const string &in name, InputModAlgorithmCallback @mutateCallback, InputModAlgorithmUICallback @renderUICallback)
+{
+    InputModificationAlgorithm @algo = InputModificationAlgorithm(identifier, name, mutateCallback, renderUICallback);
+    g_inputModAlgorithms.Add(algo);
+}
+int GetInputModAlgorithmIndex(const string &in identifier)
+{
+    for (uint i = 0; i < g_inputModAlgorithms.Length; i++)
+    {
+        if (g_inputModAlgorithms[i].identifier == identifier)
+            return int(i);
+    }
+    return 0; 
+}
+InputModificationAlgorithm@ GetInputModAlgorithm(int index)
+{
+    if (index >= 0 && index < int(g_inputModAlgorithms.Length))
+        return g_inputModAlgorithms[index];
+    if (g_inputModAlgorithms.Length > 0)
+        return g_inputModAlgorithms[0];
+    return null;
+}
+InputModificationAlgorithm@ GetInputModAlgorithmByIdentifier(const string &in identifier)
+{
+    for (uint i = 0; i < g_inputModAlgorithms.Length; i++)
+    {
+        if (g_inputModAlgorithms[i].identifier == identifier)
+            return g_inputModAlgorithms[i];
+    }
+    if (g_inputModAlgorithms.Length > 0)
+        return g_inputModAlgorithms[0];
+    return null;
+}
+void BasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    InputModification::MutateInputs(
+        buffer,
+        settings.inputCount,
+        settings.minInputsTime,
+        settings.maxInputsTime,
+        settings.maxSteerDiff,
+        settings.maxTimeDiff,
+        settings.fillSteerInputs);
+}
+void BasicAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    UI::InputIntVar("Input Modify Count" + suffix, "bf_modify_count" + varSuffix, 1);
+    toolTip(300,
+            {"At most " + int(GetVariableDouble("bf_modify_count" + varSuffix)) + " inputs will be changed each attempt."});
+    UI::Dummy(vec2(0, 0));
+    if (UI::BeginTable("##hack_for_the_tooltip" + suffix, 1))
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text("From");
+        UI::SameLine();
+        UI::Dummy(vec2(18, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_inputs_min_time" + suffix, "bf_inputs_min_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::Text("To");
+        UI::SameLine();
+        UI::Dummy(vec2(37, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_inputs_max_time" + suffix, "bf_inputs_max_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::EndTable();
+    }
+    toolTip(300, {"Time frame in which inputs can be changed", "Limiting this time frame will make the bruteforcing process faster."});
+    UI::Dummy(vec2(0, 0));
+    UI::PushItemWidth(300);
+    int t = UI::SliderIntVar("Maximum Steering Difference" + suffix, "bf_max_steer_diff" + varSuffix, 0, 131072);
+    toolTip(300, {"Bruteforce will randomize a number between [-" + t + ", " + t + "] and add it to the current steering value."});
+    UI::Dummy(vec2(0, 2));
+    int timediff = UI::InputTimeVar("Maximum Time Difference" + suffix, "bf_max_time_diff" + varSuffix);
+    UI::PopItemWidth();
+    toolTip(300, {"Bruteforce will randomize a number between [-" + timediff + ", " + timediff + "] milliseconds and add it to the current time value."});
+    UI::CheckboxVar("Fill Missing Steering Input" + suffix, "bf_inputs_fill_steer" + varSuffix);
+    toolTip(300, {"Timestamps with no steering input changes will be filled with existing values "
+                  "resulting in more values that can be changed."});
+}
+void InitializeInputModAlgorithms()
+{
+    if (g_inputModAlgorithms.Length == 0)
+    {
+        RegisterInputModAlgorithm("basic", "Basic", BasicAlgorithm_Mutate, BasicAlgorithm_RenderUI);
+        RegisterInputModAlgorithm("range", "Range", RangeAlgorithm_Mutate, RangeAlgorithm_RenderUI);
+    }
+}
+void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    int minInputCount = int(GetVariableDouble("bf_range_min_input_count" + varSuffix));
+    int maxInputCount = int(GetVariableDouble("bf_range_max_input_count" + varSuffix));
+    int minSteer = int(GetVariableDouble("bf_range_min_steer" + varSuffix));
+    int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
+    int minTimeDiff = int(GetVariableDouble("bf_range_min_time_diff" + varSuffix));
+    int maxTimeDiff = int(GetVariableDouble("bf_range_max_time_diff" + varSuffix));
+    bool fillInputs = GetVariableBool("bf_range_fill_steer" + varSuffix);
+    InputModification::MutateInputsRange(
+        buffer,
+        minInputCount,
+        maxInputCount,
+        settings.minInputsTime,
+        settings.maxInputsTime,
+        minSteer,
+        maxSteer,
+        minTimeDiff,
+        maxTimeDiff,
+        fillInputs);
+}
+void RangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    RegisterVariable("bf_range_min_input_count" + varSuffix, 1);
+    RegisterVariable("bf_range_max_input_count" + varSuffix, 1);
+    RegisterVariable("bf_range_min_steer" + varSuffix, -65536);
+    RegisterVariable("bf_range_max_steer" + varSuffix, 65536);
+    RegisterVariable("bf_range_min_time_diff" + varSuffix, 0);
+    RegisterVariable("bf_range_max_time_diff" + varSuffix, 0);
+    RegisterVariable("bf_range_fill_steer" + varSuffix, false);
+    if (UI::BeginTable("##input_count_range" + suffix, 1))
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text("Min Input Count");
+        UI::SameLine();
+        UI::Dummy(vec2(35, 0));
+        UI::SameLine();
+        UI::Text("Max Input Count");
+        UI::PushItemWidth(142);
+        UI::InputIntVar("##bf_range_min_input_count" + suffix, "bf_range_min_input_count" + varSuffix, 1);
+        UI::PopItemWidth();
+        UI::SameLine();
+        UI::Dummy(vec2(0, 0));
+        UI::SameLine();
+        UI::PushItemWidth(142);
+        UI::InputIntVar("##bf_range_max_input_count" + suffix, "bf_range_max_input_count" + varSuffix, 1);
+        UI::PopItemWidth();
+        UI::EndTable();
+    }
+    toolTip(300, {"Number of inputs to modify will be randomly chosen between min and max."});
+    UI::Dummy(vec2(0, 2));
+    if (UI::BeginTable("##hack_for_the_tooltip_range" + suffix, 1))
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text("From");
+        UI::SameLine();
+        UI::Dummy(vec2(18, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_inputs_min_time" + suffix, "bf_inputs_min_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::Text("To");
+        UI::SameLine();
+        UI::Dummy(vec2(37, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_inputs_max_time" + suffix, "bf_inputs_max_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::EndTable();
+    }
+    toolTip(300, {"Time frame in which inputs can be changed."});
+    UI::Dummy(vec2(0, 2));
+    if (UI::BeginTable("##steer_range" + suffix, 1))
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text("Steering Value Range");
+        UI::Text("Min");
+        UI::SameLine();
+        UI::Dummy(vec2(117, 0));
+        UI::SameLine();
+        UI::Text("Max");
+        UI::PushItemWidth(142);
+        UI::InputIntVar("##bf_range_min_steer" + suffix, "bf_range_min_steer" + varSuffix, 1);
+        UI::PopItemWidth();
+        UI::SameLine();
+        UI::Dummy(vec2(0, 0));
+        UI::SameLine();
+        UI::PushItemWidth(142);
+        UI::InputIntVar("##bf_range_max_steer" + suffix, "bf_range_max_steer" + varSuffix, 1);
+        UI::PopItemWidth();
+        UI::EndTable();
+    }
+    toolTip(300, {"Steering will be set to a random value between min and max.", 
+                  "Valid range is [-65536, 65536].", 
+                  "This OVERWRITES the existing steering value."});
+    int minSteer = int(GetVariableDouble("bf_range_min_steer" + varSuffix));
+    int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
+    if (minSteer < -65536) SetVariable("bf_range_min_steer" + varSuffix, -65536);
+    if (maxSteer > 65536) SetVariable("bf_range_max_steer" + varSuffix, 65536);
+    if (minSteer > maxSteer) SetVariable("bf_range_min_steer" + varSuffix, maxSteer);
+    UI::Dummy(vec2(0, 2));
+    if (UI::BeginTable("##time_diff_range" + suffix, 1))
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text("Time Difference Range");
+        UI::Text("Min");
+        UI::SameLine();
+        UI::Dummy(vec2(117, 0));
+        UI::SameLine();
+        UI::Text("Max");
+        UI::PushItemWidth(142);
+        UI::InputTimeVar("##bf_range_min_time_diff" + suffix, "bf_range_min_time_diff" + varSuffix);
+        UI::PopItemWidth();
+        UI::SameLine();
+        UI::Dummy(vec2(0, 0));
+        UI::SameLine();
+        UI::PushItemWidth(142);
+        UI::InputTimeVar("##bf_range_max_time_diff" + suffix, "bf_range_max_time_diff" + varSuffix);
+        UI::PopItemWidth();
+        UI::EndTable();
+    }
+    toolTip(300, {"Time offset will be randomly chosen between min and max.", 
+                  "Can be negative (shift earlier) or positive (shift later)."});
+    UI::Dummy(vec2(0, 2));
+    UI::CheckboxVar("Fill Missing Steering Input" + suffix, "bf_range_fill_steer" + varSuffix);
+    toolTip(300, {"Timestamps with no steering input changes will be filled with existing values "
+                  "resulting in more values that can be changed."});
+}
 class InputModificationSettings
 {
     bool enabled = true;
@@ -535,9 +719,8 @@ class InputModificationSettings
     int maxSteerDiff = 0;
     int maxTimeDiff = 0;
     bool fillSteerInputs = false;
-    
+    int algorithmIndex = 0; 
     InputModificationSettings() {}
-    
     InputModificationSettings(int count, int minTime, int maxTime, int steerDiff, int timeDiff, bool fill)
     {
         inputCount = count;
@@ -546,71 +729,75 @@ class InputModificationSettings
         maxSteerDiff = steerDiff;
         maxTimeDiff = timeDiff;
         fillSteerInputs = fill;
+        algorithmIndex = 0;
+    }
+    InputModificationAlgorithm@ GetAlgorithm()
+    {
+        return GetInputModAlgorithm(algorithmIndex);
     }
 }
-
 array<InputModificationSettings@> g_inputModSettings;
-
 void AddInputModificationSettings()
 {
     InputModificationSettings @settings = InputModificationSettings();
     uint newIndex = g_inputModSettings.Length;
     string newSuffix = GetInputModVarSuffix(newIndex);
-    
-    
     if (g_inputModSettings.Length > 0)
     {
         string lastSuffix = GetInputModVarSuffix(newIndex - 1);
-        
-        
         SetVariable("bf_modify_count" + newSuffix, GetVariableDouble("bf_modify_count" + lastSuffix));
         SetVariable("bf_inputs_min_time" + newSuffix, GetVariableDouble("bf_inputs_min_time" + lastSuffix));
         SetVariable("bf_inputs_max_time" + newSuffix, GetVariableDouble("bf_inputs_max_time" + lastSuffix));
         SetVariable("bf_max_steer_diff" + newSuffix, GetVariableDouble("bf_max_steer_diff" + lastSuffix));
         SetVariable("bf_max_time_diff" + newSuffix, GetVariableDouble("bf_max_time_diff" + lastSuffix));
         SetVariable("bf_inputs_fill_steer" + newSuffix, GetVariableBool("bf_inputs_fill_steer" + lastSuffix));
+        SetVariable("bf_input_mod_algorithm" + newSuffix, GetVariableString("bf_input_mod_algorithm" + lastSuffix));
+        SetVariable("bf_range_min_input_count" + newSuffix, GetVariableDouble("bf_range_min_input_count" + lastSuffix));
+        SetVariable("bf_range_max_input_count" + newSuffix, GetVariableDouble("bf_range_max_input_count" + lastSuffix));
+        SetVariable("bf_range_min_steer" + newSuffix, GetVariableDouble("bf_range_min_steer" + lastSuffix));
+        SetVariable("bf_range_max_steer" + newSuffix, GetVariableDouble("bf_range_max_steer" + lastSuffix));
+        SetVariable("bf_range_min_time_diff" + newSuffix, GetVariableDouble("bf_range_min_time_diff" + lastSuffix));
+        SetVariable("bf_range_max_time_diff" + newSuffix, GetVariableDouble("bf_range_max_time_diff" + lastSuffix));
+        SetVariable("bf_range_fill_steer" + newSuffix, GetVariableBool("bf_range_fill_steer" + lastSuffix));
         if (newIndex > 0)
             SetVariable("bf_input_mod_enabled" + newSuffix, true);
     }
-    
     g_inputModSettings.Add(settings);
-    
-    
     SetVariable("bf_input_mod_count", int(g_inputModSettings.Length));
 }
-
 string GetInputModVarSuffix(uint index)
 {
     return (index == 0) ? "" : ("_" + index);
 }
-
 void RemoveInputModificationSettings(uint index)
 {
     if (index < g_inputModSettings.Length && g_inputModSettings.Length > 1)
     {
-        
         for (uint i = index; i < g_inputModSettings.Length - 1; i++)
         {
             string srcSuffix = GetInputModVarSuffix(i + 1);
             string dstSuffix = GetInputModVarSuffix(i);
-            
             SetVariable("bf_modify_count" + dstSuffix, GetVariableDouble("bf_modify_count" + srcSuffix));
             SetVariable("bf_inputs_min_time" + dstSuffix, GetVariableDouble("bf_inputs_min_time" + srcSuffix));
             SetVariable("bf_inputs_max_time" + dstSuffix, GetVariableDouble("bf_inputs_max_time" + srcSuffix));
             SetVariable("bf_max_steer_diff" + dstSuffix, GetVariableDouble("bf_max_steer_diff" + srcSuffix));
             SetVariable("bf_max_time_diff" + dstSuffix, GetVariableDouble("bf_max_time_diff" + srcSuffix));
             SetVariable("bf_inputs_fill_steer" + dstSuffix, GetVariableBool("bf_inputs_fill_steer" + srcSuffix));
+            SetVariable("bf_input_mod_algorithm" + dstSuffix, GetVariableString("bf_input_mod_algorithm" + srcSuffix));
+            SetVariable("bf_range_min_input_count" + dstSuffix, GetVariableDouble("bf_range_min_input_count" + srcSuffix));
+            SetVariable("bf_range_max_input_count" + dstSuffix, GetVariableDouble("bf_range_max_input_count" + srcSuffix));
+            SetVariable("bf_range_min_steer" + dstSuffix, GetVariableDouble("bf_range_min_steer" + srcSuffix));
+            SetVariable("bf_range_max_steer" + dstSuffix, GetVariableDouble("bf_range_max_steer" + srcSuffix));
+            SetVariable("bf_range_min_time_diff" + dstSuffix, GetVariableDouble("bf_range_min_time_diff" + srcSuffix));
+            SetVariable("bf_range_max_time_diff" + dstSuffix, GetVariableDouble("bf_range_max_time_diff" + srcSuffix));
+            SetVariable("bf_range_fill_steer" + dstSuffix, GetVariableBool("bf_range_fill_steer" + srcSuffix));
             if (i > 0)
                 SetVariable("bf_input_mod_enabled" + dstSuffix, GetVariableBool("bf_input_mod_enabled" + srcSuffix));
         }
-        
         g_inputModSettings.RemoveAt(index);
-        
-        
         SetVariable("bf_input_mod_count", int(g_inputModSettings.Length));
     }
 }
-
 void MutateAllInputs(TM::InputEventBuffer @buffer)
 {
     for (uint im = 0; im < g_inputModSettings.Length; im++)
@@ -618,47 +805,35 @@ void MutateAllInputs(TM::InputEventBuffer @buffer)
         InputModificationSettings @settings = g_inputModSettings[im];
         if (!settings.enabled)
             continue;
-        InputModification::MutateInputs(
-            buffer,
-            settings.inputCount,
-            settings.minInputsTime,
-            settings.maxInputsTime,
-            settings.maxSteerDiff,
-            settings.maxTimeDiff,
-            settings.fillSteerInputs);
+        InputModificationAlgorithm @algo = settings.GetAlgorithm();
+        if (algo !is null && algo.mutateCallback !is null)
+        {
+            algo.mutateCallback(buffer, settings, im);
+        }
     }
 }
-
-
 int inputCount = 0;
 int minInputsTime = 0;
 int maxInputsTime = 0;
 int maxSteerDiff = 0;
 int maxTimeDiff = 0;
 bool fillSteerInputs = false;
-
-
 bool forceStop = false;
 int leastMinInputsTime = 0;
-
 array<TM::InputEvent> bestInputEvents;
 bool hasBestInputs = false;
-
 array<TM::InputEvent> baseInputEvents;
 bool hasBaseInputs = false;
-
 void SaveBestInputs(SimulationManager @simManager, bool printSaved = false)
 {
     TM::InputEventBuffer @buf = simManager.InputEvents;
     if (buf is null)
         return;
-
     bestInputEvents.Resize(0);
     for (uint i = 0; i < buf.Length; i++)
     {
         auto evt = buf[i];
         bestInputEvents.Add(evt);
-
         if (printSaved)
         {
             print("Saved Input: Time=" + evt.Time + " | Index=" + evt.Value.EventIndex + " | Analog=" + evt.Value.Analog);
@@ -666,19 +841,16 @@ void SaveBestInputs(SimulationManager @simManager, bool printSaved = false)
     }
     hasBestInputs = true;
 }
-
 void SaveBaseInputs(SimulationManager @simManager, bool printSaved = false)
 {
     TM::InputEventBuffer @buf = simManager.InputEvents;
     if (buf is null)
         return;
-
     baseInputEvents.Resize(0);
     for (uint i = 0; i < buf.Length; i++)
     {
         auto evt = buf[i];
         baseInputEvents.Add(evt);
-
         if (printSaved)
         {
             print("Saved Input: Time=" + evt.Time + " | Index=" + evt.Value.EventIndex + " | Analog=" + evt.Value.Analog);
@@ -686,51 +858,42 @@ void SaveBaseInputs(SimulationManager @simManager, bool printSaved = false)
     }
     hasBaseInputs = true;
 }
-
 void RestoreBestInputs(SimulationManager @simManager, bool printRestored = false)
 {
     if (!hasBestInputs)
         return;
-
     TM::InputEventBuffer @buf = simManager.InputEvents;
     if (buf is null)
         return;
-
     buf.Clear();
     for (uint i = 0; i < bestInputEvents.Length; i++)
     {
         auto evt = bestInputEvents[i];
         buf.Add(evt);
-
         if (printRestored)
         {
             print("Restored Input: Time=" + evt.Time + " | Index=" + evt.Value.EventIndex + " | Analog=" + evt.Value.Analog);
         }
     }
 }
-
 void RestoreBaseInputs(SimulationManager @simManager, bool printRestored = false)
 {
     if (!hasBaseInputs)
         return;
-
     TM::InputEventBuffer @buf = simManager.InputEvents;
     if (buf is null)
         return;
-
     buf.Clear();
     for (uint i = 0; i < baseInputEvents.Length; i++)
     {
         auto evt = baseInputEvents[i];
         buf.Add(evt);
-
         if (printRestored)
         {
             print("Restored Input: Time=" + evt.Time + " | Index=" + evt.Value.EventIndex + " | Analog=" + evt.Value.Analog);
         }
     }
 }
-
 bool GlobalConditionsMet(SimulationManager @simManager)
 {
     float currentSpeed = simManager.Dyna.CurrentState.LinearSpeed.Length();
@@ -738,7 +901,6 @@ bool GlobalConditionsMet(SimulationManager @simManager)
     bool triggerCondition = !hasConditionTrigger || conditionTrigger.ContainsPoint(simManager.Dyna.CurrentState.Location.Position);
     return currentSpeed >= minSpeed && currentCps >= minCps && triggerCondition && (standardCondition is null || standardCondition(simManager));
 }
-
 SimulationState rewindState;
 bool rewindStateAssigned = false;
 array<int> CheckpointStates;
@@ -746,23 +908,19 @@ bool IsBfV2Active = false;
 bool running = false;
 array<string> restartInfos;
 string ResultFileStartContent = "";
-
 void OnSimulationBegin(SimulationManager @simManager)
 {
     InputModification::cachedStartIndex = -1;
     IsBfV2Active = GetVariableString("controller") == "bfv2";
     if (!IsBfV2Active)
         return;
-
     @current = @GetBruteforceTarget();
     if (current is null)
     {
         SetVariable("bf_target", evaluations[0].identifier);
         @current = @evaluations[0];
     }
-
     simManager.RemoveStateValidation();
-
     info.Iterations = 0;
     info.Phase = BFPhase::Initial;
     info.Rewinded = false;
@@ -775,15 +933,10 @@ void OnSimulationBegin(SimulationManager @simManager)
     uint64 now = Time::Now;
     lastImprovementTime = now;
     lastRestartTime = now;
-
     InputModification::cachedStartIndex = -1;
     InputModification::cachedMinTime = -1;
-
-    
     int savedCount = int(GetVariableDouble("bf_input_mod_count"));
     if (savedCount < 1) savedCount = 1;
-    
-    
     while (int(g_inputModSettings.Length) < savedCount)
     {
         InputModificationSettings @settings = InputModificationSettings();
@@ -793,13 +946,10 @@ void OnSimulationBegin(SimulationManager @simManager)
     {
         g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
     }
-    
-    
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
         string varSuffix = GetInputModVarSuffix(im);
         InputModificationSettings @settings = g_inputModSettings[im];
-        
         settings.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
         settings.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
         settings.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
@@ -807,14 +957,9 @@ void OnSimulationBegin(SimulationManager @simManager)
         settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
         settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
         settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-        
-        
         if (settings.maxInputsTime == 0)
             settings.maxInputsTime = int(simManager.EventsDuration);
     }
-    
-
-    
     if (g_inputModSettings.Length > 0)
     {
         inputCount = g_inputModSettings[0].inputCount;
@@ -824,19 +969,14 @@ void OnSimulationBegin(SimulationManager @simManager)
         maxTimeDiff = g_inputModSettings[0].maxTimeDiff;
         fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
     }
-
-    
     leastMinInputsTime = 1000000000;
     for (uint i = 0; i < g_inputModSettings.Length; i++) {
         InputModificationSettings@ s = g_inputModSettings[i];
         if (s.enabled && s.minInputsTime < leastMinInputsTime)
             leastMinInputsTime = s.minInputsTime;
     }
-
-    
     minSpeed = float(GetVariableDouble("bf_condition_speed")) / 3.6f; 
     minCps = int(GetVariableDouble("bf_condition_cps"));
-
     int triggerIndex = int(GetVariableDouble("bf_condition_trigger"));
     hasConditionTrigger = false;
     if (triggerIndex > 0)
@@ -848,56 +988,63 @@ void OnSimulationBegin(SimulationManager @simManager)
             hasConditionTrigger = true;
         }
     }
-
     restartIterations = int(GetVariableDouble("bf_iterations_before_restart"));
     resultFolder = GetVariableString("bf_result_folder");
-
     print("Bruteforce V2 started with settings:");
     print(" - Target: " + current.title);
-    
-    
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
         InputModificationSettings @settings = g_inputModSettings[im];
         string enabledStr = settings.enabled ? "" : " [DISABLED]";
-        print(" - Input Modification #" + (im + 1) + enabledStr + ":");
-        print("   - Modify Count: " + settings.inputCount);
-        print("   - Time Frame: From " + Time::Format(settings.minInputsTime) + " to " + Time::Format(settings.maxInputsTime));
-        print("   - Max Steering Diff: " + settings.maxSteerDiff);
-        print("   - Max Time Diff: " + Time::Format(settings.maxTimeDiff));
-        print("   - Fill Steer: " + (settings.fillSteerInputs ? "Yes" : "No"));
+        InputModificationAlgorithm @algo = settings.GetAlgorithm();
+        string algoName = (algo !is null) ? algo.name : "Unknown";
+        print(" - Input Modification #" + (im + 1) + enabledStr + " (" + algoName + "):");
+        string varSuffix = GetInputModVarSuffix(im);
+        if (algo !is null && algo.identifier == "range")
+        {
+            int minInputCount = int(GetVariableDouble("bf_range_min_input_count" + varSuffix));
+            int maxInputCount = int(GetVariableDouble("bf_range_max_input_count" + varSuffix));
+            int minSteer = int(GetVariableDouble("bf_range_min_steer" + varSuffix));
+            int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
+            int minTimeDiff = int(GetVariableDouble("bf_range_min_time_diff" + varSuffix));
+            int maxTimeDiff = int(GetVariableDouble("bf_range_max_time_diff" + varSuffix));
+            bool fillInputs = GetVariableBool("bf_range_fill_steer" + varSuffix);
+            print("   - Input Count Range: " + minInputCount + " to " + maxInputCount);
+            print("   - Time Frame: From " + Time::Format(settings.minInputsTime) + " to " + Time::Format(settings.maxInputsTime));
+            print("   - Steering Value Range: " + minSteer + " to " + maxSteer);
+            print("   - Time Diff Range: " + Time::Format(minTimeDiff) + " to " + Time::Format(maxTimeDiff));
+            print("   - Fill Steer: " + (fillInputs ? "Yes" : "No"));
+        }
+        else
+        {
+            print("   - Modify Count: " + settings.inputCount);
+            print("   - Time Frame: From " + Time::Format(settings.minInputsTime) + " to " + Time::Format(settings.maxInputsTime));
+            print("   - Max Steering Diff: " + settings.maxSteerDiff);
+            print("   - Max Time Diff: " + Time::Format(settings.maxTimeDiff));
+            print("   - Fill Steer: " + (settings.fillSteerInputs ? "Yes" : "No"));
+        }
     }
-
     print("Conditions:");
     print(" - Min Speed: " + Text::FormatFloat(minSpeed * 3.6f, "", 0, 2) + " km/h");
     print(" - Min CPs: " + minCps);
-
     print("Restarting every " + restartIterations + " Iterations");
     print("Storing results to folder: " + resultFolder);
-
-    
     SetConsoleWindowTitle("BfV2 - " + current.title + " starting...");
-
     bestInputEvents.Clear();
     hasBestInputs = false;
     SaveBestInputs(simManager);
     SaveBaseInputs(simManager);
-
     if (current.onSimBegin !is null)
         current.onSimBegin(simManager);
 }
-
 void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
 {
     if (!IsBfV2Active)
         return;
     if (forceStop || userCancelled)
         return;
-    
-    
     if (current !is null && current.onRunStep !is null)
         current.onRunStep(simManager);
-    
     bool r1 = restartIterations > 0 && int(info.Iterations) >= restartIterations;
     bool r2 = restartCondition !is null && restartCondition(simManager);
     uint64 now = Time::Now;
@@ -907,14 +1054,12 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         RestoreBestInputs(simManager);
         CommandList list();
         list.Content = simManager.InputEvents.ToCommandsText();
-
         string filename = GetVariableString("bf_result_filename");
         string fullpath = "";
         if (resultFolder != "")
         {
             fullpath = resultFolder + "/";
         }
-
         int indexPos = filename.FindLast("{i}");
         if (indexPos != -1)
         {
@@ -927,25 +1072,17 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         }
         fullpath += filename;
         list.Save(fullpath) ? print("Saved command list to: " + fullpath) : print("Failed to save command list to: " + fullpath);
-
         RestoreBaseInputs(simManager, false);
         SaveBestInputs(simManager, false);
-
-
         SetConsoleWindowTitle("BfV2 - " + current.title  + " | Restarts: " + restartCount + " | restarting...");
-
         print("Restarting Bruteforce for reasons: ");
         if (r1)
             print("- Reached max iterations before restart: " + restartIterations);
         if (r2)
             print("- Restart condition script returned true.");
-        
-        
         restartInfos.Add(ResultFileStartContent);
-    
         ResultFileStartContent = "";
         print("Total restarts so far: " + restartCount);
-        
         array<uint> sortedIndices(restartInfos.Length);
         for (uint i = 0; i < restartInfos.Length; i++)
             sortedIndices[i] = i;
@@ -966,11 +1103,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             uint idx = sortedIndices[i];
             print("- Restart N " + (idx + 1) + ": \"" + restartInfos[idx] + "\"");
         }
-
-
         int savedCount = int(GetVariableDouble("bf_input_mod_count"));
         if (savedCount < 1) savedCount = 1;
-        
         while (int(g_inputModSettings.Length) < savedCount)
         {
             InputModificationSettings @settings = InputModificationSettings();
@@ -980,12 +1114,10 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         {
             g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
         }
-        
         for (uint im = 0; im < g_inputModSettings.Length; im++)
         {
             string varSuffix = GetInputModVarSuffix(im);
             InputModificationSettings @settings = g_inputModSettings[im];
-            
             settings.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
             settings.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
             settings.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
@@ -993,11 +1125,9 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
             settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
             settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-            
             if (settings.maxInputsTime == 0)
                 settings.maxInputsTime = int(simManager.EventsDuration);
         }
-    
         if (g_inputModSettings.Length > 0)
         {
             inputCount = g_inputModSettings[0].inputCount;
@@ -1007,23 +1137,18 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             maxTimeDiff = g_inputModSettings[0].maxTimeDiff;
             fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
         }
-
         if (current.onSimBegin !is null)
         {
             current.onSimBegin(simManager);
         }
-
         info.Iterations = 0;
         info.Phase = BFPhase::Initial;
         info.Rewinded = false;
-
         lastRestartTime = now;
         lastImprovementTime = now;
-
         simManager.RewindToState(rewindState);
         return;
     }
-
     if(now - lastWindowTitleUpdateTime > 1000)
     {
         lastWindowTitleUpdateTime = now;
@@ -1036,14 +1161,11 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             SetConsoleWindowTitle("BfV2 - " + current.title + " | Restarts: " + restartCount + " | Iterations: " + info.Iterations);
         }
     }
-
     int raceTime = simManager.RaceTime;
-
     if (current.type == CallbackType::FullControl)
     {
         BFEvaluationResponse @response = current.callback(simManager, info);
     }
-
     if (current.type == CallbackType::Legacy)
     {
         if (info.Phase == BFPhase::Initial)
@@ -1060,7 +1182,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             info.Phase = BFPhase::Search;
             info.Iterations++;
             ResultFileStartContent = response.ResultFileStartContent == "" ? ResultFileStartContent : response.ResultFileStartContent;
-            
             return;
         }
         info.Rewinded = false;
@@ -1085,8 +1206,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                     info.Phase = BFPhase::Search;
                     info.Iterations++;
                     ResultFileStartContent = response.ResultFileStartContent == "" ? ResultFileStartContent : response.ResultFileStartContent;
-                    // print("Rewind from initial phase because :" + (response.Decision == BFEvaluationDecision::Accept ? " accepted improvement." : " exceeded duration."));
-                    // print("Duration: " + Time::Format(simManager.EventsDuration) + ", Race Time: " + Time::Format(raceTime));
                 }
             }
         }
@@ -1101,7 +1220,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                     MutateAllInputs(simManager.InputEvents);
                     info.Rewinded = true;
                     info.Iterations++;
-                    // print("Rewind from do nothing.");
                 }
             }
             else if (response.Decision == BFEvaluationDecision::Accept)
@@ -1111,7 +1229,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                 RestoreBestInputs(simManager, false);
                 list.Content = simManager.InputEvents.ToCommandsText();
                 list.Save(GetVariableString("bf_result_filename")) ? void : print("Failed to save improved inputs.");
-                
                 for (uint im = 0; im < g_inputModSettings.Length; im++)
                 {
                     InputModificationSettings @settings = g_inputModSettings[im];
@@ -1120,7 +1237,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                         settings.maxInputsTime = raceTime;
                     }
                 }
-                
                 if (g_inputModSettings.Length > 0)
                     maxInputsTime = g_inputModSettings[0].maxInputsTime;
                 simManager.RewindToState(rewindState);
@@ -1129,7 +1245,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                 info.Iterations++;
                 info.Phase = BFPhase::Initial;
                 ResultFileStartContent = response.ResultFileStartContent == "" ? ResultFileStartContent : response.ResultFileStartContent;
-                // print("Rewind from improvement acceptance.");
             }
             else if (response.Decision == BFEvaluationDecision::Reject)
             {
@@ -1138,7 +1253,6 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                 MutateAllInputs(simManager.InputEvents);
                 info.Rewinded = true;
                 info.Iterations++;
-                // print("Rewind from rejection.");
             }
             else if (response.Decision == BFEvaluationDecision::Stop)
             {
@@ -1147,12 +1261,10 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         }
     }
 }
-
 void OnSimulationEnd(SimulationManager @simManager, SimulationResult result)
 {
     if (!IsBfV2Active)
         return;
-    
     array<uint> sortedIndices(restartInfos.Length);
     for (uint i = 0; i < restartInfos.Length; i++)
         sortedIndices[i] = i;
@@ -1177,20 +1289,16 @@ void OnSimulationEnd(SimulationManager @simManager, SimulationResult result)
         current.onSimEnd(simManager, result);
     running = false;
 }
-
 string Replace(const string &in text, const string &in charFrom, const string &in charTo)
 {
     if (charFrom.IsEmpty() || charFrom == charTo)
         return text;
-
     const uint lenText = text.Length;
     const uint lenFrom = charFrom.Length;
     const uint lenTo = charTo.Length;
-
     uint count = 0;
     uint searchStart = 0;
     int pos = text.FindFirst(charFrom, searchStart);
-
     while (pos != -1)
     {
         count++;
@@ -1200,23 +1308,17 @@ string Replace(const string &in text, const string &in charFrom, const string &i
             break;
         pos = text.FindFirst(charFrom, searchStart);
     }
-
     if (count == 0)
         return text;
-
     int64 diff = int64(lenTo) - int64(lenFrom);
     int64 newLen64 = int64(lenText) + diff * int64(count);
     if (newLen64 < 0)
         newLen64 = 0;
-
     uint newLen = uint(newLen64);
-
     string result;
     result.Resize(newLen);
-
     uint src = 0;
     uint dst = 0;
-
     while (true)
     {
         int found = text.FindFirst(charFrom, src);
@@ -1230,45 +1332,35 @@ string Replace(const string &in text, const string &in charFrom, const string &i
             }
             break;
         }
-
         uint uFound = uint(found);
-
         while (src < uFound)
         {
             result[dst] = text[src];
             dst++;
             src++;
         }
-
         for (uint i = 0; i < lenTo; i++)
         {
             result[dst] = charTo[i];
             dst++;
         }
-
         src += lenFrom;
         if (src >= lenText)
             break;
     }
-
     return result;
 }
-
 namespace PreciseFinishBf
 {
     void RenderEvalSettings() {}
-
     double bestTime = -1;
     int bestTimeMsImprecise = -1;
     bool conditionsMetBeforeCompute = false;
-
     BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         auto resp = BFEvaluationResponse();
         int raceTime = simManager.RaceTime;
         resp.Decision = BFEvaluationDecision::DoNothing;
-
-        
         if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating && bestTimeMsImprecise != -1)
         {
             if (raceTime > bestTimeMsImprecise + 50)
@@ -1277,7 +1369,6 @@ namespace PreciseFinishBf
                 PreciseFinish::Reset();
                 return resp;
             }
-
             if (simManager.PlayerInfo.RaceFinished && raceTime < bestTimeMsImprecise)
             {
                 if (GlobalConditionsMet(simManager))
@@ -1292,26 +1383,17 @@ namespace PreciseFinishBf
                 return resp;
             }
         }
-
-        
-        
         bool targetReached = simManager.PlayerInfo.RaceFinished;
         if (targetReached && !PreciseFinish::IsEstimating)
         {
             conditionsMetBeforeCompute = GlobalConditionsMet(simManager);
         }
-
-        
         double preciseTime;
-
         bool calculationFinished = PreciseFinish::Compute(simManager, targetReached, preciseTime);
-
         if (!calculationFinished)
         {
             return resp;
         }
-
-        
         if (!conditionsMetBeforeCompute)
         {
             if (info.Phase == BFPhase::Initial)
@@ -1325,7 +1407,6 @@ namespace PreciseFinishBf
                 return resp;
             }
         }
-
         if (info.Phase == BFPhase::Initial)
         {
             if (bestTime != -1 && preciseTime >= bestTime + 1e-7)
@@ -1334,15 +1415,12 @@ namespace PreciseFinishBf
                 PreciseFinish::Reset();
                 return resp;
             }
-
             if (bestTime != -1)
                 print("Precise finish time: " + Text::FormatFloat(preciseTime, "", 0, 9));
             else
                 print("Base run finish time: " + Text::FormatFloat(preciseTime, "", 0, 9));
-
             bestTime = preciseTime;
             bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
-
             resp.Decision = BFEvaluationDecision::Accept;
             resp.ResultFileStartContent = "# Precise Finish Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
             PreciseFinish::Reset();
@@ -1353,7 +1431,6 @@ namespace PreciseFinishBf
             {
                 bestTime = preciseTime;
                 bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
-
                 resp.Decision = BFEvaluationDecision::Accept;
                 resp.ResultFileStartContent = "# Precise Finish Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
             }
@@ -1363,43 +1440,37 @@ namespace PreciseFinishBf
             }
             PreciseFinish::Reset();
         }
-
         return resp;
     }
-
     void OnSimulationBegin(SimulationManager @simManager)
     {
         PreciseFinish::Reset();
         bestTime = -1;
         bestTimeMsImprecise = -1;
     }
-
     void Main()
     {
         auto bfEval = RegisterBruteforceEval("precisefinish", "Precise Finish Time", OnEvaluate, RenderEvalSettings);
         @bfEval.onSimBegin = @OnSimulationBegin;
     }
 }
-
 namespace PreciseFinish
 {
     bool IsEstimating = false;
     uint64 CoeffMin = 0;
-    uint64 CoeffMax = 18446744073709551615;
+    uint64 CoeffMax = 1000000000;
     SimulationState @StateBeforeHit;
     SimulationState @StateAtHit;
     int StateBeforeHitTime = -1;
     int StateAtHitTime = -1;
     bool done = false;
     double localResult = -1;
-
     uint Precision = 1;
-
     void Reset()
     {
         IsEstimating = false;
         CoeffMin = 0;
-        CoeffMax = 18446744073709551615;
+        CoeffMax = 1000000000;
         @StateBeforeHit = null;
         @StateAtHit = null;
         StateAtHitTime = -1;
@@ -1407,7 +1478,6 @@ namespace PreciseFinish
         localResult = -1;
         done = false;
     }
-
     bool Compute(SimulationManager @sim, bool targetReached, double &out result)
     {
         if (done)
@@ -1423,8 +1493,7 @@ namespace PreciseFinish
                 @StateAtHit = sim.SaveState();
                 StateAtHitTime = sim.RaceTime;
                 CoeffMin = 0;
-                CoeffMax = 18446744073709551615;
-
+                CoeffMax = 1000000000;
                 if (StateBeforeHit is null)
                 {
                     result = double(sim.RaceTime) / 1000.0;
@@ -1440,7 +1509,6 @@ namespace PreciseFinish
         }
         else
         {
-
             if (targetReached)
             {
                 CoeffMax = CoeffMin + (CoeffMax - CoeffMin) / 2;
@@ -1450,18 +1518,13 @@ namespace PreciseFinish
                 CoeffMin = CoeffMin + (CoeffMax - CoeffMin) / 2;
             }
         }
-
         if (CoeffMax - CoeffMin <= Precision)
         {
             IsEstimating = false;
-
             double baseTimeMs = double(StateBeforeHitTime);
-
             uint64 currentCoeff = CoeffMin + (CoeffMax - CoeffMin) / 2;
-            double percentage = currentCoeff / 18446744073709551615.0;
-
+            double percentage = currentCoeff / 1000000000.0;
             result = (baseTimeMs / 1000.0) + (percentage / 100.0);
-
             if (StateAtHit !is null)
             {
                 sim.RewindToState(StateAtHit);
@@ -1470,22 +1533,17 @@ namespace PreciseFinish
             {
                 sim.RewindToState(StateBeforeHit);
             }
-
             localResult = result;
             @StateBeforeHit = null;
             @StateAtHit = null;
             done = true;
             return true;
         }
-
         sim.RewindToState(StateBeforeHit);
-
         uint64 currentCoeff = CoeffMin + (CoeffMax - CoeffMin) / 2;
-        double percentage = currentCoeff / 18446744073709551615.0;
-
+        double percentage = currentCoeff / 1000000000.0;
         sim.Dyna.CurrentState.LinearSpeed = sim.Dyna.CurrentState.LinearSpeed * percentage;
         sim.Dyna.CurrentState.AngularSpeed = sim.Dyna.CurrentState.AngularSpeed * percentage;
-
         return false;
     }
 }
@@ -1495,27 +1553,22 @@ namespace PreciseTriggerBf
     double bestTime = -1;
     int bestTimeMsImprecise = -1;
     bool conditionsMetBeforeCompute = false;
-
     void RenderEvalSettings()
     {
         uint triggerIndex = uint(GetVariableDouble("bf_target_trigger"));
         array<int> @triggerIds = GetTriggerIds();
-
         if (triggerIds.Length == 0)
         {
             UI::Text("No triggers found.");
             return;
         }
-
         if (triggerIndex >= triggerIds.Length)
         {
             triggerIndex = 0;
             SetVariable("bf_target_trigger", 0);
         }
-
         Trigger3D selectedTrigger = GetTrigger(triggerIds[triggerIndex]);
         vec3 pos = selectedTrigger.Position;
-
         if (UI::BeginCombo("Trigger Index", (triggerIndex + 1) + ". Position: (" + pos.x + ", " + pos.y + ", " + pos.z + ")"))
         {
             for (uint i = 0; i < triggerIds.Length; i++)
@@ -1531,19 +1584,14 @@ namespace PreciseTriggerBf
             UI::EndCombo();
         }
     }
-
     BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         int raceTime = simManager.RaceTime;
         auto resp = BFEvaluationResponse();
-
         resp.Decision = BFEvaluationDecision::DoNothing;
-
         bool inTrigger = targetTrigger.ContainsPoint(simManager.Dyna.CurrentState.Location.Position);
-
         if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating && bestTimeMsImprecise != -1)
         {
-
             if (inTrigger && raceTime < bestTimeMsImprecise)
             {
                 if (GlobalConditionsMet(simManager))
@@ -1557,7 +1605,6 @@ namespace PreciseTriggerBf
                 PreciseFinish::Reset();
                 return resp;
             }
-
             if (raceTime > bestTimeMsImprecise + 50)
             {
                 resp.Decision = BFEvaluationDecision::Reject;
@@ -1565,23 +1612,16 @@ namespace PreciseTriggerBf
                 return resp;
             }
         }
-
         double preciseTime;
-
-        
-        
         if (inTrigger && !PreciseFinish::IsEstimating)
         {
             conditionsMetBeforeCompute = GlobalConditionsMet(simManager);
         }
-
         bool calculationDone = PreciseFinish::Compute(simManager, inTrigger, preciseTime);
-
         if (!calculationDone)
         {
             return resp;
         }
-
         if (!conditionsMetBeforeCompute)
         {
             if (info.Phase == BFPhase::Initial)
@@ -1595,60 +1635,47 @@ namespace PreciseTriggerBf
                 return resp;
             }
         }
-
         if (info.Phase == BFPhase::Initial)
         {
-
             if (bestTime != -1 && preciseTime >= bestTime + 1e-7)
             {
                 resp.Decision = BFEvaluationDecision::Reject;
                 PreciseFinish::Reset();
                 return resp;
             }
-
             if (bestTime != -1)
                 print("Precise trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
             else
                 print("Base run trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
-
             bestTime = preciseTime;
             bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
-
             resp.Decision = BFEvaluationDecision::Accept;
             resp.ResultFileStartContent = "# Precise Trigger Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
         }
         else
         {
-
             if (preciseTime < bestTime)
             {
-
                 bestTime = preciseTime;
                 bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
-
                 resp.Decision = BFEvaluationDecision::Accept;
                 resp.ResultFileStartContent = "# Precise Trigger Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
             }
             else
             {
-
                 resp.Decision = BFEvaluationDecision::Reject;
             }
         }
-
         PreciseFinish::Reset();
         return resp;
     }
-
     void OnSimulationBegin(SimulationManager @simManager)
     {
         PreciseFinish::Reset();
         bestTime = -1;
         bestTimeMsImprecise = -1;
-
         int triggerIndex = int(GetVariableDouble("bf_target_trigger"));
         array<int> @triggerIds = GetTriggerIds();
-
         if (triggerIds.Length > 0 && triggerIndex < int(triggerIds.Length))
         {
             targetTrigger = GetTrigger(triggerIds[triggerIndex]);
@@ -1658,10 +1685,8 @@ namespace PreciseTriggerBf
             print("Error: Invalid trigger index selected for bruteforce.", Severity::Error);
         }
     }
-
     void Main()
     {
-
         auto bfEval = RegisterBruteforceEval("precisetrigger", "Trigger", OnEvaluate, RenderEvalSettings);
         @bfEval.onSimBegin = @OnSimulationBegin;
     }
@@ -1672,24 +1697,18 @@ namespace PreciseCheckpointBf
     double bestTime = -1;
     int bestTimeMsImprecise = -1;
     bool conditionsMetBeforeCompute = false;
-
     void RenderEvalSettings()
     {
         targetCp = UI::InputIntVar("Target Checkpoint Index", "bf_target_cp");
     }
-
     BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         int raceTime = simManager.RaceTime;
         auto resp = BFEvaluationResponse();
-
         resp.Decision = BFEvaluationDecision::DoNothing;
-
         bool hasCp = int(simManager.PlayerInfo.CurCheckpointCount) >= targetCp;
-
         if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating && bestTimeMsImprecise != -1)
         {
-
             if (hasCp && raceTime < bestTimeMsImprecise)
             {
                 if (GlobalConditionsMet(simManager))
@@ -1703,7 +1722,6 @@ namespace PreciseCheckpointBf
                 PreciseFinish::Reset();
                 return resp;
             }
-
             if (raceTime > bestTimeMsImprecise + 50)
             {
                 resp.Decision = BFEvaluationDecision::Reject;
@@ -1711,23 +1729,16 @@ namespace PreciseCheckpointBf
                 return resp;
             }
         }
-
         double preciseTime;
-
-        
-        
         if (hasCp && !PreciseFinish::IsEstimating)
         {
             conditionsMetBeforeCompute = GlobalConditionsMet(simManager);
         }
-
         bool calculationDone = PreciseFinish::Compute(simManager, hasCp, preciseTime);
-
         if (!calculationDone)
         {
             return resp;
         }
-
         if (!conditionsMetBeforeCompute)
         {
             if (info.Phase == BFPhase::Initial)
@@ -1741,51 +1752,40 @@ namespace PreciseCheckpointBf
                 return resp;
             }
         }
-
         if (info.Phase == BFPhase::Initial)
         {
-
             if (bestTime != -1 && preciseTime >= bestTime + 1e-7)
             {
                 resp.Decision = BFEvaluationDecision::Reject;
                 PreciseFinish::Reset();
                 return resp;
             }
-
             if (bestTime != -1)
                 print("Precise checkpoint time: " + Text::FormatFloat(preciseTime, "", 0, 9));
             else
                 print("Base run checkpoint time: " + Text::FormatFloat(preciseTime, "", 0, 9));
-
             bestTime = preciseTime;
             bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
-
             resp.Decision = BFEvaluationDecision::Accept;
             resp.ResultFileStartContent = "# Precise Checkpoint Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
         }
         else
         {
-
             if (preciseTime < bestTime)
             {
-
                 bestTime = preciseTime;
                 bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
-
                 resp.Decision = BFEvaluationDecision::Accept;
                 resp.ResultFileStartContent = "# Precise Checkpoint Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
             }
             else
             {
-
                 resp.Decision = BFEvaluationDecision::Reject;
             }
         }
-
         PreciseFinish::Reset();
         return resp;
     }
-
     void OnSimulationBegin(SimulationManager @simManager)
     {
         PreciseFinish::Reset();
@@ -1793,15 +1793,12 @@ namespace PreciseCheckpointBf
         bestTimeMsImprecise = -1;
         targetCp = int(GetVariableDouble("bf_target_cp"));
     }
-
     void Main()
     {
-
         auto bfEval = RegisterBruteforceEval("precisecheckpoint", "Checkpoint", OnEvaluate, RenderEvalSettings);
         @bfEval.onSimBegin = @OnSimulationBegin;
     }
 }
-
 namespace SinglePointBf
 {
     int minTime = 0;
@@ -1840,7 +1837,6 @@ namespace SinglePointBf
                     UI::EndTooltip();
                 }
             }
-
             UI::Text("Distance");
             UI::SameLine();
             UI::Dummy(vec2(188, 0));
@@ -1848,9 +1844,7 @@ namespace SinglePointBf
             UI::Text("Speed");
             UI::EndTable();
         }
-
         toolTip(300, {"The ratio slider determines which metric bruteforce should value more.\nSetting the slider fully to the left side (0%) will just optimize how close the vehicle gets to the point.\nSetting the slider fully to the right side (100%) will instead optimize vehicle speed without taking the point into account."});
-
         UI::Dummy(vec2(0, 2));
         if (GetVariableDouble("bf_weight") <= 99)
         {
@@ -1901,7 +1895,6 @@ namespace SinglePointBf
         }
         toolTip(300, {"Time frame in which the distance and/or speed will be evaluated.", "Reducing the maximum evaluation time will make the bruteforcing process faster."});
         UI::Dummy(vec2(0, 0));
-
         UI::PushItemWidth(160);
         if (GetVariableDouble("bf_condition_distance") > 0.0f)
         {
@@ -1921,9 +1914,7 @@ namespace SinglePointBf
         {
             SetVariable("bf_condition_distance", 0.0f);
         }
-
         UI::Dummy(vec2(0, 0));
-
         if (UI::BeginTable("##ignore_speed_table", 1))
         {
             UI::TableNextRow();
@@ -1946,24 +1937,19 @@ namespace SinglePointBf
         }
         toolTip(300, {"Ignoring same speed improvements is particularly useful for bruteforcing air trajectories, where a different rotation but same speed would get rejected, despite the car being seemingly closer to target. This avoids flooding inputs and preventing real distance gains."});
     }
-
     BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         int raceTime = simManager.RaceTime;
         auto resp = BFEvaluationResponse();
-
         bool isEvalTime = raceTime >= minTime && raceTime <= maxTime;
         bool isPastEvalTime = raceTime > maxTime;
-
         bool conditionsMet = GlobalConditionsMet(simManager);
-
         if (info.Phase == BFPhase::Initial)
         {
             if (isEvalTime)
             {
                 float d = dist();
                 float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
-
                 if (conditionsMet && isBetter(d, speed))
                 {
                     bestDist = d;
@@ -1996,13 +1982,11 @@ namespace SinglePointBf
             {
                 float d = dist();
                 float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
-
                 if (conditionsMet && isBetter(d, speed))
                 {
                     isRunBetter = true;
                 }
             }
-
             if (isPastEvalTime)
             {
                 if (isRunBetter)
@@ -2017,7 +2001,6 @@ namespace SinglePointBf
                 isRunBetter = false;
             }
         }
-
         return resp;
     }
     vec3 target();
@@ -2025,12 +2008,10 @@ namespace SinglePointBf
     float k = 0.0f;
     int ignoreSameSpeed = 0;
     float distCondition = 0.0f;
-
     bool meetsConditions(float dist)
     {
         return dist < distCondition && GlobalConditionsMet(GetSimulationManager());
     }
-
     bool isBetter(float dist, float speed)
     {
         if (meetsConditions(dist))
@@ -2050,7 +2031,6 @@ namespace SinglePointBf
         }
         return false;
     }
-
     void OnSimulationBegin(SimulationManager @simManager)
     {
         if (!(GetVariableString("bf_target") == bfid))
@@ -2076,17 +2056,14 @@ namespace SinglePointBf
         distCondition = GetVariableDouble("bf_condition_distance") > 0.0f ? GetVariableDouble("bf_condition_distance") : 1e18f;
         ignoreSameSpeed = GetVariableBool("bf_ignore_same_speed") ? 1 : 0;
     }
-
     float dist()
     {
         return Math::Distance(pos(), target);
     }
-
     vec3 pos()
     {
         return GetSimulationManager().Dyna.CurrentState.Location.Position;
     }
-
     string id = "betterpoint";
     string bfid = "betterpoint";
     void Main()
@@ -2098,7 +2075,6 @@ namespace SinglePointBf
         @eval.onSimBegin = @OnSimulationBegin;
     }
 }
-
 namespace VelocityBf
 {
     int minTime = 0;
@@ -2107,9 +2083,7 @@ namespace VelocityBf
     string currentVelocityType = "Global";
     void RenderEvalSettings()
     {
-
         UI::Dummy(vec2(0, 0));
-
         currentVelocityType = GetVariableString("bf_velocity_type");
         if (UI::BeginCombo("Velocity Type", currentVelocityType))
         {
@@ -2123,7 +2097,6 @@ namespace VelocityBf
             }
             UI::EndCombo();
         }
-
         if (currentVelocityType == "Trajectory")
         {
             UI::Dummy(vec2(0, 10));
@@ -2150,7 +2123,6 @@ namespace VelocityBf
                     }
                 }
             }
-
             UI::Text("To:");
             UI::SameLine();
             UI::Dummy(vec2(11, 0));
@@ -2177,16 +2149,11 @@ namespace VelocityBf
                 }
             }
         }
-
         UI::Dummy(vec2(0, 10));
         float val = GetVariableDouble("bf_velocity_min_percent");
         string valText = Text::FormatFloat(val * 100.0f, "", 0, 1) + "%% Minimum matching velocity";
         UI::SliderFloatVar("##bf_velocity_min_percent", "bf_velocity_min_percent", -1.0f, 1.0f, valText);
         toolTip(300, {"Minimum percentage of the car's velocity that must match the target trajectory.", "A negative value means the velocity can be in the opposite direction.", "-100% minimum means any velocity is accepted, as it tells bruteforce the minimum it can accept is going in the complete opposite direction."});
-
-        /*
-            int bal = int(GetVariableDouble(id+"_bf_weight"));
-            string balText = Text::FormatInt(100 - bal) + "%% Position, " + Text::FormatInt(bal) + "%% Rotation";*/
         UI::Dummy(vec2(0, 10));
         UI::Text("Time frame in which the distance and/or speed will be evaluated:");
         UI::Dummy(vec2(0, 0));
@@ -2206,35 +2173,28 @@ namespace VelocityBf
         UI::TextDimmed("Reducing the maximum evaluation time will make the bruteforcing process faster.");
         UI::Dummy(vec2(0, 1));
     }
-
     vec3 pos()
     {
         return GetSimulationManager().Dyna.CurrentState.Location.Position;
     }
-
     float bestSpeed = Math::PI;
     int bestTime = 0;
     float bestMatchingPercnt = 0.0f;
     float matchingPercnt = 0.0f;
     float minMatchingPercnt = -1.0f;
     VelocityType bfVelocityType;
-
     enum VelocityType
     {
         Global,
         Trajectory
     }
-
     BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         int raceTime = simManager.RaceTime;
         auto resp = BFEvaluationResponse();
-
         bool isEvalTime = raceTime >= minTime && raceTime <= maxTime;
         bool isPastEvalTime = raceTime > maxTime;
-
         bool conditionsMet = GlobalConditionsMet(simManager);
-
         if (info.Phase == BFPhase::Initial)
         {
             if (isEvalTime)
@@ -2294,18 +2254,6 @@ namespace VelocityBf
                     }
                     else
                     {
-                        /*print("Rejected because: ");
-                        if(!conditionsMet){
-                            print("- Global conditions not met");
-                        }
-                        if(v <= bestSpeed){
-                            print("- Velocity " + Text::FormatFloat(v, "", 0, 9)
-                                + " m/s not greater than best velocity " + Text::FormatFloat(bestSpeed, "", 0, 9) + " m/s");
-                        }
-                        if(matchingPercnt < minMatchingPercnt){
-                            print("- Matching percentage " + Text::FormatFloat(matchingPercnt*100.0f, "", 0, 2)
-                                + "% less than minimum required " + Text::FormatFloat(minMatchingPercnt*100.0f, "", 0, 2) + "%");
-                        }*/
                     }
                 }
                 else if (conditionsMet && v > bestSpeed)
@@ -2313,16 +2261,13 @@ namespace VelocityBf
                     resp.Decision = BFEvaluationDecision::Accept;
                 }
             }
-
             if (isPastEvalTime && resp.Decision != BFEvaluationDecision::Accept)
             {
                 resp.Decision = BFEvaluationDecision::Reject;
             }
         }
-
         return resp;
     }
-
     float computeVel(SimulationManager @simManager)
     {
         if (bfVelocityType == VelocityType::Global)
@@ -2349,7 +2294,6 @@ namespace VelocityBf
             return 0;
         }
     }
-
     void OnSimulationBegin(SimulationManager @simManager)
     {
         bestSpeed = Math::PI;
@@ -2370,7 +2314,6 @@ namespace VelocityBf
         bestMatchingPercnt = 0.0f;
         matchingPercnt = 0.0f;
     }
-
     void Main()
     {
         RegisterVariable("bf_velocity_type", "Global");
@@ -2381,37 +2324,30 @@ namespace VelocityBf
         @eval.onSimBegin = @OnSimulationBegin;
     }
 }
-
 namespace InputModification
 {
     int cachedStartIndex = -1;
     int cachedMinTime = -1;
-
     void SortBufferManual(TM::InputEventBuffer @buffer, int startIndex = -1)
     {
         if (buffer is null || buffer.Length < 2)
             return;
-
         uint startCopy = 0;
         if (startIndex != -1)
         {
             startCopy = startIndex + 1;
         }
-
         if (startCopy >= buffer.Length)
             return;
-
         array<TM::InputEvent> events;
         for (uint i = startCopy; i < buffer.Length; i++)
         {
             events.Add(buffer[i]);
         }
-
         for (uint i = 1; i < events.Length; i++)
         {
             TM::InputEvent key = events[i];
             int j = i - 1;
-
             while (j >= 0 && events[j].Time > key.Time)
             {
                 events[j + 1] = events[j];
@@ -2419,20 +2355,17 @@ namespace InputModification
             }
             events[j + 1] = key;
         }
-
         for (uint i = 0; i < events.Length; i++)
         {
             buffer[startCopy + i] = events[i];
         }
     }
-
     void MutateInputs(TM::InputEventBuffer @buffer, int inputCount, int minTime, int maxTime, int maxSteerDiff, int maxTimeDiff, bool fillInputs)
     { 
         if (buffer is null)
             return;
         if (maxTime <= 0)
             return;
-
         if (fillInputs)
         {
             uint lenBefore = buffer.Length;
@@ -2440,69 +2373,54 @@ namespace InputModification
             if (buffer.Length != lenBefore)
                 cachedStartIndex = -1;
         }
-
         if (minTime != cachedMinTime)
         {
             cachedMinTime = minTime;
             cachedStartIndex = -1;
         }
-
         int actualInputCount = Math::Rand(1, inputCount);
         array<int> indices;
-
         uint start = 0;
         if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
         {
             start = cachedStartIndex;
         }
-
         for (uint i = start; i < buffer.Length; i++)
         {
             auto evt = buffer[i];
-
             if (int(evt.Time) - 100010 < minTime)
             {
                 cachedStartIndex = i;
                 continue;
             }
-
             indices.Add(i);
-
             if (int(evt.Time) - 100010 > maxTime)
                 break;
         }
-
         if (indices.Length == 0)
         {
             print("No inputs found in the specified time frame to modify.", Severity::Warning);
             return;
         }
-
         for (int i = 0; i < actualInputCount; i++)
         {
             int timeOffset = Math::Rand(-maxTimeDiff / 10, maxTimeDiff / 10) * 10;
             int steerOffset = Math::Rand(-maxSteerDiff, maxSteerDiff);
-
             int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
             auto evt = buffer[inputIdx];
-
             evt.Time += timeOffset;
-
             if (evt.Time < 100010)
             {
                 evt.Time = 100010;
             }
-
             if (int(evt.Time) - 100010 < minTime)
             {
                 evt.Time = 100010 + minTime;
             }
-
             if (int(evt.Time) - 100010 > maxTime)
             {
                 evt.Time = 100010 + maxTime;
             }
-
             if (evt.Value.EventIndex == buffer.EventIndices.SteerId)
             {
                 evt.Value.Analog = evt.Value.Analog + steerOffset;
@@ -2515,31 +2433,120 @@ namespace InputModification
                     evt.Value.Analog = 65536;
                 }
             }
-
             buffer[inputIdx] = evt;
         }
         SortBufferManual(buffer, cachedStartIndex);
     }
-
+    void MutateInputsRange(TM::InputEventBuffer @buffer, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int minTimeDiff, int maxTimeDiff, bool fillInputs)
+    { 
+        if (buffer is null)
+            return;
+        if (maxTime <= 0)
+            return;
+        if (fillInputs)
+        {
+            uint lenBefore = buffer.Length;
+            FillInputs(buffer, maxTime, cachedStartIndex);
+            if (buffer.Length != lenBefore)
+                cachedStartIndex = -1;
+        }
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
+        if (minInputCount > maxInputCount)
+        {
+            int tmp = minInputCount;
+            minInputCount = maxInputCount;
+            maxInputCount = tmp;
+        }
+        if (minInputCount < 1) minInputCount = 1;
+        int actualInputCount = Math::Rand(minInputCount, maxInputCount);
+        array<int> indices;
+        uint start = 0;
+        if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
+        {
+            start = cachedStartIndex;
+        }
+        for (uint i = start; i < buffer.Length; i++)
+        {
+            auto evt = buffer[i];
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                cachedStartIndex = i;
+                continue;
+            }
+            indices.Add(i);
+            if (int(evt.Time) - 100010 > maxTime)
+                break;
+        }
+        if (indices.Length == 0)
+        {
+            print("No inputs found in the specified time frame to modify.", Severity::Warning);
+            return;
+        }
+        if (minTimeDiff > maxTimeDiff)
+        {
+            int tmp = minTimeDiff;
+            minTimeDiff = maxTimeDiff;
+            maxTimeDiff = tmp;
+        }
+        if (minSteer > maxSteer)
+        {
+            int tmp = minSteer;
+            minSteer = maxSteer;
+            maxSteer = tmp;
+        }
+        for (int i = 0; i < actualInputCount; i++)
+        {
+            int timeOffset = Math::Rand(minTimeDiff / 10, maxTimeDiff / 10) * 10;
+            int newSteerValue = Math::Rand(minSteer, maxSteer);
+            int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
+            auto evt = buffer[inputIdx];
+            evt.Time += timeOffset;
+            if (evt.Time < 100010)
+            {
+                evt.Time = 100010;
+            }
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                evt.Time = 100010 + minTime;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+            {
+                evt.Time = 100010 + maxTime;
+            }
+            if (evt.Value.EventIndex == buffer.EventIndices.SteerId)
+            {
+                evt.Value.Analog = newSteerValue;
+                if (evt.Value.Analog < -65536)
+                {
+                    evt.Value.Analog = -65536;
+                }
+                if (evt.Value.Analog > 65536)
+                {
+                    evt.Value.Analog = 65536;
+                }
+            }
+            buffer[inputIdx] = evt;
+        }
+        SortBufferManual(buffer, cachedStartIndex);
+    }
     void FillInputs(TM::InputEventBuffer @buffer, int maxTime, int minIndex)
     {
         if (buffer is null)
             return;
         if (maxTime <= 0)
             return;
-
         const int OFFSET = 100010;
         int absMaxTime = OFFSET + maxTime;
-
         auto indices = buffer.EventIndices;
-
         array<TM::InputEvent> steer;
-
         int startIndex = 0;
         int prevSteerState = 0;
         int prevSteerTime = -1;
         bool hasPrevSteer = true;
-
         if (minIndex > 0 && minIndex < int(buffer.Length))
         {
             startIndex = minIndex;
@@ -2553,22 +2560,18 @@ namespace InputModification
                 }
             }
         }
-
         for (uint i = startIndex; i < buffer.Length; i++)
         {
             auto evt = buffer[i];
             if (int(evt.Time) > absMaxTime)
                 break;
-
             if (evt.Value.EventIndex == indices.SteerId)
             {
                 steer.Add(evt);
             }
         }
-
         uint k = 0;
         const uint steerLen = steer.Length;
-
         int loopStartTime = 0;
         if (startIndex > 0 && startIndex < int(buffer.Length))
         {
@@ -2577,12 +2580,10 @@ namespace InputModification
             if (loopStartTime < 0)
                 loopStartTime = 0;
         }
-
         for (int t = loopStartTime; t <= maxTime; t += 10)
         {
             int absT = t + OFFSET;
             bool hadSteerAtT = false;
-
             while (k < steerLen && int(steer[k].Time) <= absT)
             {
                 if (int(steer[k].Time) == absT)
@@ -2594,16 +2595,13 @@ namespace InputModification
                 hasPrevSteer = true;
                 k++;
             }
-
             if (!hadSteerAtT && hasPrevSteer && absT > prevSteerTime)
             {
                 buffer.Add(t, InputType::Steer, prevSteerState);
             }
         }
     }
-
 }
-
 void OnCheckpointCountChanged(SimulationManager @simManager, int curr, int target)
 {
     if(GetCurrentGameState() == TM::GameState::LocalRace)
@@ -2615,30 +2613,24 @@ void OnCheckpointCountChanged(SimulationManager @simManager, int curr, int targe
     if (current.onCheckpointCountChanged !is null)
         current.onCheckpointCountChanged(simManager, curr, target);
 }
-
 void OnRunStep(SimulationManager@ simManager){
     if(current !is null && current.onRunStep !is null)
         current.onRunStep(simManager);
 }
-
 namespace Scripting
 {
-    
-
     bool StartsWith(const string &in str, const string &in prefix)
     {
         if (str.Length < prefix.Length)
             return false;
         return str.Substr(0, prefix.Length) == prefix;
     }
-
     bool EndsWith(const string &in str, const string &in suffix)
     {
         if (str.Length < suffix.Length)
             return false;
         return str.Substr(str.Length - suffix.Length) == suffix;
     }
-
     string ToLower(const string &in input)
     {
         string output = input;
@@ -2650,14 +2642,9 @@ namespace Scripting
         }
         return output;
     }
-
-    
     funcdef bool ConditionCallback(SimulationManager @sim);
     funcdef float FloatGetter(SimulationManager @sim);
     funcdef vec3 Vec3Getter(SimulationManager @sim);
-
-    
-
     float GetCarX(SimulationManager @sim) { return sim.Dyna.CurrentState.Location.Position.x; }
     float GetCarY(SimulationManager @sim) { return sim.Dyna.CurrentState.Location.Position.y; }
     float GetCarZ(SimulationManager @sim) { return sim.Dyna.CurrentState.Location.Position.z; }
@@ -2682,83 +2669,64 @@ namespace Scripting
         sim.Dyna.CurrentState.Quat.GetYawPitchRoll(x, y, z);
         return z;
     }
-
     float GetCarSpeed(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed.Length(); }
-
     float GetCarFreewheel(SimulationManager @sim) { return sim.SceneVehicleCar.IsFreeWheeling ? 1.0f : 0.0f; }
-
     float GetCarLateralContact(SimulationManager @sim) { return sim.SceneVehicleCar.HasAnyLateralContact ? 1.0f : 0.0f; }
-
     float GetCarSliding(SimulationManager @sim) { return sim.SceneVehicleCar.IsSliding ? 1.0f : 0.0f; }
-
     float GetCarGear(SimulationManager @sim) { return sim.SceneVehicleCar.CarEngine.RearGear==1 ? -1.0f : float(sim.SceneVehicleCar.CarEngine.Gear); }
-
     float GetWheelFLGroundContact(SimulationManager @sim) { return sim.Wheels.FrontLeft.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelFRGroundContact(SimulationManager @sim) { return sim.Wheels.FrontRight.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelBLGroundContact(SimulationManager @sim) { return sim.Wheels.BackLeft.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelBRGroundContact(SimulationManager @sim) { return sim.Wheels.BackRight.RTState.HasGroundContact ? 1.0f : 0.0f; }
-
     vec3 GetCarPos(SimulationManager @sim) { return sim.Dyna.CurrentState.Location.Position; }
     vec3 GetCarVel(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed; }
-
     float GetIterationCount(SimulationManager @sim)
     {
         return float(info.Iterations);
     }
-
     float GetTimeLastImprovement(SimulationManager @sim)
     {
         return float(lastImprovementTime / 1000.0);
     }
-
     float GetTimeLastRestart(SimulationManager @sim)
     {
         return float(lastRestartTime / 1000.0);
     }
-
     class ConstantFloat
     {
         float val;
         ConstantFloat(float v) { val = v; }
         float Get(SimulationManager @sim) { return val; }
     }
-
     class ConstantVec3
     {
         vec3 val;
         ConstantVec3(vec3 v) { val = v; }
         vec3 Get(SimulationManager @sim) { return val; }
     }
-
     class VarFloat
     {
         string name;
         VarFloat(const string &in n) { name = n; }
         float Get(SimulationManager @sim) { return float(GetVariableDouble(name)); }
     }
-
     class VarVec3
     {
         string name;
         VarVec3(const string &in n) { name = n; }
         vec3 Get(SimulationManager @sim) { return Text::ParseVec3(GetVariableString(name)); }
     }
-
-    
-
     class MathOp
     {
         FloatGetter @left;
         FloatGetter @right;
         string op;
-
         MathOp(FloatGetter @l, FloatGetter @r, const string &in o)
         {
             @left = l;
             @right = r;
             op = o;
         }
-
         float Get(SimulationManager @sim)
         {
             float l = left(sim);
@@ -2774,21 +2742,18 @@ namespace Scripting
             return 0.0f;
         }
     }
-
     class FunctionKmh
     {
         FloatGetter @arg;
         FunctionKmh(FloatGetter @a) { @arg = a; }
         float Get(SimulationManager @sim) { return arg(sim) * 3.6f; }
     }
-
     class FunctionDeg
     {
         FloatGetter @arg;
         FunctionDeg(FloatGetter @a) { @arg = a; }
         float Get(SimulationManager @sim) { return arg(sim) * 180.0f / 3.14159265358979323846f; }
     }
-
     class FunctionDistance
     {
         Vec3Getter @p1;
@@ -2800,7 +2765,6 @@ namespace Scripting
         }
         float Get(SimulationManager @sim) { return Math::Distance(p1(sim), p2(sim)); }
     }
-
     class FunctionTimeSince
     {
         FloatGetter @arg;
@@ -2810,26 +2774,22 @@ namespace Scripting
             return (float(Time::Now) / 1000.0f) - arg(sim);
         }
     }
-
     enum CmpOp { Gt,
                  Lt,
                  GtEq,
                  LtEq,
                  Eq }
-
     class Comparison
     {
         FloatGetter @left;
         FloatGetter @right;
         CmpOp op;
-
         Comparison(FloatGetter @l, FloatGetter @r, CmpOp o)
         {
             @left = l;
             @right = r;
             op = o;
         }
-
         bool Evaluate(SimulationManager @sim)
         {
             float l = left(sim);
@@ -2850,9 +2810,6 @@ namespace Scripting
             return false;
         }
     }
-
-    
-
     string CleanSource(const string &in input)
     {
         string output = "";
@@ -2871,7 +2828,6 @@ namespace Scripting
         }
         return output;
     }
-
     int FindTopLevel(const string &in code, const string &in target, int start = 0)
     {
         int depth = 0;
@@ -2891,17 +2847,14 @@ namespace Scripting
         }
         return -1;
     }
-
     ConditionCallback @Compile(const string &in source)
     {
         string code = CleanSource(source);
         if (code == "")
             return null;
-
         CmpOp op;
         int idx = -1;
         int len = 1;
-
         if ((idx = FindTopLevel(code, ">=")) != -1)
         {
             op = CmpOp::GtEq;
@@ -2924,35 +2877,26 @@ namespace Scripting
         {
             op = CmpOp::Eq;
         }
-
         if (idx == -1)
         {
-            
             return null;
         }
-
         string lhs = code.Substr(0, idx);
         string rhs = code.Substr(idx + len);
-
         FloatGetter @leftGetter = ParseExpression(lhs);
         FloatGetter @rightGetter = ParseExpression(rhs);
-
         if (leftGetter is null || rightGetter is null)
             return null;
-
         Comparison @comp = Comparison(leftGetter, rightGetter, op);
         return ConditionCallback(comp.Evaluate);
     }
-
     class MultiCondition
     {
         array<ConditionCallback @> conditions;
-
         void Add(ConditionCallback @cb)
         {
             conditions.Add(cb);
         }
-
         bool Evaluate(SimulationManager @sim)
         {
             for (uint i = 0; i < conditions.Length; i++)
@@ -2963,7 +2907,6 @@ namespace Scripting
             return true;
         }
     }
-
     ConditionCallback @CompileMulti(const array<string> &in sources)
     {
         MultiCondition @multi = MultiCondition();
@@ -2972,7 +2915,6 @@ namespace Scripting
             string s = sources[i];
             if (CleanSource(s) == "")
                 continue;
-
             ConditionCallback @cb = Compile(s);
             if (cb is null)
                 return null;
@@ -2982,14 +2924,11 @@ namespace Scripting
             return null;
         return ConditionCallback(multi.Evaluate);
     }
-
     FloatGetter @ParseExpression(const string &in code)
     {
         int idx = -1;
         string opStr = "";
         int depth = 0;
-
-        
         for (int i = int(code.Length) - 1; i >= 0; i--)
         {
             if (code[i] == 41)
@@ -3012,7 +2951,6 @@ namespace Scripting
                 }
             }
         }
-
         if (idx != -1)
         {
             FloatGetter @left = ParseExpression(code.Substr(0, idx));
@@ -3024,13 +2962,11 @@ namespace Scripting
         }
         return ParseTerm(code);
     }
-
     FloatGetter @ParseTerm(const string &in code)
     {
         int idx = -1;
         string opStr = "";
         int depth = 0;
-
         for (int i = int(code.Length) - 1; i >= 0; i--)
         {
             if (code[i] == 41)
@@ -3053,7 +2989,6 @@ namespace Scripting
                 }
             }
         }
-
         if (idx != -1)
         {
             FloatGetter @left = ParseTerm(code.Substr(0, idx));
@@ -3065,17 +3000,14 @@ namespace Scripting
         }
         return ParseFactor(code);
     }
-
     FloatGetter @ParseFactor(const string &in input)
     {
         string t = input;
         string lower = ToLower(t);
-
         if (StartsWith(t, "(") && EndsWith(t, ")"))
         {
             return ParseExpression(t.Substr(1, t.Length - 2));
         }
-
         if (StartsWith(lower, "kmh(") && EndsWith(t, ")"))
         {
             string argStr = t.Substr(4, t.Length - 5);
@@ -3085,7 +3017,6 @@ namespace Scripting
             FunctionKmh @fn = FunctionKmh(arg);
             return FloatGetter(fn.Get);
         }
-
         if (StartsWith(lower, "deg(") && EndsWith(t, ")"))
         {
             string argStr = t.Substr(4, t.Length - 5);
@@ -3095,17 +3026,14 @@ namespace Scripting
             FunctionDeg @fn = FunctionDeg(arg);
             return FloatGetter(fn.Get);
         }
-
         if (StartsWith(lower, "distance(") && EndsWith(t, ")"))
         {
             string content = t.Substr(9, t.Length - 10);
             int commaIdx = FindTopLevel(content, ",");
             if (commaIdx == -1)
                 return null;
-
             string arg1 = content.Substr(0, commaIdx);
             string arg2 = content.Substr(commaIdx + 1);
-
             Vec3Getter @v1 = ParseVec3(arg1);
             Vec3Getter @v2 = ParseVec3(arg2);
             if (v1 is null || v2 is null)
@@ -3113,7 +3041,6 @@ namespace Scripting
             FunctionDistance @fn = FunctionDistance(v1, v2);
             return FloatGetter(fn.Get);
         }
-
         if (StartsWith(lower, "time_since(") && EndsWith(t, ")"))
         {
             string content = t.Substr(11, t.Length - 12);
@@ -3123,7 +3050,6 @@ namespace Scripting
             FunctionTimeSince @fn = FunctionTimeSince(arg);
             return FloatGetter(fn.Get);
         }
-
         if (StartsWith(lower, "variable(") && EndsWith(t, ")"))
         {
             string content = t.Substr(9, t.Length - 10);
@@ -3134,7 +3060,6 @@ namespace Scripting
             VarFloat @v = VarFloat(content);
             return FloatGetter(v.Get);
         }
-
         if (lower == "car.position.x" || lower == "car.x")
             return GetCarX;
         if (lower == "car.position.y" || lower == "car.y")
@@ -3175,25 +3100,19 @@ namespace Scripting
             return GetTimeLastImprovement;
         if (lower == "last_restart.time")
             return GetTimeLastRestart;
-
         if (lower == "iterations")
             return GetIterationCount;
-
         if (lower.Length > 0 && lower.FindFirstNotOf("0123456789.-") == -1)
         {
             ConstantFloat @c = ConstantFloat(Text::ParseFloat(lower));
             return FloatGetter(c.Get);
         }
-
-        // print("Script Error: Unknown float term '" + t + "'");
         return null;
     }
-
     Vec3Getter @ParseVec3(const string &in input)
     {
         string t = input;
         string lower = ToLower(t);
-
         if (StartsWith(t, "(") && EndsWith(t, ")"))
         {
             string content = t.Substr(1, t.Length - 2);
@@ -3205,7 +3124,6 @@ namespace Scripting
                 return Vec3Getter(c.Get);
             }
         }
-
         if (StartsWith(lower, "variable(") && EndsWith(t, ")"))
         {
             string content = t.Substr(9, t.Length - 10);
@@ -3216,17 +3134,13 @@ namespace Scripting
             VarVec3 @v = VarVec3(content);
             return Vec3Getter(v.Get);
         }
-
         if (lower == "car.position" || lower == "car.pos")
             return GetCarPos;
         if (lower == "car.velocity" || lower == "car.vel")
             return GetCarVel;
-
-        // print("Script Error: Unknown vec3 term '" + t + "'");
         return null;
     }
 }
-
 namespace SkyBf
 {
     Polyhedron g_finishPoly;
@@ -3319,21 +3233,17 @@ namespace SkyBf
     array<string> g_worldCheckpointNames;
     array<Polyhedron @> g_worldFinishPolys;
     array<AABB> g_worldFinishAABBs;
-
     uint64 g_totalOnEvaluateTime = 0;
     uint64 g_totalCalcMinCarDistTime = 0;
     uint64 g_totalVertexTransformTime = 0;
     uint64 g_totalClosestPointPolyTime = 0;
     uint64 g_onEvaluateCallCount = 0;
-
     const string g_distPluginPrefix = "dist_bf";
     const string g_uberPluginPrefix = "uber_bf";
     int g_bfTargetType = -1;
     int g_bfTargetCpIndex = -1;
     float g_bestBfDistance = 1e18f;
     string g_cachedChallengeUid = "";
-
-
     void CacheCheckpointData()
     {
         TM::GameCtnChallenge @challenge = GetCurrentChallenge();
@@ -3352,7 +3262,6 @@ namespace SkyBf
         {
             return;
         }
-
         g_cachedChallengeUid = challenge.Uid;
         g_worldCheckpointPolys.Clear();
         g_worldCheckpointAABBs.Clear();
@@ -3365,7 +3274,6 @@ namespace SkyBf
             print("Error: Could not get challenge blocks.", Severity::Error);
             return;
         }
-
         for (uint i = 0; i < blocks.Length; i++)
         {
             TM::GameCtnBlock @block = blocks[i];
@@ -3416,50 +3324,40 @@ namespace SkyBf
             }
         }
     }
-
     namespace Drawing
     {
         int counter = 0;
         const vec2 padFix = vec2(-8, -8);
         bool dimensionsInitialized = false;
-
         const array<string> NUMBER_PATTERNS = {
-            "111101101101111", // 0
-            "010110010010111", // 1
-            "111001111100111", // 2
-            "111001111001111", // 3
-            "101101111001001", // 4
-            "111100111001111", // 5
-            "111100111101111", // 6
-            "111001010010010", // 7
-            "111101111101111", // 8
-            "111101111001111"  // 9
+            "111101101101111", 
+            "010110010010111", 
+            "111001111100111", 
+            "111001111001111", 
+            "101101111001001", 
+            "111100111001111", 
+            "111100111101111", 
+            "111001010010010", 
+            "111101111101111", 
+            "111101111001111"  
         };
-
         void square(int x, int y, uint dimension)
         {
             string title = "##Window for pixel" + counter++;
-
             UI::SetNextWindowPos(vec2(x - dimension / 2, y - dimension / 2) + padFix);
             UI::SetNextWindowSize(vec2(dimension + 12, dimension + 12));
-
             UI::Begin(title,
                       UI::WindowFlags::NoBackground | UI::WindowFlags::NoDecoration | UI::WindowFlags::NoInputs | UI::WindowFlags::NoMouseInputs | UI::WindowFlags::NoNavInputs | UI::WindowFlags::NoFocusOnAppearing | UI::WindowFlags::NoBringToFrontOnFocus | UI::WindowFlags::NoNavFocus);
-
             UI::Button(title, vec2(float(dimension), float(dimension)));
-
             UI::End();
         }
-
         void number(int x, int y, uint dimension, uint numberValue)
         {
             if (dimension == 0)
                 return;
-
             string digits = "" + numberValue;
             if (digits.Length == 0)
                 digits = "0";
-
             uint cellSize = dimension;
             int digitWidth = int(cellSize) * 3;
             int digitSpacing = int(cellSize);
@@ -3469,19 +3367,15 @@ namespace SkyBf
                 totalWidth += (int(digits.Length) - 1) * digitSpacing;
             }
             int totalHeight = int(cellSize) * 5;
-
             int startX = x - totalWidth / 2;
             int startY = y - totalHeight / 2;
-
             for (uint i = 0; i < digits.Length; ++i)
             {
                 int digitIndex = digits[i] - '0';
                 if (digitIndex < 0 || digitIndex >= int(NUMBER_PATTERNS.Length))
                     continue;
-
                 string pattern = NUMBER_PATTERNS[digitIndex];
                 int digitX = startX + int(i) * (digitWidth + digitSpacing);
-
                 for (uint row = 0; row < 5; ++row)
                 {
                     for (uint col = 0; col < 3; ++col)
@@ -3491,7 +3385,6 @@ namespace SkyBf
                             continue;
                         if (pattern[patternIndex] != '1')
                             continue;
-
                         float centerX = float(digitX) + (float(col) + 0.5f) * float(cellSize);
                         float centerY = float(startY) + (float(row) + 0.5f) * float(cellSize);
                         square(int(Math::Round(centerX)), int(Math::Round(centerY)), cellSize);
@@ -3499,7 +3392,6 @@ namespace SkyBf
                 }
             }
         }
-
         dictionary dimensionsMapping;
         void InitializeDimensions()
         {
@@ -3514,13 +3406,10 @@ namespace SkyBf
             dimensionsMapping.Set("33177600", vec2(3840, 2160));
             dimensionsInitialized = true;
         }
-
         int screenWidth = 1920;
         int screenHeight = 1080;
-
         uint64 timeOfLastCapture = 0;
         uint64 captureInterval = 2000;
-
         vec3 lastCamPos = vec3(0, 0, 0);
         mat3 lastCamRot = mat3();
         vec2 lastScreenPos = vec2(0, 0);
@@ -3544,28 +3433,23 @@ namespace SkyBf
             screenWidth = int(dim.x);
             screenHeight = int(dim.y);
         }
-
         void BeginFrame()
         {
             counter = 0;
             UpdateScreenSize();
         }
-
         vec2 GetScreenSize()
         {
             return vec2(float(screenWidth), float(screenHeight));
         }
-
         void Draw(SimulationManager @simManager)
         {
             BeginFrame();
-
             TM::GameCamera @gameCamera = GetCurrentCamera();
             vec3 camPos = gameCamera.Location.Position;
             mat3 camRot = gameCamera.Location.Rotation;
-            float camFov = gameCamera.Fov; // Varies between 70 and 90 degrees
+            float camFov = gameCamera.Fov; 
             UpdateScreenSize();
-
             vec2 screenPos;
             if (camPos == lastCamPos && camRot.x == lastCamRot.x && camRot.y == lastCamRot.y && camRot.z == lastCamRot.z)
             {
@@ -3579,37 +3463,28 @@ namespace SkyBf
             lastCamPos = camPos;
             lastCamRot = camRot;
             lastScreenPos = screenPos;
-
             vec3 rgb = HSVToRGB(GetRainbowHue(), 1.0f, 1.0f);
             vec4 rainbowColor = vec4(rgb.x, rgb.y, rgb.z, 1.0f);
             UI::PushStyleColor(UI::Col::Button, rainbowColor);
             number(int(screenPos.x), int(screenPos.y), 30, int(Math::Round(camFov)));
             UI::PopStyleColor(1);
         }
-
         vec2 WorldToScreen(vec3 worldPos, vec3 camPos, mat3 camRot, float camFov, vec2 screenSize)
         {
             vec3 dir = worldPos - camPos;
-
             camRot.Transpose();
             vec3 localDir = matTimesVec(camRot, dir);
-
             if (localDir.z <= 0)
                 return vec2(-1, -1);
-
             float fovRad = camFov * (3.14159265 / 180.0);
             float aspectRatio = screenSize.x / screenSize.y;
             float tanHalfFov = Math::Tan(fovRad * 0.5);
-
             float ndcX = -(localDir.x / localDir.z) / (tanHalfFov * aspectRatio);
             float ndcY = (localDir.y / localDir.z) / tanHalfFov;
-
             float screenX = (ndcX * 0.5 + 0.5) * screenSize.x;
             float screenY = (-ndcY * 0.5 + 0.5) * screenSize.y;
-
             return vec2(screenX, screenY);
         }
-
         vec3 matTimesVec(mat3 m, vec3 v)
         {
             return vec3(
@@ -3617,31 +3492,26 @@ namespace SkyBf
                 m.y.x * v.x + m.y.y * v.y + m.y.z * v.z,
                 m.z.x * v.x + m.z.y * v.y + m.z.z * v.z);
         }
-
         float GetRainbowHue()
         {
             float t = float(Time::Now % 6000) / 6000.0f;
             return t * 360.0f;
         }
-
         vec3 HSVToRGB(float h, float s, float v)
         {
             while (h < 0.0f)
                 h += 360.0f;
             while (h >= 360.0f)
                 h -= 360.0f;
-
             float hPrime = h / 60.0f;
             float hFloor = Math::Floor(hPrime);
             int segment = int(hFloor) % 6;
             if (segment < 0)
                 segment += 6;
             float f = hPrime - hFloor;
-
             float p = v * (1.0f - s);
             float q = v * (1.0f - f * s);
             float t = v * (1.0f - (1.0f - f) * s);
-
             if (segment == 0)
                 return vec3(v, t, p);
             if (segment == 1)
@@ -3654,9 +3524,7 @@ namespace SkyBf
                 return vec3(t, p, v);
             return vec3(v, p, q);
         }
-
     }
-
     void RenderBruteforceEvaluationSettingssss()
     {
         g_bfTargetType = int(GetVariableDouble(g_distPluginPrefix + "_target_type"));
@@ -3798,7 +3666,6 @@ namespace SkyBf
         vec3 diff = p1 - p2;
         return Math::Dot(diff, diff);
     }
-
     bool IsPointInsideTriangle(const vec3 &in point, const vec3 &in v0, const vec3 &in v1, const vec3 &in v2, const vec3 &in planeNormal)
     {
         vec3 edge0 = v1 - v0;
@@ -3865,11 +3732,9 @@ namespace SkyBf
     Polyhedron TransformPolyhedronToWorld(const Polyhedron &in basePoly, const TM::GameCtnBlock @block)
     {
         Polyhedron worldPoly;
-
         vec3 blockOriginWorld = vec3(block.Coord.x * 32.0f, block.Coord.y * 8.0f, block.Coord.z * 32.0f);
         GmVec3 centerOffsetLocal = GmVec3(16.0f, 4.0f, 16.0f);
         GmVec3 blockCenterWorld = GmVec3(blockOriginWorld) + centerOffsetLocal;
-
         GmMat3 blockRotationMat;
         float angleRad = 0.0f;
         if (block.Dir == TM::CardinalDir::East)
@@ -3888,7 +3753,6 @@ namespace SkyBf
         {
             blockRotationMat.RotateY(angleRad);
         }
-
         worldPoly.vertices.Resize(basePoly.vertices.Length);
         for (uint i = 0; i < basePoly.vertices.Length; ++i)
         {
@@ -3898,29 +3762,22 @@ namespace SkyBf
             GmVec3 finalWorldVertex = rotatedRelativeVertex + blockCenterWorld;
             worldPoly.vertices[i] = finalWorldVertex.ToVec3();
         }
-
         worldPoly.faces = basePoly.faces;
         worldPoly.uniqueEdges = basePoly.uniqueEdges;
-
         worldPoly.precomputedFaces.Resize(basePoly.precomputedFaces.Length);
         for (uint i = 0; i < basePoly.precomputedFaces.Length; ++i)
         {
             const PrecomputedFace @basePface = basePoly.precomputedFaces[i];
             PrecomputedFace @worldPface = worldPoly.precomputedFaces[i];
-
             worldPface.vertexIndices = basePface.vertexIndices;
-
             GmVec3 localPlanePoint = basePface.planePoint;
             GmVec3 pointRelativeToCenter = localPlanePoint - centerOffsetLocal;
             GmVec3 rotatedRelativePoint = blockRotationMat.Transform(pointRelativeToCenter);
             worldPface.planePoint = rotatedRelativePoint + blockCenterWorld;
-
             worldPface.normal = blockRotationMat.Transform(basePface.normal);
         }
-
         return worldPoly;
     }
-
     float g_currentWindowMinDistance = 1e18f;
     bool g_conditionsMetAtMinDistance = false;
     bool g_windowResultProcessed = false;
@@ -3949,15 +3806,12 @@ namespace SkyBf
     AABB g_targetCpAABB;
     bool g_bfConfigIsValid = false;
     string g_bfTargetDescription = "Invalid Target";
-
     Polyhedron g_clippedtargetCpPoly;
     AABB @g_clippedtargetCpAABB;
     array<Polyhedron @> g_worldClippedFinishPolys;
     array<AABB> g_worldClippedFinishAABBs;
-
     void OnDistSimulationBegin(SimulationManager @simManager)
     {
-
         if (!(GetVariableString("controller") == "bfv2"))
         {
             g_bfConfigIsValid = false;
@@ -3968,7 +3822,6 @@ namespace SkyBf
         g_isEarlyStop = false;
         g_forceAccept = false;
         g_bfPhase = BFPhase::Initial;
-
         TM::GameCtnChallenge @challenge = GetCurrentChallenge();
         if (challenge !is null && challenge.Uid != g_cachedChallengeUid)
         {
@@ -3978,7 +3831,6 @@ namespace SkyBf
         bfTimeFrom = int(GetVariableDouble(g_distPluginPrefix + "_bf_time_from"));
         bfTimeTo = int(GetVariableDouble(g_distPluginPrefix + "_bf_time_to"));
         g_bfTargetType = int(GetVariableDouble(g_distPluginPrefix + "_target_type"));
-
         if (g_bfTargetType == 0)
         {
             g_bfTargetCpIndex = int(GetVariableDouble(g_distPluginPrefix + "_target_cp_index"));
@@ -4025,22 +3877,18 @@ namespace SkyBf
         {
             print("BF Init Error: Invalid target type specified: " + g_bfTargetType, Severity::Error);
         }
-
         if (g_bfConfigIsValid)
         {
-
             g_bestBfDistance = 1e18f;
             g_currentWindowMinDistance = 1e18f;
             g_conditionsMetAtMinDistance = false;
             g_windowResultProcessed = true;
             g_lastProcessedRaceTime = -1;
-
             g_totalOnEvaluateTime = 0;
             g_totalCalcMinCarDistTime = 0;
             g_totalVertexTransformTime = 0;
             g_totalClosestPointPolyTime = 0;
             g_onEvaluateCallCount = 0;
-
             AABB triggerAABB = triggerIdToAABB(int(GetVariableDouble(g_distPluginPrefix + "_constraint_trigger_index")));
             if (g_bfTargetType == 0)
             {
@@ -4068,7 +3916,6 @@ namespace SkyBf
             print("BF Initialization failed. Evaluation will be stopped.");
         }
     }
-
     void OnSimulationBegin(SimulationManager @simManager)
     {
         if (GetVariableString("bf_target") == g_bruteforceDistanceTargetIdentifier)
@@ -4080,9 +3927,7 @@ namespace SkyBf
             OnUberSimulationBegin(simManager);
         }
     }
-
     bool g_simEndProcessed = false;
-
     void OnSimulationEnd(SimulationManager @simManager, SimulationResult result)
     {
         if (GetVariableString("bf_target") != g_bruteforceDistanceTargetIdentifier || GetVariableString("controller") != "bfv2")
@@ -4096,7 +3941,6 @@ namespace SkyBf
             {
                 g_earlyStopCommandList.Save(GetVariableString("bf_result_filename"));
             }
-
             print("\n--- Bruteforce Performance Report ---");
             if (g_onEvaluateCallCount == 0)
             {
@@ -4104,40 +3948,32 @@ namespace SkyBf
                 print("-------------------------------------\n");
                 return;
             }
-
             print("Total evaluations: " + g_onEvaluateCallCount);
             print("Total time in OnEvaluate: " + g_totalOnEvaluateTime + " ms");
             float avgOnEvaluate = float(g_totalOnEvaluateTime) / g_onEvaluateCallCount;
             print("  -> Average per evaluation: " + Text::FormatFloat(avgOnEvaluate, "", 0, 4) + " ms");
-
             if (g_totalOnEvaluateTime > 0)
             {
                 print("\nBreakdown of OnEvaluate time:");
                 uint64 totalMeasuredInside = g_totalCalcMinCarDistTime;
                 uint64 overhead = g_totalOnEvaluateTime > totalMeasuredInside ? g_totalOnEvaluateTime - totalMeasuredInside : 0;
-
                 print("  - CalculateMinCarDistanceToPoly: " + g_totalCalcMinCarDistTime + " ms (" + Text::FormatFloat(100.0f * g_totalCalcMinCarDistTime / g_totalOnEvaluateTime, "", 0, 1) + "%)");
                 print("  - OnEvaluate Overhead: " + overhead + " ms (" + Text::FormatFloat(100.0f * overhead / g_totalOnEvaluateTime, "", 0, 1) + "%)");
-
                 if (g_totalCalcMinCarDistTime > 0)
                 {
                     print("\nBreakdown of CalculateMinCarDistanceToPoly time:");
                     uint64 totalCalcDistBreakdown = g_totalVertexTransformTime + g_totalClosestPointPolyTime;
                     uint64 calcDistOverhead = g_totalCalcMinCarDistTime > totalCalcDistBreakdown ? g_totalCalcMinCarDistTime - totalCalcDistBreakdown : 0;
-
                     print("    - Vertex Transformations: " + g_totalVertexTransformTime + " ms (" + Text::FormatFloat(100.0f * g_totalVertexTransformTime / g_totalCalcMinCarDistTime, "", 0, 1) + "%)");
                     print("    - Polygon Closest Point Checks: " + g_totalClosestPointPolyTime + " ms (" + Text::FormatFloat(100.0f * g_totalClosestPointPolyTime / g_totalCalcMinCarDistTime, "", 0, 1) + "%)");
                     print("    - Other (internal logic): " + calcDistOverhead + " ms (" + Text::FormatFloat(100.0f * calcDistOverhead / g_totalCalcMinCarDistTime, "", 0, 1) + "%)");
                 }
             }
-
             print("-------------------------------------\n");
         }
     }
-
     class BFResultPrinter
     {
-
         int COL_ITER = 10;
         int COL_PHASE = 12;
         int COL_TARGET = 30;
@@ -4145,16 +3981,13 @@ namespace SkyBf
         int COL_DIST = 18;
         int COL_IMPROVE = 18;
         int precision = 8;
-
         bool headerPrinted = false;
-
     private
         string PadString(const string &in str, int width, bool alignRight = false)
         {
             int len = str.Length;
             if (len >= width)
             {
-
                 return str.Substr(0, width);
             }
             int padding = width - len;
@@ -4172,25 +4005,20 @@ namespace SkyBf
                 return str + padStr;
             }
         }
-
         void PrintHeader(const string &in targetDesc, int timeFrom, int timeTo)
         {
             string title = "Bruteforce Evaluation Results";
             string targetInfo = "Target: " + targetDesc + " | Window: [" + timeFrom + "-" + timeTo + "] ms";
-
             string header = PadString("Iteration", COL_ITER) + " | " +
                             PadString("Phase", COL_PHASE) + " | " +
-
                             PadString("Min Distance", COL_DIST, true) + " | " +
                             PadString("Improvement", COL_IMPROVE, true);
-
             int totalWidth = header.Length;
             string separator = "";
             for (int i = 0; i < totalWidth; ++i)
             {
                 separator += "-";
             }
-
             print("");
             print(title);
             print(targetInfo);
@@ -4199,52 +4027,40 @@ namespace SkyBf
             print(separator);
             headerPrinted = true;
         }
-
         void PrintRow(int iteration, const string &in phase, float distance, float improvement = -1.0f)
         {
-
             string iterStr = Text::FormatInt(iteration);
             string phaseStr = phase;
             string distStr = Text::FormatFloat(distance, "", 0, precision) + " m";
             string improveStr = (improvement >= 0.0f) ? (Text::FormatFloat(improvement, "", 0, precision) + " m") : "N/A";
-
             string row = PadString(iterStr, COL_ITER, true) + " | " +
                          PadString(phaseStr, COL_PHASE) + " | " +
-
                          PadString(distStr, COL_DIST, true) + " | " +
                          PadString(improveStr, COL_IMPROVE, true);
-
             print(row);
         }
-
         void PrintInitialResult(int iteration, const string &in targetDesc, int timeFrom, int timeTo, float distance)
         {
-
             if (!headerPrinted)
             {
                 PrintHeader(targetDesc, timeFrom, timeTo);
             }
             PrintRow(iteration, "Initial", distance, -1.0f);
         }
-
         void PrintImprovedResult(int iteration, float newDistance, float improvement)
         {
-
             if (!headerPrinted)
             {
-
                 print("BFResultPrinter Warning: Header not printed before improved result!", Severity::Warning);
             }
             PrintRow(iteration, "Improvement", newDistance, improvement);
         }
-
         void PrintTargetAchieved()
         {
             if (!headerPrinted)
             {
                 print("BFResultPrinter Warning: Header not printed before target achievement!", Severity::Warning);
             }
-
             array<string> celebration = {
                 "|------------------------------------------------------|",
                 "|                                                      |",
@@ -4262,7 +4078,6 @@ namespace SkyBf
                 "|                Mission accomplished!                 |",
                 "|                                                      |",
                 "|------------------------------------------------------|"};
-
             print("\n");
             for (uint i = 0; i < celebration.Length; ++i)
             {
@@ -4272,20 +4087,17 @@ namespace SkyBf
             }
             print("\n");
         }
-
         void Reset()
         {
             headerPrinted = false;
         }
     }
-
     BFResultPrinter g_bfPrinter;
     bool g_isNewBFEvaluationRun = false;
     CommandList g_earlyStopCommandList;
     bool g_isEarlyStop = false;
     bool g_forceAccept = false;
     BFPhase g_bfPhase = BFPhase::Initial;
-
     void OnCheckpointCountChanged(SimulationManager @simManager, int current, int target)
     {
         int raceTime = simManager.RaceTime;
@@ -4373,10 +4185,8 @@ namespace SkyBf
             resp.Decision = BFEvaluationDecision::Stop;
             return resp;
         }
-
         int raceTime = simManager.RaceTime;
         g_bfPhase = info.Phase;
-
         if (raceTime < g_lastProcessedRaceTime)
         {
             g_currentWindowMinDistance = 1e18f;
@@ -4384,22 +4194,16 @@ namespace SkyBf
             g_windowResultProcessed = false;
         }
         g_lastProcessedRaceTime = raceTime;
-
         TM::PlayerInfo @playerInfo = simManager.PlayerInfo;
-
         bool isInWindow = (raceTime >= bfTimeFrom && raceTime < bfTimeTo);
         bool isDecisionTime = (raceTime == bfTimeTo);
-
         bool shouldCalculateDistance = isInWindow || (isDecisionTime && !g_windowResultProcessed);
         float currentTickDistance = 1e18f;
-
         if (shouldCalculateDistance)
         {
             g_windowResultProcessed = false;
-
             GmIso4 carWorldTransform = GmIso4(simManager.Dyna.CurrentState.Location);
             vec3 carPosition = carWorldTransform.m_Position.ToVec3();
-
             if (g_bfTargetType == 0)
             {
                 const Polyhedron @targetPoly;
@@ -4414,7 +4218,6 @@ namespace SkyBf
                 {
                     @targetPoly = g_targetCpPoly;
                 }
-
                 bool needsAccurateDistance = targetAABB.Contains(carPosition, 15);
                 if (needsAccurateDistance)
                 {
@@ -4434,7 +4237,6 @@ namespace SkyBf
                     if (targetPoly is null || targetPoly.faces.Length == 0)
                         continue;
                     const AABB targetAABB = g_worldClippedFinishAABBs[i];
-
                     bool needsAccurateDistance = targetAABB.Contains(carPosition, 15);
                     float distToThisFinish = 1e18f;
                     if (needsAccurateDistance)
@@ -4449,14 +4251,12 @@ namespace SkyBf
                 }
                 currentTickDistance = minDistToAnyFinish;
             }
-            
             if (currentTickDistance < g_currentWindowMinDistance)
             {
                 g_conditionsMetAtMinDistance = GlobalConditionsMet(simManager);
             }
             g_currentWindowMinDistance = Math::Min(g_currentWindowMinDistance, currentTickDistance);
         }
-
         if (isDecisionTime && !g_windowResultProcessed)
         {
             g_windowResultProcessed = true;
@@ -4471,9 +4271,7 @@ namespace SkyBf
                 g_bfPrinter.PrintTargetAchieved();
                 return resp;
             }
-
             float finalMinDistance = g_currentWindowMinDistance;
-
             if (finalMinDistance == 1e18f)
             {
                 if (shouldCalculateDistance)
@@ -4485,9 +4283,7 @@ namespace SkyBf
                     print("BF Evaluate: Warning - Could not determine minimum distance at decision time " + raceTime + "ms.", Severity::Warning);
                 }
             }
-
             string targetDesc = g_bfTargetDescription;
-
             if (info.Phase == BFPhase::Initial)
             {
                 g_bestBfDistance = finalMinDistance;
@@ -4497,7 +4293,6 @@ namespace SkyBf
                     g_bfPrinter.Reset();
                     g_isNewBFEvaluationRun = false;
                     g_bfPrinter.PrintInitialResult(info.Iterations, targetDesc, bfTimeFrom, bfTimeTo, g_bestBfDistance);
-
                     resp.ResultFileStartContent = "# Baseline min distance to " + targetDesc + " [" + bfTimeFrom + "-" + bfTimeTo + "ms]: " + Text::FormatFloat(g_bestBfDistance, "", 0, 6) + " m";
                 }
             }
@@ -4508,14 +4303,12 @@ namespace SkyBf
                     resp.Decision = BFEvaluationDecision::DoNothing;
                     return resp;
                 }
-                
                 if (finalMinDistance < g_bestBfDistance && g_conditionsMetAtMinDistance)
                 {
                     float oldBest = g_bestBfDistance;
                     g_bestBfDistance = finalMinDistance;
                     resp.Decision = BFEvaluationDecision::Accept;
                     g_bfPrinter.PrintImprovedResult(info.Iterations, g_bestBfDistance, oldBest - g_bestBfDistance);
-
                     resp.ResultFileStartContent = "# Distance to " + targetDesc + " [" + Text::FormatFloat(bfTimeFrom/1000.0, "", 0, 2) + "-" + Text::FormatFloat(bfTimeTo/1000.0, "", 0, 2) + "]: " + Text::FormatFloat(g_bestBfDistance, "", 0, 6) + " m at iteration " + info.Iterations;
                 }
                 else
@@ -4523,17 +4316,14 @@ namespace SkyBf
                     resp.Decision = BFEvaluationDecision::Reject;
                 }
             }
-
             g_currentWindowMinDistance = 1e18f;
             g_conditionsMetAtMinDistance = false;
-
             return resp;
         }
         if (g_forceAccept && info.Phase == BFPhase::Search)
         {
             if (GetVariableBool(g_distPluginPrefix + "_shift_finish_eval"))
             {
-
                 g_isNewBFEvaluationRun = true;
             }
             g_forceAccept = false;
@@ -4551,7 +4341,6 @@ namespace SkyBf
     {
         InitializeTriggerData();
         InitializeCarEllipsoids();
-
         RegisterVariable(g_distPluginPrefix + "_target_type", 0);
         RegisterVariable(g_distPluginPrefix + "_target_cp_index", 0);
         RegisterVariable(g_distPluginPrefix + "_show_cp_numbers", false);
@@ -4570,7 +4359,6 @@ namespace SkyBf
         @eval1.onCheckpointCountChanged = @OnCheckpointCountChanged;
         @eval1.onRunStep = @OnRunStep;
         @eval1.onRender = @Render;
-
         RegisterVariable(g_uberPluginPrefix + "_uberbug_threshold", 0.8);
         RegisterVariable(g_uberPluginPrefix + "_uberbug_mode", "Find");
         RegisterVariable(g_uberPluginPrefix + "_uberbug_show_visualization", false);
@@ -4601,38 +4389,31 @@ namespace SkyBf
         @eval2.onRunStep = @OnRunStep;
         @eval2.onRender = @Render;
         RegisterSettingsPage("Uberbug BF", UberbugPageSettings);
-
         RegisterCustomCommand("clear_uberbugs", "Clear all stored uberbugs", OnClearUberbugs);
-
         string trajectoryTriggerCache = GetVariableString(g_uberPluginPrefix + "_trajectory_trigger_cache");
         string cachedTriggers = GetVariableString(g_uberPluginPrefix + "_uberbugs_trigger_cache");
     }
-
     void DistRender()
     {
         if (!GetVariableBool(g_distPluginPrefix + "_show_cp_numbers"))
         {
             return;
         }
-
         SimulationManager @simManager = GetSimulationManager();
         if (simManager is null || !simManager.InRace)
         {
             return;
         }
-
         TM::GameCamera @gameCamera = GetCurrentCamera();
         if (gameCamera is null)
         {
             return;
         }
-
         Drawing::BeginFrame();
         vec3 camPos = gameCamera.Location.Position;
         mat3 camRot = gameCamera.Location.Rotation;
         float camFov = gameCamera.Fov;
         vec2 screenSize = Drawing::GetScreenSize();
-
         vec3 rainbow = Drawing::HSVToRGB(Drawing::GetRainbowHue(), 1.0f, 1.0f);
         UI::PushStyleColor(UI::Col::Button, vec4(rainbow.x, rainbow.y, rainbow.z, 1.0f));
         for (uint i = 0; i < g_worldCheckpointAABBs.Length; i++)
@@ -4643,7 +4424,6 @@ namespace SkyBf
         }
         UI::PopStyleColor(1);
     }
-
     void Render()
     {
         DistRender();
@@ -5135,18 +4915,14 @@ namespace SkyBf
         }
         bool intersectsTriangle(const vec3 &in p0, const vec3 &in p1, const vec3 &in p2) const
         {
-
             vec3 boxCenter = (min + max) * 0.5f;
             vec3 boxHalf = (max - min) * 0.5f;
-
             vec3 v0 = p0 - boxCenter;
             vec3 v1 = p1 - boxCenter;
             vec3 v2 = p2 - boxCenter;
-
             vec3 e0 = v1 - v0;
             vec3 e1 = v2 - v1;
             vec3 e2 = v0 - v2;
-
             if (!testAxis(v0, v1, v2, e0, boxHalf, 0))
                 return false;
             if (!testAxis(v0, v1, v2, e0, boxHalf, 1))
@@ -5165,7 +4941,6 @@ namespace SkyBf
                 return false;
             if (!testAxis(v0, v1, v2, e2, boxHalf, 2))
                 return false;
-
             for (int i = 0; i < 3; i++)
             {
                 float triMin = Math::Min(v0[i], Math::Min(v1[i], v2[i]));
@@ -5173,11 +4948,8 @@ namespace SkyBf
                 if (triMin > boxHalf[i] || triMax < -boxHalf[i])
                     return false;
             }
-
             vec3 normal = Cross(e0, e1);
-
             float rad = boxHalf.x * Math::Abs(normal.x) + boxHalf.y * Math::Abs(normal.y) + boxHalf.z * Math::Abs(normal.z);
-
             float triProj0 = Math::Dot(normal, v0);
             float triProj1 = Math::Dot(normal, v1);
             float triProj2 = Math::Dot(normal, v2);
@@ -5185,17 +4957,14 @@ namespace SkyBf
             float triMax = Math::Max(triProj0, Math::Max(triProj1, triProj2));
             if (triMin > rad || triMax < -rad)
                 return false;
-
             return true;
         }
-
         string ToString()
         {
             return "AABB(min: " + min.x + ", " + min.y + ", " + min.z +
                    ", max: " + max.x + ", " + max.y + ", " + max.z + ")";
         }
     }
-
     class Edge
     {
         int v0;
@@ -5207,7 +4976,6 @@ namespace SkyBf
         }
         Edge(int i0 = -1, int i1 = -1)
         {
-
             if (i0 < i1)
             {
                 v0 = i0;
@@ -5232,12 +5000,10 @@ namespace SkyBf
             return v1 < other.v1;
         }
     }
-
     class SortableVertex
     {
         float angle;
         int index;
-
         int opCmp(const SortableVertex &in other) const
         {
             if (angle < other.angle)
@@ -5247,14 +5013,12 @@ namespace SkyBf
             return 0;
         }
     };
-
     class PrecomputedFace
     {
         array<int> vertexIndices;
         GmVec3 normal;
         GmVec3 planePoint;
     }
-
     class Polyhedron
     {
         array<vec3> vertices;
@@ -5263,28 +5027,22 @@ namespace SkyBf
         array<Edge> uniqueEdges;
         vec3 BoundingSphereCenter;
         float BoundingSphereRadius;
-
         Polyhedron()
         {
             BoundingSphereRadius = 0.0f;
         }
-
         Polyhedron(const array<vec3> &in in_vertices, const array<array<int>> &in triangleFaces)
         {
             this.vertices = in_vertices;
-
             if (vertices.IsEmpty() || triangleFaces.IsEmpty())
             {
                 return;
             }
-
             uint numTriangles = triangleFaces.Length;
             array<array<int>> newFaceIndices;
             array<PrecomputedFace> newPrecomputedFaces;
-
             dictionary edgeToGlobalFaces;
             array<vec3> faceNormals(numTriangles);
-
             for (uint i = 0; i < numTriangles; ++i)
             {
                 const array<int> @face_idxs = triangleFaces[i];
@@ -5293,16 +5051,13 @@ namespace SkyBf
                     print("Error: Input face " + i + " is not a triangle. Simplification requires a triangle mesh.", Severity::Error);
                     return;
                 }
-
                 vec3 edge1 = vertices[face_idxs[1]] - vertices[face_idxs[0]];
                 vec3 edge2 = vertices[face_idxs[2]] - vertices[face_idxs[0]];
                 faceNormals[i] = Cross(edge1, edge2).Normalized();
-
                 for (uint j = 0; j < 3; ++j)
                 {
                     Edge e(face_idxs[j], face_idxs[(j + 1) % 3]);
                     string edgeKey = e.v0 + "_" + e.v1;
-
                     array<int> @faceList;
                     if (!edgeToGlobalFaces.Get(edgeKey, @faceList))
                     {
@@ -5314,31 +5069,25 @@ namespace SkyBf
                     }
                 }
             }
-
             array<bool> processedFaces(numTriangles);
             const float COPLANAR_TOLERANCE = 0.9999f;
-
             for (uint i = 0; i < numTriangles; ++i)
             {
                 if (processedFaces[i])
                     continue;
-
                 array<int> componentQueue = {int(i)};
                 array<int> componentFaces = {int(i)};
                 processedFaces[i] = true;
                 uint head = 0;
                 const vec3 referenceNormal = faceNormals[i];
-
                 while (head < componentQueue.Length)
                 {
                     int currentIdx = componentQueue[head++];
                     const array<int> @currentFace = triangleFaces[currentIdx];
-
                     for (uint j = 0; j < 3; ++j)
                     {
                         Edge e(currentFace[j], currentFace[(j + 1) % 3]);
                         string edgeKey = e.v0 + "_" + e.v1;
-
                         array<int> @neighborFaces;
                         if (edgeToGlobalFaces.Get(edgeKey, @neighborFaces))
                         {
@@ -5355,10 +5104,8 @@ namespace SkyBf
                         }
                     }
                 }
-
                 dictionary boundaryEdges;
                 dictionary vertToBoundaryEdges;
-
                 for (uint c_idx = 0; c_idx < componentFaces.Length; ++c_idx)
                 {
                     int triFaceIdx = componentFaces[c_idx];
@@ -5367,10 +5114,8 @@ namespace SkyBf
                     {
                         Edge e(triVerts[v_idx], triVerts[(v_idx + 1) % 3]);
                         string edgeKey = e.v0 + "_" + e.v1;
-
                         array<int> @globalFaces;
                         edgeToGlobalFaces.Get(edgeKey, @globalFaces);
-
                         int sharedCoplanarFaces = 0;
                         for (uint g_idx = 0; g_idx < globalFaces.Length; ++g_idx)
                         {
@@ -5379,13 +5124,11 @@ namespace SkyBf
                                 sharedCoplanarFaces++;
                             }
                         }
-
                         if (sharedCoplanarFaces == 1)
                         {
                             if (!boundaryEdges.Exists(edgeKey))
                             {
                                 boundaryEdges.Set(edgeKey, e);
-
                                 array<Edge> @v0_edges;
                                 if (!vertToBoundaryEdges.Get("" + e.v0, @v0_edges))
                                 {
@@ -5393,7 +5136,6 @@ namespace SkyBf
                                     vertToBoundaryEdges.Set("" + e.v0, @v0_edges);
                                 }
                                 v0_edges.Add(e);
-
                                 array<Edge> @v1_edges;
                                 if (!vertToBoundaryEdges.Get("" + e.v1, @v1_edges))
                                 {
@@ -5405,39 +5147,30 @@ namespace SkyBf
                         }
                     }
                 }
-
                 array<string> @boundaryEdgeKeys = boundaryEdges.GetKeys();
                 if (boundaryEdgeKeys.Length < 3)
                     continue;
-
                 array<int> sortedIndices;
                 Edge startEdge;
                 boundaryEdges.Get(boundaryEdgeKeys[0], startEdge);
-
                 sortedIndices.Add(startEdge.v0);
                 sortedIndices.Add(startEdge.v1);
-
                 dictionary usedEdgeKeys;
                 usedEdgeKeys.Set(boundaryEdgeKeys[0], true);
-
                 int currentVert = startEdge.v1;
                 int startVert = startEdge.v0;
-
                 while (currentVert != startVert && sortedIndices.Length <= boundaryEdgeKeys.Length)
                 {
                     array<Edge> @connectedEdges;
                     vertToBoundaryEdges.Get("" + currentVert, @connectedEdges);
-
                     bool foundNext = false;
                     for (uint edge_idx = 0; edge_idx < connectedEdges.Length; ++edge_idx)
                     {
                         Edge nextEdge = connectedEdges[edge_idx];
                         string nextEdgeKey = nextEdge.v0 + "_" + nextEdge.v1;
-
                         if (!usedEdgeKeys.Exists(nextEdgeKey))
                         {
                             usedEdgeKeys.Set(nextEdgeKey, true);
-
                             currentVert = (nextEdge.v0 == currentVert) ? nextEdge.v1 : nextEdge.v0;
                             sortedIndices.Add(currentVert);
                             foundNext = true;
@@ -5446,38 +5179,30 @@ namespace SkyBf
                     }
                     if (!foundNext)
                     {
-
                         print("Error: Could not find next edge in chain for merged face.", Severity::Error);
                         break;
                     }
                 }
-
                 if (sortedIndices.Length > 0 && sortedIndices[sortedIndices.Length - 1] == startVert)
                 {
                     sortedIndices.RemoveAt(sortedIndices.Length - 1);
                 }
-
                 if (sortedIndices.Length < 3)
                     continue;
-
                 newFaceIndices.Add(sortedIndices);
-
                 PrecomputedFace pface;
                 pface.vertexIndices = sortedIndices;
                 pface.normal = GmVec3(referenceNormal);
                 pface.planePoint = GmVec3(vertices[sortedIndices[0]]);
                 newPrecomputedFaces.Add(pface);
             }
-
             this.faces = newFaceIndices;
             this.precomputedFaces = newPrecomputedFaces;
-
             if (this.precomputedFaces.IsEmpty())
             {
             }
             else
             {
-
                 GmVec3 centroid(0, 0, 0);
                 for (uint i = 0; i < this.vertices.Length; ++i)
                 {
@@ -5487,35 +5212,26 @@ namespace SkyBf
                 {
                     centroid /= float(this.vertices.Length);
                 }
-
                 for (uint i = 0; i < this.precomputedFaces.Length; ++i)
                 {
-
                     PrecomputedFace @pface = this.precomputedFaces[i];
-
                     if (pface.vertexIndices.Length < 3)
                         continue;
-
                     GmVec3 v0 = GmVec3(this.vertices[pface.vertexIndices[0]]);
                     GmVec3 v1 = GmVec3(this.vertices[pface.vertexIndices[1]]);
                     GmVec3 v2 = GmVec3(this.vertices[pface.vertexIndices[2]]);
                     GmVec3 correct_normal = Cross(v1 - v0, v2 - v0).Normalized();
-
                     GmVec3 face_to_center = centroid - v0;
                     if (GmDot(correct_normal, face_to_center) > 0.0f)
                     {
                         correct_normal = -correct_normal;
                     }
-
                     pface.normal = correct_normal;
-
                     pface.planePoint = v0;
                 }
             }
-
             if (vertices.IsEmpty() || this.faces.IsEmpty())
                 return;
-
             uint numFaces = this.faces.Length;
             array<Edge> allEdgesTemp;
             for (uint i = 0; i < numFaces; ++i)
@@ -5531,7 +5247,6 @@ namespace SkyBf
                     allEdgesTemp.Add(Edge(i0, i1));
                 }
             }
-
             if (!allEdgesTemp.IsEmpty())
             {
                 allEdgesTemp.SortAsc();
@@ -5544,10 +5259,8 @@ namespace SkyBf
                     }
                 }
             }
-
             if (!this.vertices.IsEmpty())
             {
-
                 vec3 center(0, 0, 0);
                 for (uint i = 0; i < this.vertices.Length; ++i)
                 {
@@ -5555,7 +5268,6 @@ namespace SkyBf
                 }
                 center /= float(this.vertices.Length);
                 this.BoundingSphereCenter = center;
-
                 float maxRadiusSq = 0.0f;
                 for (uint i = 0; i < this.vertices.Length; ++i)
                 {
@@ -5573,7 +5285,6 @@ namespace SkyBf
                 this.BoundingSphereRadius = 0.0f;
             }
         }
-
         bool GetFaceVertices(uint faceIndex, array<vec3> &out faceVerts) const
         {
             if (faceIndex >= faces.Length)
@@ -5589,14 +5300,12 @@ namespace SkyBf
             }
             return true;
         }
-
         GmVec3 GetClosestPoint(const GmVec3 &in p) const
         {
             if (precomputedFaces.IsEmpty())
             {
                 if (vertices.IsEmpty())
                     return p;
-
                 GmVec3 closest_v(vertices[0].x, vertices[0].y, vertices[0].z);
                 float min_dist_sq = (p - closest_v).LengthSquared();
                 for (uint i = 1; i < vertices.Length; ++i)
@@ -5611,17 +5320,13 @@ namespace SkyBf
                 }
                 return closest_v;
             }
-
             GmVec3 closest_point_overall;
             float min_dist_sq = 1e18f;
             bool first_face = true;
-
             for (uint i = 0; i < precomputedFaces.Length; ++i)
             {
                 const PrecomputedFace @face = precomputedFaces[i];
-
                 GmVec3 projectedPoint = p - face.normal * GmDot(p - face.planePoint, face.normal);
-
                 bool isInside = true;
                 for (uint j = 0; j < face.vertexIndices.Length; ++j)
                 {
@@ -5629,14 +5334,12 @@ namespace SkyBf
                     GmVec3 v_end = GmVec3(vertices[face.vertexIndices[(j + 1) % face.vertexIndices.Length]]);
                     GmVec3 edge = v_end - v_start;
                     GmVec3 to_point = projectedPoint - v_start;
-
                     if (GmDot(Cross(edge, to_point), face.normal) < -EPSILON)
                     {
                         isInside = false;
                         break;
                     }
                 }
-
                 GmVec3 point_on_face;
                 if (isInside)
                 {
@@ -5648,7 +5351,6 @@ namespace SkyBf
                     GmVec3 v_first = GmVec3(vertices[face.vertexIndices[0]]);
                     point_on_face = closest_point_on_segment(p, v_last, v_first);
                     float min_edge_dist_sq = (p - point_on_face).LengthSquared();
-
                     for (uint j = 0; j < face.vertexIndices.Length - 1; ++j)
                     {
                         GmVec3 v_start = GmVec3(vertices[face.vertexIndices[j]]);
@@ -5662,7 +5364,6 @@ namespace SkyBf
                         }
                     }
                 }
-
                 float dist_sq = (p - point_on_face).LengthSquared();
                 if (first_face || dist_sq < min_dist_sq)
                 {
@@ -5673,17 +5374,14 @@ namespace SkyBf
             }
             return closest_point_overall;
         }
-
         bool GetFaceNormal(uint faceIndex, GmVec3 &out normal) const
         {
-
             if (faceIndex >= precomputedFaces.Length)
                 return false;
             normal = precomputedFaces[faceIndex].normal;
             return true;
         }
     };
-
     class Ellipsoid
     {
         GmVec3 center;
@@ -5706,17 +5404,14 @@ namespace SkyBf
             this.radii = GmVec3(radii);
             this.rotation = GmMat3(rotation);
         }
-
     } array<iso4> currentRunStates;
     array<string> runStatesResultFiles;
     array<iso4> initialRunStates;
     int maxDur = 0;
     float viztime = 0;
-
     bool runAccepted = false;
     bool stop = false;
     float bestProj = 0.0f;
-
     BFEvaluationResponse @OnEvaluateUberbug(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         BFEvaluationResponse @resp = BFEvaluationResponse();
@@ -5818,7 +5513,6 @@ namespace SkyBf
         }
         return resp;
     }
-
     string SaveCurrentInputs(SimulationManager @simManager)
     {
         string filename = currentFindMode == "Collect many" ? GetVariableString(g_uberPluginPrefix + "_uberbug_result_file")
@@ -5842,23 +5536,19 @@ namespace SkyBf
         }
         return filename;
     }
-
     bool isUberbug(SimulationManager @simManager)
     {
         vec3 speed = simManager.Dyna.CurrentState.LinearSpeed;
         vec3 previousSpeed = simManager.Dyna.PreviousState.LinearSpeed;
         return Math::Dot(speed.Normalized(), previousSpeed.Normalized()) <= GetVariableDouble(g_uberPluginPrefix + "_uberbug_threshold") && speed.Length() * 3.6f >= GetVariableDouble(g_uberPluginPrefix + "_uberbug_min_speed");
     }
-
     vec3 GetUberbugTrajectory(SimulationManager @simManager)
     {
         vec3 pos = simManager.Dyna.CurrentState.Location.Position;
         vec3 prevPos = simManager.Dyna.PreviousState.Location.Position;
         return (pos - prevPos);
     }
-
     int totalAmountCollected = 0;
-
     void OnUberSimulationBegin(SimulationManager @simManager)
     {
         if (GetVariableString("controller") != "bfv2")
@@ -5879,7 +5569,6 @@ namespace SkyBf
         {
             RemoveTrigger(g_uberbugDrawTriggerIds[i]);
         }
-
         string cachedTrajIds = GetVariableString(g_uberPluginPrefix + "_trajectory_trigger_cache");
         if (g_trajectoryDrawTriggerIds.Length == 0 && cachedTrajIds != "")
         {
@@ -5907,21 +5596,15 @@ namespace SkyBf
         g_uberbugDrawTriggerIds.Clear();
         SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
     }
-
     string currentUberMode = "Find";
     string currentFindMode = "Single";
-
     array<array<iso4>> uberbugStates;
-
     void RenderBruteforceEvaluationSettingsUberbug()
     {
-
         SimulationManager @simManager = GetSimulationManager();
         TM::GameCamera @cam = GetCurrentCamera();
-
         UI::Dummy(vec2(0, 5));
         UI::PushItemWidth(231);
-
         if (UI::BeginCombo("Mode", currentUberMode))
         {
             if (UI::Selectable("Find", currentUberMode == "Find"))
@@ -5962,7 +5645,6 @@ namespace SkyBf
             UI::Dummy(vec2(0, 1));
             if (currentFindMode == "Collect many")
             {
-
                 UI::InputIntVar("Amount", g_uberPluginPrefix + "_uberbug_amount", 10);
                 UI::Dummy(vec2(0, 1));
                 UI::InputTextVar("Result file", g_uberPluginPrefix + "_uberbug_result_file");
@@ -6023,17 +5705,14 @@ namespace SkyBf
         UI::InputFloatVar("Min. speed", g_uberPluginPrefix + "_uberbug_min_speed", 10.0f);
         UI::PopItemWidth();
     }
-
     string replaySavingFilenameFormat = "";
     int record = 0;
     int currentReplay = 1;
     int replaySavingTime = 0;
     SimulationState baseState;
-
     void OnRunStep(SimulationManager @simManager)
     {
         CacheCheckpointData();
-
         if(record==1){
             simManager.GiveUp();
             record=2;
@@ -6065,18 +5744,13 @@ namespace SkyBf
         }
     }
     uint64 last_ubertriggers_update = 0;
-
     array<int> g_uberbugDrawTriggerIds;
     array<int> g_trajectoryDrawTriggerIds;
-
     int prevTime = -1;
-
     vec3 prev1();
     vec3 prev2();
-
     void drawTrajectory(vec3 p1, vec3 p2)
     {
-
         TM::GameState gameState = GetCurrentGameState();
         string cachedTriggerIds = GetVariableString(g_uberPluginPrefix + "_trajectory_trigger_cache");
         if (g_trajectoryDrawTriggerIds.Length == 0 && cachedTriggerIds != "")
@@ -6134,9 +5808,7 @@ namespace SkyBf
             SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", cache);
         }
     }
-
     uint64 startTime = 0;
-
     void UberRender()
     {
         if (GetCurrentGameState() == TM::GameState::StartUp)
@@ -6162,12 +5834,9 @@ namespace SkyBf
             Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point1")),
             Text::ParseVec3(GetVariableString(g_uberPluginPrefix + "_uberbug_point2")));
     }
-
     void drawUberTriggers(int time)
     {
-
         TM::GameState gameState = GetCurrentGameState();
-
         string cachedTriggerIds = GetVariableString(g_uberPluginPrefix + "_uberbugs_trigger_cache");
         if (g_uberbugDrawTriggerIds.Length == 0 && cachedTriggerIds != "")
         {
@@ -6178,7 +5847,6 @@ namespace SkyBf
             }
             SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
         }
-
         if (!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_visualization") || gameState != TM::GameState::LocalRace)
         {
             for (uint i = 0; i < g_uberbugDrawTriggerIds.Length; i++)
@@ -6188,7 +5856,6 @@ namespace SkyBf
             g_uberbugDrawTriggerIds.Clear();
             return;
         }
-
         if (time == prevTime)
         {
             if (!GetVariableBool(g_uberPluginPrefix + "_uberbug_show_visualization"))
@@ -6239,27 +5906,20 @@ namespace SkyBf
                 iso4 carTransform = uberbugStates[i][time / 10];
                 vec3 carWorldPos = carTransform.Position;
                 mat3 carWorldRot = carTransform.Rotation;
-
                 vec3 aabbMin, aabbSize;
                 int id;
-
                 vec3 mainBodyLocalHalfExtents(1.5f / 2.0f, 0.45 / 2.0f, 3.0f / 2.0f);
                 vec3 mainBodyLocalOffset(0.0f, 0.0f, 0.0f);
-
                 CalculateRotatedAABB(mainBodyLocalOffset, mainBodyLocalHalfExtents, carWorldPos, carWorldRot, aabbMin, aabbSize);
                 id = SetTrigger(Trigger3D(aabbMin, aabbSize));
                 g_uberbugDrawTriggerIds.Add(id);
-
                 vec3 backPartLocalHalfExtents(0.6f / 2.0f, 0.5f / 2.0f, 0.6f / 2.0f);
                 vec3 backPartLocalOffset(0.0f, 0.4f, -0.8f);
-
                 CalculateRotatedAABB(backPartLocalOffset, backPartLocalHalfExtents, carWorldPos, carWorldRot, aabbMin, aabbSize);
                 id = SetTrigger(Trigger3D(aabbMin, aabbSize));
                 g_uberbugDrawTriggerIds.Add(id);
-
                 vec3 topPartLocalHalfExtents(0.3f / 2.0f, 0.35f / 2.0f, 0.7f / 2.0f);
                 vec3 topPartLocalOffset(0.0f, 0.4f, 0.0f);
-
                 CalculateRotatedAABB(topPartLocalOffset, topPartLocalHalfExtents, carWorldPos, carWorldRot, aabbMin, aabbSize);
                 id = SetTrigger(Trigger3D(aabbMin, aabbSize));
                 g_uberbugDrawTriggerIds.Add(id);
@@ -6280,9 +5940,7 @@ namespace SkyBf
         }
         SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", cache);
     }
-
     string closestInputFile = "";
-
     void UberbugPageSettings()
     {
         UI::CheckboxVar("Show uberbugs visualization", g_uberPluginPrefix + "_uberbug_show_visualization");
@@ -6351,13 +6009,11 @@ namespace SkyBf
             {
             }
         }
-
         UI::Dummy(vec2(0, 3));
         UI::Separator();
         UI::Dummy(vec2(0, 3));
         UI::TextWrapped("Replay generation from input files");
         UI::Dummy(vec2(0, 1));
-
         if(GetSimulationManager().InRace){
             replaySavingFilenameFormat = UI::InputTextVar("Filename format", g_uberPluginPrefix + "_replaysaving_filename_format");
             replaySavingTime = UI::InputTimeVar("Time limit", g_uberPluginPrefix + "_replaysaving_time_limit");
@@ -6366,7 +6022,6 @@ namespace SkyBf
             }else if(UI::Button("Generate replays")){
                 record = 1;
             }
-            
             UI::TextDimmed("This will go through every input file with a name matching the pattern. Every replay will be saved with a different time, so that they can be differentiated in mediatracker.");
             float root = Math::Ceil(replaySavingTime/1000.0);
             UI::TextDimmed("Given the current time limit, replays will start from: " + root + ".01 s for the first replay, " + root + ".02 s for the second, and so on.");
@@ -6376,17 +6031,13 @@ namespace SkyBf
         }else{
             UI::TextDimmed("You need to be in a race to generate replays from input files.");
         }
-
         UI::Dummy(vec2(0, 3));
         UI::Separator();
         UI::Dummy(vec2(0, 3));
-
         UI::CheckboxVar("Show trajectory preview", g_uberPluginPrefix + "_uberbug_show_trajectory");
     }
-
     void OnClearUberbugs(int fromTime, int toTime, const string &in commandLine, const array<string> &in args)
     {
-
         for (uint i = 0; i < g_uberbugDrawTriggerIds.Length; ++i)
         {
             RemoveTrigger(g_uberbugDrawTriggerIds[i]);
@@ -6395,7 +6046,6 @@ namespace SkyBf
         SetVariable(g_uberPluginPrefix + "_uberbugs_trigger_cache", "");
         uberbugStates.Clear();
     }
-
     vec3 Mat3MultVec3(const mat3 &in M, const vec3 &in v)
     {
         return vec3(
@@ -6403,7 +6053,6 @@ namespace SkyBf
             M.y.x * v.x + M.y.y * v.y + M.y.z * v.z,
             M.z.x * v.x + M.z.y * v.y + M.z.z * v.z);
     }
-
     void CalculateRotatedAABB(
         const vec3 &in localCenterOffset,
         const vec3 &in localHalfExtents,
@@ -6412,9 +6061,7 @@ namespace SkyBf
         vec3 &out out_aabbMin,
         vec3 &out out_aabbSize)
     {
-
         vec3 worldBoxCenter = carWorldPosition + Mat3MultVec3(carWorldRotation, localCenterOffset);
-
         vec3 newGlobalHalfExtents;
         newGlobalHalfExtents.x = Math::Abs(carWorldRotation.x.x * localHalfExtents.x) +
                                  Math::Abs(carWorldRotation.y.x * localHalfExtents.y) +
@@ -6425,13 +6072,11 @@ namespace SkyBf
         newGlobalHalfExtents.z = Math::Abs(carWorldRotation.x.z * localHalfExtents.x) +
                                  Math::Abs(carWorldRotation.y.z * localHalfExtents.y) +
                                  Math::Abs(carWorldRotation.z.z * localHalfExtents.z);
-
         out_aabbMin = worldBoxCenter - newGlobalHalfExtents;
         out_aabbSize = newGlobalHalfExtents * 2.0f;
     }
     array<vec3> g_polyVertsInCarSpace;
     array<vec3> g_transformedVertices;
-
     vec3 Normalize(vec3 v)
     {
         float magnitude = v.Length();
@@ -6441,14 +6086,12 @@ namespace SkyBf
         }
         return vec3(0, 0, 0);
     }
-
     vec3 Cross(vec3 a, vec3 b)
     {
         return vec3(a.y * b.z - a.z * b.y,
                     a.z * b.x - a.x * b.z,
                     a.x * b.y - a.y * b.x);
     }
-
     GmVec3 Cross(const GmVec3 &in a, const GmVec3 &in b)
     {
         return GmVec3(
@@ -6456,9 +6099,7 @@ namespace SkyBf
             a.z * b.x - a.x * b.z,
             a.x * b.y - a.y * b.x);
     }
-
     const float EPSILON = 1e-6f;
-
     GmIso4 GetCarEllipsoidLocationByIndex(SimulationManager @simM, const GmIso4 &in carLocation, uint index)
     {
         if (index >= 8)
@@ -6508,7 +6149,6 @@ namespace SkyBf
         }
         return worldTransform;
     }
-
     void InitializeCarEllipsoids()
     {
         g_carEllipsoids.Clear();
@@ -6543,22 +6183,18 @@ namespace SkyBf
             g_carEllipsoids.Add(Ellipsoid(localPositions[i], radii[i], localRotations[i]));
         }
     }
-
     float GmDot(const GmVec3 &in a, const GmVec3 &in b)
     {
         return a.x * b.x + a.y * b.y + a.z * b.z;
     }
-
     GmVec3 GmScale(const GmVec3 &in a, const GmVec3 &in b)
     {
         return GmVec3(a.x * b.x, a.y * b.y, a.z * b.z);
     }
-
     vec3 FindClosestPointOnPolyToOrigin_Native(const array<vec3> &in transformedVertices, const Polyhedron &in originalPoly)
     {
         if (transformedVertices.IsEmpty())
             return vec3(0, 0, 0);
-
         vec3 centroid(0, 0, 0);
         for (uint i = 0; i < transformedVertices.Length; ++i)
         {
@@ -6568,37 +6204,28 @@ namespace SkyBf
         {
             centroid /= float(transformedVertices.Length);
         }
-
         float max_dist = -1e18f;
         int best_face_index = -1;
-
         for (uint i = 0; i < originalPoly.precomputedFaces.Length; ++i)
         {
             const PrecomputedFace @face_info = originalPoly.precomputedFaces[i];
             if (face_info.vertexIndices.Length < 3)
                 continue;
-
             const vec3 v0 = transformedVertices[face_info.vertexIndices[0]];
             const vec3 v1 = transformedVertices[face_info.vertexIndices[1]];
             const vec3 v2 = transformedVertices[face_info.vertexIndices[2]];
-
             vec3 face_normal = Cross(v1 - v0, v2 - v0).Normalized();
-
             if (Math::Dot(face_normal, centroid - v0) > 0.0f)
             {
-
                 face_normal = face_normal * -1.0f;
             }
-
             float dist = -Math::Dot(v0, face_normal);
-
             if (dist > max_dist)
             {
                 max_dist = dist;
                 best_face_index = i;
             }
         }
-
         if (best_face_index == -1)
         {
             float min_dist_sq = 1e18f;
@@ -6614,22 +6241,17 @@ namespace SkyBf
             }
             return closest_point;
         }
-
         const PrecomputedFace @best_face = originalPoly.precomputedFaces[best_face_index];
         const array<int> @vertexIndices = best_face.vertexIndices;
-
         const vec3 v0 = transformedVertices[vertexIndices[0]];
         const vec3 v1 = transformedVertices[vertexIndices[1]];
         const vec3 v2 = transformedVertices[vertexIndices[2]];
         vec3 best_face_normal = Cross(v1 - v0, v2 - v0).Normalized();
         if (Math::Dot(best_face_normal, centroid - v0) > 0.0f)
         {
-
             best_face_normal = best_face_normal * -1.0f;
         }
-
         vec3 projectedPoint = best_face_normal * -Math::Dot(v0, best_face_normal);
-
         bool isInside = true;
         for (uint j = 0; j < vertexIndices.Length; ++j)
         {
@@ -6637,14 +6259,12 @@ namespace SkyBf
             const vec3 v_end = transformedVertices[vertexIndices[(j + 1) % vertexIndices.Length]];
             vec3 edge = v_end - v_start;
             vec3 to_point = projectedPoint - v_start;
-
             if (Math::Dot(Cross(edge, to_point), best_face_normal) < -EPSILON)
             {
                 isInside = false;
                 break;
             }
         }
-
         if (isInside)
         {
             return projectedPoint;
@@ -6668,49 +6288,38 @@ namespace SkyBf
             return closest_point_on_edge;
         }
     }
-
     vec3 GetClosestPointOnTransformedPolyhedron(const array<vec3> &in transformedVertices, const Polyhedron &in originalPoly)
     {
         uint64 polyCheckStartTime = Time::get_Now();
-
         vec3 closestPoint = FindClosestPointOnPolyToOrigin_Native(transformedVertices, originalPoly);
         g_totalClosestPointPolyTime += (Time::get_Now() - polyCheckStartTime);
         return closestPoint;
     }
-
     float CalculateMinCarDistanceToPoly_Inner(const GmIso4 &in carWorldTransformGm, const Polyhedron @targetPoly)
     {
         if (targetPoly is null || targetPoly.vertices.IsEmpty())
         {
             return 1e18f;
         }
-
         auto simManager = GetSimulationManager();
         float minDistanceSqOverall = 1e18f;
-
         iso4 carWorldTransform = carWorldTransformGm.ToIso4();
-
         mat3 carInvRotation = carWorldTransform.Rotation;
-
         g_polyVertsInCarSpace.Resize(targetPoly.vertices.Length);
         for (uint i = 0; i < targetPoly.vertices.Length; ++i)
         {
             vec3 v_rel_world = targetPoly.vertices[i] - carWorldTransform.Position;
-
             g_polyVertsInCarSpace[i] = vec3(
                 carInvRotation.x.x * v_rel_world.x + carInvRotation.y.x * v_rel_world.y + carInvRotation.z.x * v_rel_world.z,
                 carInvRotation.x.y * v_rel_world.x + carInvRotation.y.y * v_rel_world.y + carInvRotation.z.y * v_rel_world.z,
                 carInvRotation.x.z * v_rel_world.x + carInvRotation.y.z * v_rel_world.y + carInvRotation.z.z * v_rel_world.z);
         }
-
         g_transformedVertices.Resize(targetPoly.vertices.Length);
-
         for (uint ellipsoidIndex = 0; ellipsoidIndex < g_carEllipsoids.Length; ++ellipsoidIndex)
         {
             const Ellipsoid @baseEllipsoid = g_carEllipsoids[ellipsoidIndex];
             vec3 localPosition = baseEllipsoid.center.ToVec3();
             vec3 invRadii(1.0f / baseEllipsoid.radii.x, 1.0f / baseEllipsoid.radii.y, 1.0f / baseEllipsoid.radii.z);
-
             if (ellipsoidIndex <= 3)
             {
                 iso4 wheelSurfaceLocation;
@@ -6730,7 +6339,6 @@ namespace SkyBf
                     break;
                 }
                 localPosition = wheelSurfaceLocation.Position;
-
                 for (uint i = 0; i < g_polyVertsInCarSpace.Length; ++i)
                 {
                     g_transformedVertices[i] = Scale(g_polyVertsInCarSpace[i] - localPosition, invRadii);
@@ -6738,13 +6346,10 @@ namespace SkyBf
             }
             else
             {
-
                 mat3 localInvRotation = baseEllipsoid.rotation.ToMat3();
-
                 for (uint i = 0; i < g_polyVertsInCarSpace.Length; ++i)
                 {
                     vec3 v_relative_to_ellipsoid = g_polyVertsInCarSpace[i] - localPosition;
-
                     vec3 v_rotated = vec3(
                         localInvRotation.x.x * v_relative_to_ellipsoid.x + localInvRotation.y.x * v_relative_to_ellipsoid.y + localInvRotation.z.x * v_relative_to_ellipsoid.z,
                         localInvRotation.x.y * v_relative_to_ellipsoid.x + localInvRotation.y.y * v_relative_to_ellipsoid.y + localInvRotation.z.y * v_relative_to_ellipsoid.z,
@@ -6752,21 +6357,15 @@ namespace SkyBf
                     g_transformedVertices[i] = Scale(v_rotated, invRadii);
                 }
             }
-
             vec3 p_poly_transformed = GetClosestPointOnTransformedPolyhedron(g_transformedVertices, targetPoly);
-
             if (p_poly_transformed.LengthSquared() < 1.0f - EPSILON)
             {
                 return 0.0f;
             }
-
             vec3 p_sphere_transformed = p_poly_transformed.Normalized();
-
             vec3 p_poly_carspace, p_sphere_carspace;
-
             vec3 p_poly_unscaled = Scale(p_poly_transformed, baseEllipsoid.radii.ToVec3());
             vec3 p_sphere_unscaled = Scale(p_sphere_transformed, baseEllipsoid.radii.ToVec3());
-
             if (ellipsoidIndex <= 3)
             {
                 p_poly_carspace = p_poly_unscaled + localPosition;
@@ -6774,10 +6373,8 @@ namespace SkyBf
             }
             else
             {
-
                 mat3 localForwardRotation = baseEllipsoid.rotation.ToMat3();
                 localForwardRotation.Transpose();
-
                 p_poly_carspace = vec3(
                                       localForwardRotation.x.x * p_poly_unscaled.x + localForwardRotation.y.x * p_poly_unscaled.y + localForwardRotation.z.x * p_poly_unscaled.z,
                                       localForwardRotation.x.y * p_poly_unscaled.x + localForwardRotation.y.y * p_poly_unscaled.y + localForwardRotation.z.y * p_poly_unscaled.z,
@@ -6789,17 +6386,14 @@ namespace SkyBf
                                         localForwardRotation.x.z * p_sphere_unscaled.x + localForwardRotation.y.z * p_sphere_unscaled.y + localForwardRotation.z.z * p_sphere_unscaled.z) +
                                     localPosition;
             }
-
             float distanceSq = (p_poly_carspace - p_sphere_carspace).LengthSquared();
             if (distanceSq < minDistanceSqOverall)
             {
                 minDistanceSqOverall = distanceSq;
             }
         }
-
         return Math::Sqrt(minDistanceSqOverall);
     }
-
     float CalculateMinCarDistanceToPoly(const GmIso4 &in carWorldTransform, const Polyhedron @targetPoly)
     {
         uint64 funcStartTime = Time::get_Now();
@@ -6807,38 +6401,30 @@ namespace SkyBf
         g_totalCalcMinCarDistTime += (Time::get_Now() - funcStartTime);
         return result;
     }
-
     Polyhedron ClipPolyhedronByPlane(const Polyhedron &in poly, const vec3 &in clipPlaneNormal, const vec3 &in clipPlanePoint)
     {
         if (poly.vertices.IsEmpty())
             return poly;
-
         array<vec3> newVertices;
         array<array<int>> newFaces;
         dictionary vertexMap;
-
         array<float> vertexDists(poly.vertices.Length);
         for (uint i = 0; i < poly.vertices.Length; i++)
         {
             vertexDists[i] = Math::Dot(poly.vertices[i] - clipPlanePoint, clipPlaneNormal);
         }
-
         for (uint faceIdx = 0; faceIdx < poly.faces.Length; faceIdx++)
         {
             const array<int> @face = poly.faces[faceIdx];
             if (face.Length < 3)
                 continue;
-
             array<int> newPolygonIndices;
-
             for (uint i = 0; i < face.Length; i++)
             {
                 int currOriginalIdx = face[i];
                 int nextOriginalIdx = face[(i + 1) % face.Length];
-
                 float currDist = vertexDists[currOriginalIdx];
                 float nextDist = vertexDists[nextOriginalIdx];
-
                 if (currDist <= EPSILON)
                 {
                     string key = "" + currOriginalIdx;
@@ -6849,28 +6435,23 @@ namespace SkyBf
                         vertexMap.Set(key, newIdx);
                         newVertices.Add(poly.vertices[currOriginalIdx]);
                     }
-
                     if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length - 1] != newIdx)
                     {
                         newPolygonIndices.Add(newIdx);
                     }
                 }
-
                 if ((currDist > 0 && nextDist < 0) || (currDist < 0 && nextDist > 0))
                 {
                     float t = currDist / (currDist - nextDist);
                     vec3 intersectionPoint = poly.vertices[currOriginalIdx] + (poly.vertices[nextOriginalIdx] - poly.vertices[currOriginalIdx]) * t;
-
                     int newIdx = newVertices.Length;
                     newVertices.Add(intersectionPoint);
-
                     if (newPolygonIndices.IsEmpty() || newPolygonIndices[newPolygonIndices.Length - 1] != newIdx)
                     {
                         newPolygonIndices.Add(newIdx);
                     }
                 }
             }
-
             if (newPolygonIndices.Length >= 3)
             {
                 for (uint i = 1; i < newPolygonIndices.Length - 1; i++)
@@ -6883,46 +6464,36 @@ namespace SkyBf
                 }
             }
         }
-
         Polyhedron clippedPoly(newVertices, newFaces);
         return clippedPoly;
     }
-
     Polyhedron ClipPolyhedronByAABB(const Polyhedron &in poly, const AABB &in box)
     {
         Polyhedron clippedPoly = poly;
-
         clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(-1, 0, 0), box.min);
         clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(1, 0, 0), box.max);
         clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, -1, 0), box.min);
         clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, 1, 0), box.max);
         clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, 0, -1), box.min);
         clippedPoly = ClipPolyhedronByPlane(clippedPoly, vec3(0, 0, 1), box.max);
-
         return clippedPoly;
     }
-
     vec3 Scale(const vec3 &in a, const vec3 &in b)
     {
         return vec3(a.x * b.x, a.y * b.y, a.z * b.z);
     }
-
     vec3 closest_point_on_segment_from_origin_native(const vec3 &in a, const vec3 &in b)
     {
         vec3 ab = b - a;
-
         float ab_len_sq = ab.LengthSquared();
         if (ab_len_sq < 1e-12f)
         {
             return a;
         }
-
         float t = -Math::Dot(a, ab) / ab_len_sq;
-
         t = Math::Clamp(t, 0.0f, 1.0f);
         return a + ab * t;
     }
-
     GmVec3 closest_point_on_segment(const GmVec3 &in p, const GmVec3 &in a, const GmVec3 &in b)
     {
         GmVec3 ab = b - a;
@@ -6935,43 +6506,33 @@ namespace SkyBf
         t = Math::Max(0.0f, Math::Min(1.0f, t));
         return a + ab * t;
     }
-
     string vec3tostring(const vec3 &in v)
     {
         return "x: " + v.x + ", y: " + v.y + ", z: " + v.z;
     }
-
 }
-
 namespace CarLocationBf {
     uint64 g_lastTriggerUpdateTime = 0;
     array<int> g_ellipsoidVisualTriggerIds;
     string id = "clbf";
     array<array<vec3>> voxels;
     array<string> data = {"# X Y Z\n-1.20000000 0.30000000 -1.50000000\n-1.20000000 0.30000000 -1.20000000\n-1.20000000 0.60000000 -1.20000000\n-0.90000000 0.00000000 -1.50000000\n-0.90000000 0.00000000 -1.20000000\n-0.90000000 0.00000000 -0.90000000\n-0.90000000 0.00000000 1.50000000\n-0.90000000 0.00000000 1.80000000\n-0.90000000 0.00000000 2.10000000\n-0.90000000 0.30000000 -1.50000000\n-0.90000000 0.30000000 -0.90000000\n-0.90000000 0.30000000 -0.60000000\n-0.90000000 0.30000000 -0.30000000\n-0.90000000 0.30000000 0.00000000\n-0.90000000 0.30000000 0.30000000\n-0.90000000 0.30000000 0.60000000\n-0.90000000 0.30000000 0.90000000\n-0.90000000 0.30000000 1.50000000\n-0.90000000 0.30000000 1.80000000\n-0.90000000 0.30000000 2.10000000\n-0.90000000 0.60000000 -1.50000000\n-0.90000000 0.60000000 -0.90000000\n-0.90000000 0.60000000 -0.60000000\n-0.90000000 0.60000000 -0.30000000\n-0.90000000 0.60000000 0.00000000\n-0.90000000 0.60000000 0.30000000\n-0.90000000 0.60000000 0.60000000\n-0.90000000 0.60000000 0.90000000\n-0.90000000 0.60000000 1.50000000\n-0.90000000 0.60000000 1.80000000\n-0.90000000 0.60000000 2.10000000\n-0.90000000 0.90000000 -1.50000000\n-0.90000000 0.90000000 -1.20000000\n-0.90000000 0.90000000 -0.90000000\n-0.90000000 0.90000000 -0.60000000\n-0.90000000 0.90000000 -0.30000000\n-0.60000000 0.00000000 -1.20000000\n-0.60000000 0.00000000 -0.60000000\n-0.60000000 0.00000000 -0.30000000\n-0.60000000 0.00000000 0.00000000\n-0.60000000 0.00000000 0.30000000\n-0.60000000 0.00000000 0.60000000\n-0.60000000 0.00000000 1.50000000\n-0.60000000 0.00000000 1.80000000\n-0.60000000 0.30000000 -1.80000000\n-0.60000000 0.30000000 -1.50000000\n-0.60000000 0.30000000 -0.90000000\n-0.60000000 0.30000000 0.90000000\n-0.60000000 0.30000000 1.20000000\n-0.60000000 0.30000000 2.10000000\n-0.60000000 0.60000000 -1.80000000\n-0.60000000 0.60000000 0.30000000\n-0.60000000 0.60000000 0.60000000\n-0.60000000 0.60000000 0.90000000\n-0.60000000 0.60000000 1.20000000\n-0.60000000 0.60000000 1.50000000\n-0.60000000 0.60000000 1.80000000\n-0.60000000 0.60000000 2.10000000\n-0.60000000 0.90000000 -1.80000000\n-0.60000000 0.90000000 -0.30000000\n-0.60000000 0.90000000 0.00000000\n-0.60000000 1.20000000 -1.50000000\n-0.60000000 1.20000000 -1.20000000\n-0.60000000 1.20000000 -0.90000000\n-0.60000000 1.20000000 -0.60000000\n-0.30000000 0.00000000 -0.90000000\n-0.30000000 0.00000000 -0.60000000\n-0.30000000 0.00000000 -0.30000000\n-0.30000000 0.00000000 0.00000000\n-0.30000000 0.00000000 0.30000000\n-0.30000000 0.00000000 0.60000000\n-0.30000000 0.00000000 0.90000000\n-0.30000000 0.00000000 1.20000000\n-0.30000000 0.00000000 1.50000000\n-0.30000000 0.00000000 1.80000000\n-0.30000000 0.00000000 2.10000000\n-0.30000000 0.30000000 -1.80000000\n-0.30000000 0.30000000 -1.50000000\n-0.30000000 0.30000000 -1.20000000\n-0.30000000 0.30000000 2.10000000\n-0.30000000 0.60000000 -1.80000000\n-0.30000000 0.60000000 1.20000000\n-0.30000000 0.60000000 1.50000000\n-0.30000000 0.60000000 1.80000000\n-0.30000000 0.60000000 2.10000000\n-0.30000000 0.90000000 -1.80000000\n-0.30000000 0.90000000 0.00000000\n-0.30000000 0.90000000 0.30000000\n-0.30000000 0.90000000 0.60000000\n-0.30000000 0.90000000 0.90000000\n-0.30000000 1.20000000 -1.50000000\n-0.30000000 1.20000000 -1.20000000\n-0.30000000 1.20000000 -0.90000000\n-0.30000000 1.20000000 -0.60000000\n-0.30000000 1.20000000 -0.30000000\n0.00000000 0.00000000 -0.90000000\n0.00000000 0.00000000 -0.60000000\n0.00000000 0.00000000 -0.30000000\n0.00000000 0.00000000 0.00000000\n0.00000000 0.00000000 0.30000000\n0.00000000 0.00000000 0.60000000\n0.00000000 0.00000000 0.90000000\n0.00000000 0.00000000 1.20000000\n0.00000000 0.00000000 1.50000000\n0.00000000 0.00000000 1.80000000\n0.00000000 0.00000000 2.10000000\n0.00000000 0.30000000 -1.80000000\n0.00000000 0.30000000 -1.50000000\n0.00000000 0.30000000 -1.20000000\n0.00000000 0.30000000 2.10000000\n0.00000000 0.60000000 -1.80000000\n0.00000000 0.60000000 1.20000000\n0.00000000 0.60000000 1.50000000\n0.00000000 0.60000000 1.80000000\n0.00000000 0.60000000 2.10000000\n0.00000000 0.90000000 -1.80000000\n0.00000000 0.90000000 0.00000000\n0.00000000 0.90000000 0.30000000\n0.00000000 0.90000000 0.60000000\n0.00000000 0.90000000 0.90000000\n0.00000000 1.20000000 -1.50000000\n0.00000000 1.20000000 -1.20000000\n0.00000000 1.20000000 -0.90000000\n0.00000000 1.20000000 -0.60000000\n0.00000000 1.20000000 -0.30000000\n0.30000000 0.00000000 -0.90000000\n0.30000000 0.00000000 -0.60000000\n0.30000000 0.00000000 -0.30000000\n0.30000000 0.00000000 0.00000000\n0.30000000 0.00000000 0.30000000\n0.30000000 0.00000000 0.60000000\n0.30000000 0.00000000 0.90000000\n0.30000000 0.00000000 1.20000000\n0.30000000 0.00000000 1.50000000\n0.30000000 0.00000000 1.80000000\n0.30000000 0.00000000 2.10000000\n0.30000000 0.30000000 -1.80000000\n0.30000000 0.30000000 -1.50000000\n0.30000000 0.30000000 -1.20000000\n0.30000000 0.30000000 2.10000000\n0.30000000 0.60000000 -1.80000000\n0.30000000 0.60000000 1.20000000\n0.30000000 0.60000000 1.50000000\n0.30000000 0.60000000 1.80000000\n0.30000000 0.60000000 2.10000000\n0.30000000 0.90000000 -1.80000000\n0.30000000 0.90000000 0.00000000\n0.30000000 0.90000000 0.30000000\n0.30000000 0.90000000 0.60000000\n0.30000000 0.90000000 0.90000000\n0.30000000 1.20000000 -1.50000000\n0.30000000 1.20000000 -1.20000000\n0.30000000 1.20000000 -0.90000000\n0.30000000 1.20000000 -0.60000000\n0.30000000 1.20000000 -0.30000000\n0.60000000 0.00000000 -1.20000000\n0.60000000 0.00000000 -0.60000000\n0.60000000 0.00000000 -0.30000000\n0.60000000 0.00000000 0.00000000\n0.60000000 0.00000000 0.30000000\n0.60000000 0.00000000 0.60000000\n0.60000000 0.00000000 1.50000000\n0.60000000 0.00000000 1.80000000\n0.60000000 0.30000000 -1.80000000\n0.60000000 0.30000000 -1.50000000\n0.60000000 0.30000000 -0.90000000\n0.60000000 0.30000000 0.90000000\n0.60000000 0.30000000 1.20000000\n0.60000000 0.30000000 2.10000000\n0.60000000 0.60000000 -1.80000000\n0.60000000 0.60000000 0.30000000\n0.60000000 0.60000000 0.60000000\n0.60000000 0.60000000 0.90000000\n0.60000000 0.60000000 1.20000000\n0.60000000 0.60000000 1.50000000\n0.60000000 0.60000000 1.80000000\n0.60000000 0.60000000 2.10000000\n0.60000000 0.90000000 -1.80000000\n0.60000000 0.90000000 -0.30000000\n0.60000000 0.90000000 0.00000000\n0.60000000 1.20000000 -1.50000000\n0.60000000 1.20000000 -1.20000000\n0.60000000 1.20000000 -0.90000000\n0.60000000 1.20000000 -0.60000000\n0.90000000 0.00000000 -1.50000000\n0.90000000 0.00000000 -1.20000000\n0.90000000 0.00000000 -0.90000000\n0.90000000 0.00000000 1.50000000\n0.90000000 0.00000000 1.80000000\n0.90000000 0.00000000 2.10000000\n0.90000000 0.30000000 -1.50000000\n0.90000000 0.30000000 -0.90000000\n0.90000000 0.30000000 -0.60000000\n0.90000000 0.30000000 -0.30000000\n0.90000000 0.30000000 0.00000000\n0.90000000 0.30000000 0.30000000\n0.90000000 0.30000000 0.60000000\n0.90000000 0.30000000 0.90000000\n0.90000000 0.30000000 1.50000000\n0.90000000 0.30000000 1.80000000\n0.90000000 0.30000000 2.10000000\n0.90000000 0.60000000 -1.50000000\n0.90000000 0.60000000 -0.90000000\n0.90000000 0.60000000 -0.60000000\n0.90000000 0.60000000 -0.30000000\n0.90000000 0.60000000 0.00000000\n0.90000000 0.60000000 0.30000000\n0.90000000 0.60000000 0.60000000\n0.90000000 0.60000000 0.90000000\n0.90000000 0.60000000 1.50000000\n0.90000000 0.60000000 1.80000000\n0.90000000 0.60000000 2.10000000\n0.90000000 0.90000000 -1.50000000\n0.90000000 0.90000000 -1.20000000\n0.90000000 0.90000000 -0.90000000\n0.90000000 0.90000000 -0.60000000\n0.90000000 0.90000000 -0.30000000\n1.20000000 0.30000000 -1.50000000\n1.20000000 0.30000000 -1.20000000\n1.20000000 0.60000000 -1.20000000",    "# X Y Z\n-1.00000000 0.00000000 -1.40000000\n-1.00000000 0.00000000 -1.20000000\n-1.00000000 0.00000000 -1.00000000\n-1.00000000 0.00000000 1.60000000\n-1.00000000 0.00000000 1.80000000\n-1.00000000 0.00000000 2.00000000\n-1.00000000 0.20000000 -1.60000000\n-1.00000000 0.20000000 -1.40000000\n-1.00000000 0.20000000 -1.20000000\n-1.00000000 0.20000000 -1.00000000\n-1.00000000 0.20000000 -0.80000000\n-1.00000000 0.20000000 1.40000000\n-1.00000000 0.20000000 1.60000000\n-1.00000000 0.20000000 1.80000000\n-1.00000000 0.20000000 2.00000000\n-1.00000000 0.20000000 2.20000000\n-1.00000000 0.40000000 -1.60000000\n-1.00000000 0.40000000 -1.40000000\n-1.00000000 0.40000000 -1.20000000\n-1.00000000 0.40000000 -1.00000000\n-1.00000000 0.40000000 -0.80000000\n-1.00000000 0.40000000 -0.60000000\n-1.00000000 0.40000000 -0.40000000\n-1.00000000 0.40000000 -0.20000000\n-1.00000000 0.40000000 0.00000000\n-1.00000000 0.40000000 0.20000000\n-1.00000000 0.40000000 0.40000000\n-1.00000000 0.40000000 1.40000000\n-1.00000000 0.40000000 1.60000000\n-1.00000000 0.40000000 1.80000000\n-1.00000000 0.40000000 2.00000000\n-1.00000000 0.40000000 2.20000000\n-1.00000000 0.60000000 -1.60000000\n-1.00000000 0.60000000 -1.40000000\n-1.00000000 0.60000000 -1.20000000\n-1.00000000 0.60000000 -1.00000000\n-1.00000000 0.60000000 -0.80000000\n-1.00000000 0.60000000 -0.60000000\n-1.00000000 0.60000000 -0.40000000\n-1.00000000 0.60000000 -0.20000000\n-1.00000000 0.60000000 0.00000000\n-1.00000000 0.60000000 0.20000000\n-1.00000000 0.60000000 1.40000000\n-1.00000000 0.60000000 1.60000000\n-1.00000000 0.60000000 1.80000000\n-1.00000000 0.60000000 2.00000000\n-1.00000000 0.80000000 -1.40000000\n-1.00000000 0.80000000 -1.20000000\n-1.00000000 0.80000000 -1.00000000\n-1.00000000 0.80000000 -0.80000000\n-1.00000000 0.80000000 -0.60000000\n-1.00000000 0.80000000 -0.40000000\n-1.00000000 0.80000000 1.80000000\n-0.80000000 0.00000000 -1.40000000\n-0.80000000 0.00000000 -1.20000000\n-0.80000000 0.00000000 -1.00000000\n-0.80000000 0.00000000 1.60000000\n-0.80000000 0.00000000 1.80000000\n-0.80000000 0.00000000 2.00000000\n-0.80000000 0.20000000 -1.60000000\n-0.80000000 0.20000000 -0.80000000\n-0.80000000 0.20000000 -0.60000000\n-0.80000000 0.20000000 -0.40000000\n-0.80000000 0.20000000 -0.20000000\n-0.80000000 0.20000000 0.00000000\n-0.80000000 0.20000000 0.20000000\n-0.80000000 0.20000000 0.40000000\n-0.80000000 0.20000000 0.60000000\n-0.80000000 0.20000000 0.80000000\n-0.80000000 0.20000000 1.40000000\n-0.80000000 0.20000000 2.20000000\n-0.80000000 0.40000000 -1.60000000\n-0.80000000 0.40000000 0.60000000\n-0.80000000 0.40000000 0.80000000\n-0.80000000 0.40000000 1.00000000\n-0.80000000 0.40000000 1.40000000\n-0.80000000 0.40000000 2.20000000\n-0.80000000 0.60000000 -1.60000000\n-0.80000000 0.60000000 0.00000000\n-0.80000000 0.60000000 0.20000000\n-0.80000000 0.60000000 0.40000000\n-0.80000000 0.60000000 0.60000000\n-0.80000000 0.60000000 0.80000000\n-0.80000000 0.60000000 1.40000000\n-0.80000000 0.60000000 1.60000000\n-0.80000000 0.60000000 2.00000000\n-0.80000000 0.80000000 -1.60000000\n-0.80000000 0.80000000 -0.20000000\n-0.80000000 0.80000000 1.80000000\n-0.80000000 1.00000000 -1.40000000\n-0.80000000 1.00000000 -1.20000000\n-0.80000000 1.00000000 -1.00000000\n-0.80000000 1.00000000 -0.80000000\n-0.80000000 1.00000000 -0.60000000\n-0.80000000 1.00000000 -0.40000000\n-0.60000000 0.20000000 -1.40000000\n-0.60000000 0.20000000 -1.20000000\n-0.60000000 0.20000000 -1.00000000\n-0.60000000 0.20000000 -0.80000000\n-0.60000000 0.20000000 -0.60000000\n-0.60000000 0.20000000 -0.40000000\n-0.60000000 0.20000000 -0.20000000\n-0.60000000 0.20000000 0.00000000\n-0.60000000 0.20000000 0.20000000\n-0.60000000 0.20000000 0.40000000\n-0.60000000 0.20000000 0.60000000\n-0.60000000 0.20000000 0.80000000\n-0.60000000 0.20000000 1.00000000\n-0.60000000 0.20000000 1.20000000\n-0.60000000 0.20000000 1.40000000\n-0.60000000 0.20000000 1.60000000\n-0.60000000 0.20000000 1.80000000\n-0.60000000 0.20000000 2.00000000\n-0.60000000 0.40000000 -1.60000000\n-0.60000000 0.40000000 1.20000000\n-0.60000000 0.40000000 1.40000000\n-0.60000000 0.40000000 2.00000000\n-0.60000000 0.60000000 -1.80000000\n-0.60000000 0.60000000 0.60000000\n-0.60000000 0.60000000 0.80000000\n-0.60000000 0.60000000 1.00000000\n-0.60000000 0.60000000 1.60000000\n-0.60000000 0.60000000 1.80000000\n-0.60000000 0.60000000 2.00000000\n-0.60000000 0.80000000 -1.80000000\n-0.60000000 0.80000000 0.00000000\n-0.60000000 0.80000000 0.20000000\n-0.60000000 0.80000000 0.40000000\n-0.60000000 1.00000000 -1.60000000\n-0.60000000 1.00000000 -1.40000000\n-0.60000000 1.00000000 -1.20000000\n-0.60000000 1.00000000 -1.00000000\n-0.60000000 1.00000000 -0.80000000\n-0.60000000 1.00000000 -0.60000000\n-0.60000000 1.00000000 -0.40000000\n-0.60000000 1.00000000 -0.20000000\n-0.40000000 0.00000000 0.00000000\n-0.40000000 0.00000000 0.20000000\n-0.40000000 0.00000000 1.80000000\n-0.40000000 0.20000000 -1.40000000\n-0.40000000 0.20000000 -1.20000000\n-0.40000000 0.20000000 -1.00000000\n-0.40000000 0.20000000 -0.80000000\n-0.40000000 0.20000000 -0.60000000\n-0.40000000 0.20000000 -0.40000000\n-0.40000000 0.20000000 -0.20000000\n-0.40000000 0.20000000 0.40000000\n-0.40000000 0.20000000 0.60000000\n-0.40000000 0.20000000 0.80000000\n-0.40000000 0.20000000 1.00000000\n-0.40000000 0.20000000 1.20000000\n-0.40000000 0.20000000 1.40000000\n-0.40000000 0.20000000 1.60000000\n-0.40000000 0.20000000 2.00000000\n-0.40000000 0.40000000 -1.80000000\n-0.40000000 0.40000000 -1.60000000\n-0.40000000 0.40000000 2.20000000\n-0.40000000 0.60000000 -1.80000000\n-0.40000000 0.60000000 0.80000000\n-0.40000000 0.60000000 1.00000000\n-0.40000000 0.60000000 1.20000000\n-0.40000000 0.60000000 1.40000000\n-0.40000000 0.60000000 1.60000000\n-0.40000000 0.60000000 1.80000000\n-0.40000000 0.60000000 2.00000000\n-0.40000000 0.80000000 -1.80000000\n-0.40000000 0.80000000 0.00000000\n-0.40000000 0.80000000 0.20000000\n-0.40000000 0.80000000 0.40000000\n-0.40000000 0.80000000 0.60000000\n-0.40000000 1.00000000 -1.80000000\n-0.40000000 1.00000000 -1.60000000\n-0.40000000 1.00000000 -0.40000000\n-0.40000000 1.00000000 -0.20000000\n-0.40000000 1.20000000 -1.40000000\n-0.40000000 1.20000000 -1.20000000\n-0.40000000 1.20000000 -1.00000000\n-0.40000000 1.20000000 -0.80000000\n-0.40000000 1.20000000 -0.60000000\n-0.20000000 0.00000000 -0.40000000\n-0.20000000 0.00000000 -0.20000000\n-0.20000000 0.00000000 0.00000000\n-0.20000000 0.00000000 0.20000000\n-0.20000000 0.00000000 0.40000000\n-0.20000000 0.00000000 0.60000000\n-0.20000000 0.00000000 1.60000000\n-0.20000000 0.00000000 1.80000000\n-0.20000000 0.20000000 -1.60000000\n-0.20000000 0.20000000 -1.40000000\n-0.20000000 0.20000000 -1.20000000\n-0.20000000 0.20000000 -1.00000000\n-0.20000000 0.20000000 -0.80000000\n-0.20000000 0.20000000 -0.60000000\n-0.20000000 0.20000000 0.80000000\n-0.20000000 0.20000000 1.00000000\n-0.20000000 0.20000000 1.20000000\n-0.20000000 0.20000000 1.40000000\n-0.20000000 0.20000000 2.00000000\n-0.20000000 0.20000000 2.20000000\n-0.20000000 0.40000000 -1.80000000\n-0.20000000 0.40000000 2.20000000\n-0.20000000 0.60000000 -2.00000000\n-0.20000000 0.60000000 1.40000000\n-0.20000000 0.60000000 1.60000000\n-0.20000000 0.60000000 1.80000000\n-0.20000000 0.60000000 2.00000000\n-0.20000000 0.80000000 -2.00000000\n-0.20000000 0.80000000 0.20000000\n-0.20000000 0.80000000 0.40000000\n-0.20000000 0.80000000 0.60000000\n-0.20000000 0.80000000 0.80000000\n-0.20000000 0.80000000 1.00000000\n-0.20000000 0.80000000 1.20000000\n-0.20000000 1.00000000 -1.80000000\n-0.20000000 1.00000000 -1.60000000\n-0.20000000 1.00000000 -0.20000000\n-0.20000000 1.00000000 0.00000000\n-0.20000000 1.20000000 -1.40000000\n-0.20000000 1.20000000 -1.20000000\n-0.20000000 1.20000000 -1.00000000\n-0.20000000 1.20000000 -0.80000000\n-0.20000000 1.20000000 -0.60000000\n-0.20000000 1.20000000 -0.40000000\n0.00000000 0.00000000 -0.40000000\n0.00000000 0.00000000 -0.20000000\n0.00000000 0.00000000 0.00000000\n0.00000000 0.00000000 0.20000000\n0.00000000 0.00000000 0.40000000\n0.00000000 0.00000000 0.60000000\n0.00000000 0.00000000 0.80000000\n0.00000000 0.00000000 1.00000000\n0.00000000 0.00000000 1.60000000\n0.00000000 0.00000000 1.80000000\n0.00000000 0.20000000 -1.60000000\n0.00000000 0.20000000 -1.40000000\n0.00000000 0.20000000 -1.20000000\n0.00000000 0.20000000 -1.00000000\n0.00000000 0.20000000 -0.80000000\n0.00000000 0.20000000 -0.60000000\n0.00000000 0.20000000 1.20000000\n0.00000000 0.20000000 1.40000000\n0.00000000 0.20000000 2.00000000\n0.00000000 0.20000000 2.20000000\n0.00000000 0.40000000 -1.80000000\n0.00000000 0.40000000 2.20000000\n0.00000000 0.60000000 -2.00000000\n0.00000000 0.60000000 1.40000000\n0.00000000 0.60000000 1.60000000\n0.00000000 0.60000000 1.80000000\n0.00000000 0.60000000 2.00000000\n0.00000000 0.80000000 -2.00000000\n0.00000000 0.80000000 0.20000000\n0.00000000 0.80000000 0.40000000\n0.00000000 0.80000000 0.60000000\n0.00000000 0.80000000 0.80000000\n0.00000000 0.80000000 1.00000000\n0.00000000 0.80000000 1.20000000\n0.00000000 1.00000000 -1.80000000\n0.00000000 1.00000000 -1.60000000\n0.00000000 1.00000000 -0.20000000\n0.00000000 1.00000000 0.00000000\n0.00000000 1.20000000 -1.40000000\n0.00000000 1.20000000 -1.20000000\n0.00000000 1.20000000 -1.00000000\n0.00000000 1.20000000 -0.80000000\n0.00000000 1.20000000 -0.60000000\n0.00000000 1.20000000 -0.40000000\n0.20000000 0.00000000 -0.40000000\n0.20000000 0.00000000 -0.20000000\n0.20000000 0.00000000 0.00000000\n0.20000000 0.00000000 0.20000000\n0.20000000 0.00000000 0.40000000\n0.20000000 0.00000000 0.60000000\n0.20000000 0.00000000 1.60000000\n0.20000000 0.00000000 1.80000000\n0.20000000 0.20000000 -1.60000000\n0.20000000 0.20000000 -1.40000000\n0.20000000 0.20000000 -1.20000000\n0.20000000 0.20000000 -1.00000000\n0.20000000 0.20000000 -0.80000000\n0.20000000 0.20000000 -0.60000000\n0.20000000 0.20000000 0.80000000\n0.20000000 0.20000000 1.00000000\n0.20000000 0.20000000 1.20000000\n0.20000000 0.20000000 1.40000000\n0.20000000 0.20000000 2.00000000\n0.20000000 0.20000000 2.20000000\n0.20000000 0.40000000 -1.80000000\n0.20000000 0.40000000 2.20000000\n0.20000000 0.60000000 -2.00000000\n0.20000000 0.60000000 1.40000000\n0.20000000 0.60000000 1.60000000\n0.20000000 0.60000000 1.80000000\n0.20000000 0.60000000 2.00000000\n0.20000000 0.80000000 -2.00000000\n0.20000000 0.80000000 0.20000000\n0.20000000 0.80000000 0.40000000\n0.20000000 0.80000000 0.60000000\n0.20000000 0.80000000 0.80000000\n0.20000000 0.80000000 1.00000000\n0.20000000 0.80000000 1.20000000\n0.20000000 1.00000000 -1.80000000\n0.20000000 1.00000000 -1.60000000\n0.20000000 1.00000000 -0.20000000\n0.20000000 1.00000000 0.00000000\n0.20000000 1.20000000 -1.40000000\n0.20000000 1.20000000 -1.20000000\n0.20000000 1.20000000 -1.00000000\n0.20000000 1.20000000 -0.80000000\n0.20000000 1.20000000 -0.60000000\n0.20000000 1.20000000 -0.40000000\n0.40000000 0.00000000 0.00000000\n0.40000000 0.00000000 0.20000000\n0.40000000 0.00000000 1.80000000\n0.40000000 0.20000000 -1.40000000\n0.40000000 0.20000000 -1.20000000\n0.40000000 0.20000000 -1.00000000\n0.40000000 0.20000000 -0.80000000\n0.40000000 0.20000000 -0.60000000\n0.40000000 0.20000000 -0.40000000\n0.40000000 0.20000000 -0.20000000\n0.40000000 0.20000000 0.40000000\n0.40000000 0.20000000 0.60000000\n0.40000000 0.20000000 0.80000000\n0.40000000 0.20000000 1.00000000\n0.40000000 0.20000000 1.20000000\n0.40000000 0.20000000 1.40000000\n0.40000000 0.20000000 1.60000000\n0.40000000 0.20000000 2.00000000\n0.40000000 0.40000000 -1.80000000\n0.40000000 0.40000000 -1.60000000\n0.40000000 0.40000000 2.20000000\n0.40000000 0.60000000 -1.80000000\n0.40000000 0.60000000 0.80000000\n0.40000000 0.60000000 1.00000000\n0.40000000 0.60000000 1.20000000\n0.40000000 0.60000000 1.40000000\n0.40000000 0.60000000 1.60000000\n0.40000000 0.60000000 1.80000000\n0.40000000 0.60000000 2.00000000\n0.40000000 0.80000000 -1.80000000\n0.40000000 0.80000000 0.00000000\n0.40000000 0.80000000 0.20000000\n0.40000000 0.80000000 0.40000000\n0.40000000 0.80000000 0.60000000\n0.40000000 1.00000000 -1.80000000\n0.40000000 1.00000000 -1.60000000\n0.40000000 1.00000000 -0.40000000\n0.40000000 1.00000000 -0.20000000\n0.40000000 1.20000000 -1.40000000\n0.40000000 1.20000000 -1.20000000\n0.40000000 1.20000000 -1.00000000\n0.40000000 1.20000000 -0.80000000\n0.40000000 1.20000000 -0.60000000\n0.60000000 0.20000000 -1.40000000\n0.60000000 0.20000000 -1.20000000\n0.60000000 0.20000000 -1.00000000\n0.60000000 0.20000000 -0.80000000\n0.60000000 0.20000000 -0.60000000\n0.60000000 0.20000000 -0.40000000\n0.60000000 0.20000000 -0.20000000\n0.60000000 0.20000000 0.00000000\n0.60000000 0.20000000 0.20000000\n0.60000000 0.20000000 0.40000000\n0.60000000 0.20000000 0.60000000\n0.60000000 0.20000000 0.80000000\n0.60000000 0.20000000 1.00000000\n0.60000000 0.20000000 1.20000000\n0.60000000 0.20000000 1.40000000\n0.60000000 0.20000000 1.60000000\n0.60000000 0.20000000 1.80000000\n0.60000000 0.20000000 2.00000000\n0.60000000 0.40000000 -1.60000000\n0.60000000 0.40000000 1.20000000\n0.60000000 0.40000000 2.00000000\n0.60000000 0.60000000 -1.80000000\n0.60000000 0.60000000 0.60000000\n0.60000000 0.60000000 0.80000000\n0.60000000 0.60000000 1.00000000\n0.60000000 0.60000000 1.40000000\n0.60000000 0.60000000 1.60000000\n0.60000000 0.60000000 1.80000000\n0.60000000 0.60000000 2.00000000\n0.60000000 0.80000000 -1.80000000\n0.60000000 0.80000000 0.00000000\n0.60000000 0.80000000 0.20000000\n0.60000000 0.80000000 0.40000000\n0.60000000 1.00000000 -1.60000000\n0.60000000 1.00000000 -1.40000000\n0.60000000 1.00000000 -1.20000000\n0.60000000 1.00000000 -1.00000000\n0.60000000 1.00000000 -0.80000000\n0.60000000 1.00000000 -0.60000000\n0.60000000 1.00000000 -0.40000000\n0.60000000 1.00000000 -0.20000000\n0.80000000 0.00000000 -1.40000000\n0.80000000 0.00000000 -1.20000000\n0.80000000 0.00000000 -1.00000000\n0.80000000 0.00000000 1.60000000\n0.80000000 0.00000000 1.80000000\n0.80000000 0.00000000 2.00000000\n0.80000000 0.20000000 -1.60000000\n0.80000000 0.20000000 -0.80000000\n0.80000000 0.20000000 -0.60000000\n0.80000000 0.20000000 -0.40000000\n0.80000000 0.20000000 -0.20000000\n0.80000000 0.20000000 0.00000000\n0.80000000 0.20000000 0.20000000\n0.80000000 0.20000000 0.40000000\n0.80000000 0.20000000 0.60000000\n0.80000000 0.20000000 0.80000000\n0.80000000 0.20000000 1.40000000\n0.80000000 0.20000000 2.20000000\n0.80000000 0.40000000 -1.60000000\n0.80000000 0.40000000 0.60000000\n0.80000000 0.40000000 0.80000000\n0.80000000 0.40000000 1.00000000\n0.80000000 0.40000000 1.40000000\n0.80000000 0.40000000 2.20000000\n0.80000000 0.60000000 -1.60000000\n0.80000000 0.60000000 0.00000000\n0.80000000 0.60000000 0.20000000\n0.80000000 0.60000000 0.40000000\n0.80000000 0.60000000 0.60000000\n0.80000000 0.60000000 0.80000000\n0.80000000 0.60000000 1.40000000\n0.80000000 0.60000000 1.60000000\n0.80000000 0.60000000 2.00000000\n0.80000000 0.80000000 -1.60000000\n0.80000000 0.80000000 -0.20000000\n0.80000000 0.80000000 1.80000000\n0.80000000 1.00000000 -1.40000000\n0.80000000 1.00000000 -1.20000000\n0.80000000 1.00000000 -1.00000000\n0.80000000 1.00000000 -0.80000000\n0.80000000 1.00000000 -0.60000000\n0.80000000 1.00000000 -0.40000000\n1.00000000 0.00000000 -1.40000000\n1.00000000 0.00000000 -1.20000000\n1.00000000 0.00000000 -1.00000000\n1.00000000 0.00000000 1.60000000\n1.00000000 0.00000000 1.80000000\n1.00000000 0.00000000 2.00000000\n1.00000000 0.20000000 -1.60000000\n1.00000000 0.20000000 -1.40000000\n1.00000000 0.20000000 -1.20000000\n1.00000000 0.20000000 -1.00000000\n1.00000000 0.20000000 -0.80000000\n1.00000000 0.20000000 1.40000000\n1.00000000 0.20000000 1.60000000\n1.00000000 0.20000000 1.80000000\n1.00000000 0.20000000 2.00000000\n1.00000000 0.20000000 2.20000000\n1.00000000 0.40000000 -1.60000000\n1.00000000 0.40000000 -1.40000000\n1.00000000 0.40000000 -1.20000000\n1.00000000 0.40000000 -1.00000000\n1.00000000 0.40000000 -0.80000000\n1.00000000 0.40000000 -0.60000000\n1.00000000 0.40000000 -0.40000000\n1.00000000 0.40000000 -0.20000000\n1.00000000 0.40000000 0.00000000\n1.00000000 0.40000000 0.20000000\n1.00000000 0.40000000 0.40000000\n1.00000000 0.40000000 1.40000000\n1.00000000 0.40000000 1.60000000\n1.00000000 0.40000000 1.80000000\n1.00000000 0.40000000 2.00000000\n1.00000000 0.40000000 2.20000000\n1.00000000 0.60000000 -1.60000000\n1.00000000 0.60000000 -1.40000000\n1.00000000 0.60000000 -1.20000000\n1.00000000 0.60000000 -1.00000000\n1.00000000 0.60000000 -0.80000000\n1.00000000 0.60000000 -0.60000000\n1.00000000 0.60000000 -0.40000000\n1.00000000 0.60000000 -0.20000000\n1.00000000 0.60000000 0.00000000\n1.00000000 0.60000000 0.20000000\n1.00000000 0.60000000 1.40000000\n1.00000000 0.60000000 1.60000000\n1.00000000 0.60000000 1.80000000\n1.00000000 0.60000000 2.00000000\n1.00000000 0.80000000 -1.40000000\n1.00000000 0.80000000 -1.20000000\n1.00000000 0.80000000 -1.00000000\n1.00000000 0.80000000 -0.80000000\n1.00000000 0.80000000 -0.60000000\n1.00000000 0.80000000 -0.40000000\n1.00000000 0.80000000 1.80000000",    "# X Y Z\n-1.10000000 0.20000000 -1.30000000\n-1.10000000 0.20000000 -1.20000000\n-1.10000000 0.20000000 -1.10000000\n-1.10000000 0.30000000 -1.30000000\n-1.10000000 0.30000000 -1.20000000\n-1.10000000 0.30000000 -1.10000000\n-1.10000000 0.40000000 -1.40000000\n-1.10000000 0.40000000 -1.30000000\n-1.10000000 0.40000000 -1.20000000\n-1.10000000 0.40000000 -1.10000000\n-1.10000000 0.50000000 -1.30000000\n-1.10000000 0.50000000 -1.20000000\n-1.10000000 0.50000000 -1.10000000\n-1.00000000 0.00000000 -1.30000000\n-1.00000000 0.00000000 -1.20000000\n-1.00000000 0.00000000 -1.10000000\n-1.00000000 0.00000000 1.70000000\n-1.00000000 0.00000000 1.80000000\n-1.00000000 0.10000000 -1.40000000\n-1.00000000 0.10000000 -1.30000000\n-1.00000000 0.10000000 -1.20000000\n-1.00000000 0.10000000 -1.10000000\n-1.00000000 0.10000000 -1.00000000\n-1.00000000 0.10000000 1.50000000\n-1.00000000 0.10000000 1.60000000\n-1.00000000 0.10000000 1.70000000\n-1.00000000 0.10000000 1.80000000\n-1.00000000 0.10000000 1.90000000\n-1.00000000 0.10000000 2.00000000\n-1.00000000 0.20000000 -1.50000000\n-1.00000000 0.20000000 -1.40000000\n-1.00000000 0.20000000 -1.00000000\n-1.00000000 0.20000000 -0.90000000\n-1.00000000 0.20000000 1.50000000\n-1.00000000 0.20000000 1.60000000\n-1.00000000 0.20000000 1.70000000\n-1.00000000 0.20000000 1.80000000\n-1.00000000 0.20000000 1.90000000\n-1.00000000 0.20000000 2.00000000\n-1.00000000 0.20000000 2.10000000\n-1.00000000 0.30000000 -1.50000000\n-1.00000000 0.30000000 -1.40000000\n-1.00000000 0.30000000 -1.00000000\n-1.00000000 0.30000000 -0.90000000\n-1.00000000 0.30000000 1.50000000\n-1.00000000 0.30000000 1.60000000\n-1.00000000 0.30000000 1.70000000\n-1.00000000 0.30000000 1.80000000\n-1.00000000 0.30000000 1.90000000\n-1.00000000 0.30000000 2.00000000\n-1.00000000 0.30000000 2.10000000\n-1.00000000 0.40000000 -1.50000000\n-1.00000000 0.40000000 -1.00000000\n-1.00000000 0.40000000 -0.90000000\n-1.00000000 0.40000000 -0.50000000\n-1.00000000 0.40000000 -0.40000000\n-1.00000000 0.40000000 -0.30000000\n-1.00000000 0.40000000 -0.20000000\n-1.00000000 0.40000000 -0.10000000\n-1.00000000 0.40000000 0.00000000\n-1.00000000 0.40000000 0.10000000\n-1.00000000 0.40000000 1.50000000\n-1.00000000 0.40000000 1.60000000\n-1.00000000 0.40000000 1.70000000\n-1.00000000 0.40000000 1.80000000\n-1.00000000 0.40000000 1.90000000\n-1.00000000 0.40000000 2.00000000\n-1.00000000 0.40000000 2.10000000\n-1.00000000 0.50000000 -1.50000000\n-1.00000000 0.50000000 -1.40000000\n-1.00000000 0.50000000 -1.00000000\n-1.00000000 0.50000000 -0.90000000\n-1.00000000 0.50000000 -0.80000000\n-1.00000000 0.50000000 -0.70000000\n-1.00000000 0.50000000 -0.60000000\n-1.00000000 0.50000000 -0.50000000\n-1.00000000 0.50000000 -0.40000000\n-1.00000000 0.50000000 -0.30000000\n-1.00000000 0.50000000 -0.20000000\n-1.00000000 0.50000000 -0.10000000\n-1.00000000 0.50000000 0.00000000\n-1.00000000 0.50000000 0.10000000\n-1.00000000 0.50000000 1.50000000\n-1.00000000 0.50000000 1.60000000\n-1.00000000 0.50000000 1.70000000\n-1.00000000 0.50000000 1.80000000\n-1.00000000 0.50000000 1.90000000\n-1.00000000 0.50000000 2.00000000\n-1.00000000 0.50000000 2.10000000\n-1.00000000 0.60000000 -1.50000000\n-1.00000000 0.60000000 -1.40000000\n-1.00000000 0.60000000 -1.30000000\n-1.00000000 0.60000000 -1.20000000\n-1.00000000 0.60000000 -1.10000000\n-1.00000000 0.60000000 -1.00000000\n-1.00000000 0.60000000 -0.90000000\n-1.00000000 0.60000000 -0.80000000\n-1.00000000 0.60000000 -0.70000000\n-1.00000000 0.60000000 -0.60000000\n-1.00000000 0.60000000 -0.50000000\n-1.00000000 0.60000000 1.50000000\n-1.00000000 0.60000000 1.60000000\n-1.00000000 0.60000000 1.70000000\n-1.00000000 0.60000000 1.80000000\n-1.00000000 0.60000000 1.90000000\n-1.00000000 0.60000000 2.00000000\n-1.00000000 0.70000000 -1.30000000\n-1.00000000 0.70000000 -1.20000000\n-1.00000000 0.70000000 -1.10000000\n-1.00000000 0.70000000 -1.00000000\n-1.00000000 0.70000000 -0.90000000\n-1.00000000 0.70000000 -0.80000000\n-1.00000000 0.70000000 -0.70000000\n-1.00000000 0.70000000 -0.60000000\n-1.00000000 0.70000000 -0.50000000\n-1.00000000 0.70000000 1.70000000\n-1.00000000 0.70000000 1.80000000\n-1.00000000 0.70000000 1.90000000\n-1.00000000 0.80000000 -1.20000000\n-1.00000000 0.80000000 -1.10000000\n-1.00000000 0.80000000 -1.00000000\n-1.00000000 0.80000000 -0.90000000\n-1.00000000 0.80000000 -0.80000000\n-1.00000000 0.80000000 -0.70000000\n-1.00000000 0.80000000 -0.60000000\n-0.90000000 0.00000000 -1.40000000\n-0.90000000 0.00000000 -1.30000000\n-0.90000000 0.00000000 -1.20000000\n-0.90000000 0.00000000 -1.10000000\n-0.90000000 0.00000000 -1.00000000\n-0.90000000 0.00000000 1.60000000\n-0.90000000 0.00000000 1.70000000\n-0.90000000 0.00000000 1.80000000\n-0.90000000 0.00000000 1.90000000\n-0.90000000 0.00000000 2.00000000\n-0.90000000 0.10000000 -1.50000000\n-0.90000000 0.10000000 -0.90000000\n-0.90000000 0.10000000 1.50000000\n-0.90000000 0.10000000 2.10000000\n-0.90000000 0.20000000 -1.60000000\n-0.90000000 0.20000000 -0.90000000\n-0.90000000 0.20000000 1.40000000\n-0.90000000 0.20000000 2.10000000\n-0.90000000 0.30000000 -1.60000000\n-0.90000000 0.30000000 -0.80000000\n-0.90000000 0.30000000 -0.70000000\n-0.90000000 0.30000000 -0.60000000\n-0.90000000 0.30000000 -0.50000000\n-0.90000000 0.30000000 -0.40000000\n-0.90000000 0.30000000 -0.30000000\n-0.90000000 0.30000000 -0.20000000\n-0.90000000 0.30000000 -0.10000000\n-0.90000000 0.30000000 0.00000000\n-0.90000000 0.30000000 0.10000000\n-0.90000000 0.30000000 0.20000000\n-0.90000000 0.30000000 0.30000000\n-0.90000000 0.30000000 0.40000000\n-0.90000000 0.30000000 0.50000000\n-0.90000000 0.30000000 1.40000000\n-0.90000000 0.30000000 2.10000000\n-0.90000000 0.40000000 -1.60000000\n-0.90000000 0.40000000 -0.80000000\n-0.90000000 0.40000000 -0.70000000\n-0.90000000 0.40000000 -0.60000000\n-0.90000000 0.40000000 0.20000000\n-0.90000000 0.40000000 0.30000000\n-0.90000000 0.40000000 0.40000000\n-0.90000000 0.40000000 0.50000000\n-0.90000000 0.40000000 0.60000000\n-0.90000000 0.40000000 1.40000000\n-0.90000000 0.40000000 2.10000000\n-0.90000000 0.50000000 -1.60000000\n-0.90000000 0.50000000 0.20000000\n-0.90000000 0.50000000 0.30000000\n-0.90000000 0.50000000 0.40000000\n-0.90000000 0.50000000 0.50000000\n-0.90000000 0.50000000 1.40000000\n-0.90000000 0.50000000 2.10000000\n-0.90000000 0.60000000 -1.50000000\n-0.90000000 0.60000000 -0.40000000\n-0.90000000 0.60000000 -0.30000000\n-0.90000000 0.60000000 -0.20000000\n-0.90000000 0.60000000 -0.10000000\n-0.90000000 0.60000000 0.00000000\n-0.90000000 0.60000000 0.10000000\n-0.90000000 0.60000000 0.20000000\n-0.90000000 0.60000000 0.30000000\n-0.90000000 0.60000000 1.50000000\n-0.90000000 0.60000000 2.10000000\n-0.90000000 0.70000000 -1.50000000\n-0.90000000 0.70000000 -1.40000000\n-0.90000000 0.70000000 -0.40000000\n-0.90000000 0.70000000 -0.30000000\n-0.90000000 0.70000000 1.60000000\n-0.90000000 0.70000000 1.70000000\n-0.90000000 0.70000000 1.80000000\n-0.90000000 0.70000000 1.90000000\n-0.90000000 0.70000000 2.00000000\n-0.90000000 0.80000000 -1.40000000\n-0.90000000 0.80000000 -1.30000000\n-0.90000000 0.80000000 -0.50000000\n-0.90000000 0.80000000 -0.40000000\n-0.90000000 0.90000000 -1.30000000\n-0.90000000 0.90000000 -1.20000000\n-0.90000000 0.90000000 -1.10000000\n-0.90000000 0.90000000 -1.00000000\n-0.90000000 0.90000000 -0.90000000\n-0.90000000 0.90000000 -0.80000000\n-0.90000000 0.90000000 -0.70000000\n-0.90000000 0.90000000 -0.60000000\n-0.90000000 0.90000000 -0.50000000\n-0.80000000 0.00000000 -1.40000000\n-0.80000000 0.00000000 -1.30000000\n-0.80000000 0.00000000 -1.20000000\n-0.80000000 0.00000000 -1.10000000\n-0.80000000 0.00000000 -1.00000000\n-0.80000000 0.00000000 1.60000000\n-0.80000000 0.00000000 1.70000000\n-0.80000000 0.00000000 1.80000000\n-0.80000000 0.00000000 1.90000000\n-0.80000000 0.00000000 2.00000000\n-0.80000000 0.10000000 -1.50000000\n-0.80000000 0.10000000 -1.40000000\n-0.80000000 0.10000000 -1.00000000\n-0.80000000 0.10000000 -0.90000000\n-0.80000000 0.10000000 1.50000000\n-0.80000000 0.10000000 2.00000000\n-0.80000000 0.10000000 2.10000000\n-0.80000000 0.20000000 -1.50000000\n-0.80000000 0.20000000 -0.90000000\n-0.80000000 0.20000000 -0.60000000\n-0.80000000 0.20000000 -0.50000000\n-0.80000000 0.20000000 -0.40000000\n-0.80000000 0.20000000 -0.30000000\n-0.80000000 0.20000000 -0.20000000\n-0.80000000 0.20000000 -0.10000000\n-0.80000000 0.20000000 0.00000000\n-0.80000000 0.20000000 0.10000000\n-0.80000000 0.20000000 0.20000000\n-0.80000000 0.20000000 0.30000000\n-0.80000000 0.20000000 0.40000000\n-0.80000000 0.20000000 0.50000000\n-0.80000000 0.20000000 1.40000000\n-0.80000000 0.20000000 2.10000000\n-0.80000000 0.30000000 -1.60000000\n-0.80000000 0.30000000 -1.50000000\n-0.80000000 0.30000000 -0.80000000\n-0.80000000 0.30000000 -0.70000000\n-0.80000000 0.30000000 0.60000000\n-0.80000000 0.30000000 0.70000000\n-0.80000000 0.30000000 0.80000000\n-0.80000000 0.30000000 1.40000000\n-0.80000000 0.30000000 2.10000000\n-0.80000000 0.40000000 -1.60000000\n-0.80000000 0.40000000 0.70000000\n-0.80000000 0.40000000 0.80000000\n-0.80000000 0.40000000 1.40000000\n-0.80000000 0.40000000 2.10000000\n-0.80000000 0.50000000 -1.50000000\n-0.80000000 0.50000000 0.60000000\n-0.80000000 0.50000000 0.70000000\n-0.80000000 0.50000000 0.80000000\n-0.80000000 0.50000000 1.40000000\n-0.80000000 0.50000000 2.10000000\n-0.80000000 0.60000000 -1.60000000\n-0.80000000 0.60000000 0.20000000\n-0.80000000 0.60000000 0.30000000\n-0.80000000 0.60000000 0.40000000\n-0.80000000 0.60000000 0.50000000\n-0.80000000 0.60000000 0.60000000\n-0.80000000 0.60000000 1.50000000\n-0.80000000 0.60000000 2.00000000\n-0.80000000 0.60000000 2.10000000\n-0.80000000 0.70000000 -1.60000000\n-0.80000000 0.70000000 -0.20000000\n-0.80000000 0.70000000 -0.10000000\n-0.80000000 0.70000000 0.00000000\n-0.80000000 0.70000000 0.10000000\n-0.80000000 0.70000000 1.60000000\n-0.80000000 0.70000000 1.70000000\n-0.80000000 0.70000000 1.80000000\n-0.80000000 0.70000000 1.90000000\n-0.80000000 0.70000000 2.00000000\n-0.80000000 0.80000000 -1.60000000\n-0.80000000 0.80000000 -1.50000000\n-0.80000000 0.80000000 -0.30000000\n-0.80000000 0.90000000 -1.50000000\n-0.80000000 0.90000000 -1.40000000\n-0.80000000 0.90000000 -0.50000000\n-0.80000000 0.90000000 -0.40000000\n-0.80000000 1.00000000 -1.30000000\n-0.80000000 1.00000000 -1.20000000\n-0.80000000 1.00000000 -1.10000000\n-0.80000000 1.00000000 -1.00000000\n-0.80000000 1.00000000 -0.90000000\n-0.80000000 1.00000000 -0.80000000\n-0.80000000 1.00000000 -0.70000000\n-0.80000000 1.00000000 -0.60000000\n-0.70000000 0.10000000 -1.30000000\n-0.70000000 0.10000000 -1.20000000\n-0.70000000 0.10000000 -1.10000000\n-0.70000000 0.10000000 1.60000000\n-0.70000000 0.10000000 1.70000000\n-0.70000000 0.10000000 1.80000000\n-0.70000000 0.10000000 1.90000000\n-0.70000000 0.20000000 -1.40000000\n-0.70000000 0.20000000 -1.30000000\n-0.70000000 0.20000000 -1.20000000\n-0.70000000 0.20000000 -1.00000000\n-0.70000000 0.20000000 -0.90000000\n-0.70000000 0.20000000 -0.80000000\n-0.70000000 0.20000000 -0.70000000\n-0.70000000 0.20000000 -0.60000000\n-0.70000000 0.20000000 -0.50000000\n-0.70000000 0.20000000 -0.40000000\n-0.70000000 0.20000000 -0.30000000\n-0.70000000 0.20000000 -0.20000000\n-0.70000000 0.20000000 -0.10000000\n-0.70000000 0.20000000 0.00000000\n-0.70000000 0.20000000 0.10000000\n-0.70000000 0.20000000 0.20000000\n-0.70000000 0.20000000 0.30000000\n-0.70000000 0.20000000 0.40000000\n-0.70000000 0.20000000 0.50000000\n-0.70000000 0.20000000 0.60000000\n-0.70000000 0.20000000 0.70000000\n-0.70000000 0.20000000 0.80000000\n-0.70000000 0.20000000 1.50000000\n-0.70000000 0.20000000 2.00000000\n-0.70000000 0.30000000 -1.40000000\n-0.70000000 0.30000000 0.90000000\n-0.70000000 0.30000000 1.00000000\n-0.70000000 0.30000000 1.50000000\n-0.70000000 0.30000000 2.10000000\n-0.70000000 0.40000000 -1.50000000\n-0.70000000 0.40000000 0.90000000\n-0.70000000 0.40000000 1.00000000\n-0.70000000 0.40000000 1.50000000\n-0.70000000 0.40000000 2.10000000\n-0.70000000 0.50000000 -1.60000000\n-0.70000000 0.50000000 0.90000000\n-0.70000000 0.50000000 1.00000000\n-0.70000000 0.50000000 1.50000000\n-0.70000000 0.50000000 2.00000000\n-0.70000000 0.60000000 -1.70000000\n-0.70000000 0.60000000 0.50000000\n-0.70000000 0.60000000 0.60000000\n-0.70000000 0.60000000 0.70000000\n-0.70000000 0.60000000 0.80000000\n-0.70000000 0.60000000 1.60000000\n-0.70000000 0.60000000 1.70000000\n-0.70000000 0.60000000 1.80000000\n-0.70000000 0.60000000 1.90000000\n-0.70000000 0.70000000 -1.70000000\n-0.70000000 0.70000000 -0.10000000\n-0.70000000 0.70000000 0.00000000\n-0.70000000 0.70000000 0.10000000\n-0.70000000 0.70000000 0.20000000\n-0.70000000 0.70000000 0.30000000\n-0.70000000 0.70000000 0.40000000\n-0.70000000 0.80000000 -1.70000000\n-0.70000000 0.80000000 -0.20000000\n-0.70000000 0.90000000 -1.60000000\n-0.70000000 0.90000000 -1.50000000\n-0.70000000 0.90000000 -0.30000000\n-0.70000000 1.00000000 -1.40000000\n-0.70000000 1.00000000 -1.30000000\n-0.70000000 1.00000000 -1.20000000\n-0.70000000 1.00000000 -1.10000000\n-0.70000000 1.00000000 -0.90000000\n-0.70000000 1.00000000 -0.80000000\n-0.70000000 1.00000000 -0.70000000\n-0.70000000 1.00000000 -0.60000000\n-0.70000000 1.00000000 -0.50000000\n-0.70000000 1.00000000 -0.40000000\n-0.70000000 1.10000000 -1.00000000\n-0.60000000 0.10000000 -0.10000000\n-0.60000000 0.10000000 0.00000000\n-0.60000000 0.10000000 0.10000000\n-0.60000000 0.10000000 0.20000000\n-0.60000000 0.10000000 0.30000000\n-0.60000000 0.10000000 1.70000000\n-0.60000000 0.10000000 1.80000000\n-0.60000000 0.20000000 -1.10000000\n-0.60000000 0.20000000 -1.00000000\n-0.60000000 0.20000000 -0.90000000\n-0.60000000 0.20000000 -0.80000000\n-0.60000000 0.20000000 -0.70000000\n-0.60000000 0.20000000 -0.60000000\n-0.60000000 0.20000000 -0.50000000\n-0.60000000 0.20000000 -0.40000000\n-0.60000000 0.20000000 -0.30000000\n-0.60000000 0.20000000 -0.20000000\n-0.60000000 0.20000000 0.40000000\n-0.60000000 0.20000000 0.50000000\n-0.60000000 0.20000000 0.60000000\n-0.60000000 0.20000000 0.70000000\n-0.60000000 0.20000000 0.80000000\n-0.60000000 0.20000000 0.90000000\n-0.60000000 0.20000000 1.00000000\n-0.60000000 0.20000000 1.50000000\n-0.60000000 0.20000000 1.60000000\n-0.60000000 0.20000000 1.90000000\n-0.60000000 0.20000000 2.00000000\n-0.60000000 0.30000000 -1.40000000\n-0.60000000 0.30000000 -1.30000000\n-0.60000000 0.30000000 -1.20000000\n-0.60000000 0.30000000 1.10000000\n-0.60000000 0.30000000 1.20000000\n-0.60000000 0.30000000 1.50000000\n-0.60000000 0.30000000 2.00000000\n-0.60000000 0.40000000 -1.60000000\n-0.60000000 0.40000000 -1.50000000\n-0.60000000 0.40000000 1.10000000\n-0.60000000 0.40000000 1.20000000\n-0.60000000 0.40000000 1.50000000\n-0.60000000 0.40000000 2.00000000\n-0.60000000 0.50000000 -1.70000000\n-0.60000000 0.50000000 1.00000000\n-0.60000000 0.50000000 1.10000000\n-0.60000000 0.50000000 1.50000000\n-0.60000000 0.50000000 2.00000000\n-0.60000000 0.60000000 -1.80000000\n-0.60000000 0.60000000 0.70000000\n-0.60000000 0.60000000 0.80000000\n-0.60000000 0.60000000 0.90000000\n-0.60000000 0.60000000 1.60000000\n-0.60000000 0.60000000 1.70000000\n-0.60000000 0.60000000 1.80000000\n-0.60000000 0.60000000 1.90000000\n-0.60000000 0.70000000 -1.80000000\n-0.60000000 0.70000000 0.00000000\n-0.60000000 0.70000000 0.10000000\n-0.60000000 0.70000000 0.20000000\n-0.60000000 0.70000000 0.30000000\n-0.60000000 0.70000000 0.40000000\n-0.60000000 0.70000000 0.50000000\n-0.60000000 0.70000000 0.60000000\n-0.60000000 0.80000000 -1.70000000\n-0.60000000 0.80000000 -0.10000000\n-0.60000000 0.90000000 -1.70000000\n-0.60000000 0.90000000 -0.20000000\n-0.60000000 1.00000000 -1.60000000\n-0.60000000 1.00000000 -1.50000000\n-0.60000000 1.00000000 -1.40000000\n-0.60000000 1.00000000 -0.60000000\n-0.60000000 1.00000000 -0.50000000\n-0.60000000 1.00000000 -0.40000000\n-0.60000000 1.00000000 -0.30000000\n-0.60000000 1.10000000 -1.30000000\n-0.60000000 1.10000000 -1.20000000\n-0.60000000 1.10000000 -1.10000000\n-0.60000000 1.10000000 -1.00000000\n-0.60000000 1.10000000 -0.90000000\n-0.60000000 1.10000000 -0.80000000\n-0.60000000 1.10000000 -0.70000000\n-0.50000000 0.10000000 -0.50000000\n-0.50000000 0.10000000 -0.40000000\n-0.50000000 0.10000000 -0.30000000\n-0.50000000 0.10000000 -0.20000000\n-0.50000000 0.10000000 -0.10000000\n-0.50000000 0.10000000 0.00000000\n-0.50000000 0.10000000 0.10000000\n-0.50000000 0.10000000 0.20000000\n-0.50000000 0.10000000 0.30000000\n-0.50000000 0.10000000 0.40000000\n-0.50000000 0.10000000 0.50000000\n-0.50000000 0.10000000 0.60000000\n-0.50000000 0.10000000 1.60000000\n-0.50000000 0.10000000 1.70000000\n-0.50000000 0.10000000 1.80000000\n-0.50000000 0.10000000 1.90000000\n-0.50000000 0.20000000 -1.30000000\n-0.50000000 0.20000000 -1.20000000\n-0.50000000 0.20000000 -1.10000000\n-0.50000000 0.20000000 -1.00000000\n-0.50000000 0.20000000 -0.90000000\n-0.50000000 0.20000000 -0.80000000\n-0.50000000 0.20000000 -0.70000000\n-0.50000000 0.20000000 -0.60000000\n-0.50000000 0.20000000 0.70000000\n-0.50000000 0.20000000 0.80000000\n-0.50000000 0.20000000 0.90000000\n-0.50000000 0.20000000 1.00000000\n-0.50000000 0.20000000 1.10000000\n-0.50000000 0.20000000 1.50000000\n-0.50000000 0.20000000 2.00000000\n-0.50000000 0.30000000 -1.50000000\n-0.50000000 0.30000000 -1.40000000\n-0.50000000 0.30000000 1.20000000\n-0.50000000 0.30000000 1.30000000\n-0.50000000 0.30000000 1.40000000\n-0.50000000 0.30000000 2.10000000\n-0.50000000 0.40000000 -1.70000000\n-0.50000000 0.40000000 -1.60000000\n-0.50000000 0.40000000 1.30000000\n-0.50000000 0.40000000 1.40000000\n-0.50000000 0.40000000 2.10000000\n-0.50000000 0.50000000 -1.80000000\n-0.50000000 0.50000000 1.20000000\n-0.50000000 0.50000000 1.50000000\n-0.50000000 0.50000000 2.10000000\n-0.50000000 0.60000000 -1.80000000\n-0.50000000 0.60000000 0.80000000\n-0.50000000 0.60000000 0.90000000\n-0.50000000 0.60000000 1.00000000\n-0.50000000 0.60000000 1.10000000\n-0.50000000 0.60000000 1.60000000\n-0.50000000 0.60000000 1.70000000\n-0.50000000 0.60000000 1.80000000\n-0.50000000 0.60000000 1.90000000\n-0.50000000 0.60000000 2.00000000\n-0.50000000 0.70000000 -1.80000000\n-0.50000000 0.70000000 0.20000000\n-0.50000000 0.70000000 0.30000000\n-0.50000000 0.70000000 0.40000000\n-0.50000000 0.70000000 0.50000000\n-0.50000000 0.70000000 0.60000000\n-0.50000000 0.70000000 0.70000000\n-0.50000000 0.80000000 -1.80000000\n-0.50000000 0.80000000 0.00000000\n-0.50000000 0.80000000 0.10000000\n-0.50000000 0.90000000 -1.70000000\n-0.50000000 0.90000000 -0.20000000\n-0.50000000 0.90000000 -0.10000000\n-0.50000000 1.00000000 -1.60000000\n-0.50000000 1.00000000 -1.50000000\n-0.50000000 1.00000000 -0.40000000\n-0.50000000 1.00000000 -0.30000000\n-0.50000000 1.10000000 -1.40000000\n-0.50000000 1.10000000 -1.30000000\n-0.50000000 1.10000000 -1.20000000\n-0.50000000 1.10000000 -1.10000000\n-0.50000000 1.10000000 -1.00000000\n-0.50000000 1.10000000 -0.90000000\n-0.50000000 1.10000000 -0.80000000\n-0.50000000 1.10000000 -0.70000000\n-0.50000000 1.10000000 -0.60000000\n-0.50000000 1.10000000 -0.50000000\n-0.40000000 0.10000000 -0.70000000\n-0.40000000 0.10000000 -0.60000000\n-0.40000000 0.10000000 -0.50000000\n-0.40000000 0.10000000 -0.40000000\n-0.40000000 0.10000000 -0.30000000\n-0.40000000 0.10000000 -0.20000000\n-0.40000000 0.10000000 -0.10000000\n-0.40000000 0.10000000 0.00000000\n-0.40000000 0.10000000 0.10000000\n-0.40000000 0.10000000 0.20000000\n-0.40000000 0.10000000 0.30000000\n-0.40000000 0.10000000 0.40000000\n-0.40000000 0.10000000 0.50000000\n-0.40000000 0.10000000 0.60000000\n-0.40000000 0.10000000 0.70000000\n-0.40000000 0.10000000 0.80000000\n-0.40000000 0.10000000 1.60000000\n-0.40000000 0.10000000 1.70000000\n-0.40000000 0.10000000 1.80000000\n-0.40000000 0.10000000 1.90000000\n-0.40000000 0.20000000 -1.40000000\n-0.40000000 0.20000000 -1.30000000\n-0.40000000 0.20000000 -1.20000000\n-0.40000000 0.20000000 -1.10000000\n-0.40000000 0.20000000 -1.00000000\n-0.40000000 0.20000000 -0.90000000\n-0.40000000 0.20000000 -0.80000000\n-0.40000000 0.20000000 0.90000000\n-0.40000000 0.20000000 1.00000000\n-0.40000000 0.20000000 1.10000000\n-0.40000000 0.20000000 1.20000000\n-0.40000000 0.20000000 1.40000000\n-0.40000000 0.20000000 1.50000000\n-0.40000000 0.20000000 2.00000000\n-0.40000000 0.20000000 2.10000000\n-0.40000000 0.30000000 -1.60000000\n-0.40000000 0.30000000 -1.50000000\n-0.40000000 0.30000000 1.30000000\n-0.40000000 0.30000000 2.10000000\n-0.40000000 0.40000000 -1.70000000\n-0.40000000 0.40000000 2.10000000\n-0.40000000 0.50000000 -1.80000000\n-0.40000000 0.50000000 1.30000000\n-0.40000000 0.50000000 1.40000000\n-0.40000000 0.50000000 2.10000000\n-0.40000000 0.60000000 -1.90000000\n-0.40000000 0.60000000 0.90000000\n-0.40000000 0.60000000 1.00000000\n-0.40000000 0.60000000 1.10000000\n-0.40000000 0.60000000 1.20000000\n-0.40000000 0.60000000 1.50000000\n-0.40000000 0.60000000 1.60000000\n-0.40000000 0.60000000 1.70000000\n-0.40000000 0.60000000 1.80000000\n-0.40000000 0.60000000 1.90000000\n-0.40000000 0.60000000 2.00000000\n-0.40000000 0.70000000 -1.90000000\n-0.40000000 0.70000000 0.30000000\n-0.40000000 0.70000000 0.40000000\n-0.40000000 0.70000000 0.50000000\n-0.40000000 0.70000000 0.60000000\n-0.40000000 0.70000000 0.70000000\n-0.40000000 0.70000000 0.80000000\n-0.40000000 0.80000000 -1.80000000\n-0.40000000 0.80000000 0.00000000\n-0.40000000 0.80000000 0.10000000\n-0.40000000 0.80000000 0.20000000\n-0.40000000 0.90000000 -1.80000000\n-0.40000000 0.90000000 -0.10000000\n-0.40000000 1.00000000 -1.70000000\n-0.40000000 1.00000000 -1.60000000\n-0.40000000 1.00000000 -0.30000000\n-0.40000000 1.00000000 -0.20000000\n-0.40000000 1.10000000 -1.50000000\n-0.40000000 1.10000000 -1.40000000\n-0.40000000 1.10000000 -1.30000000\n-0.40000000 1.10000000 -1.20000000\n-0.40000000 1.10000000 -1.10000000\n-0.40000000 1.10000000 -1.00000000\n-0.40000000 1.10000000 -0.90000000\n-0.40000000 1.10000000 -0.80000000\n-0.40000000 1.10000000 -0.70000000\n-0.40000000 1.10000000 -0.60000000\n-0.40000000 1.10000000 -0.50000000\n-0.40000000 1.10000000 -0.40000000\n-0.30000000 0.10000000 -0.80000000\n-0.30000000 0.10000000 -0.70000000\n-0.30000000 0.10000000 -0.60000000\n-0.30000000 0.10000000 -0.50000000\n-0.30000000 0.10000000 -0.40000000\n-0.30000000 0.10000000 -0.30000000\n-0.30000000 0.10000000 -0.20000000\n-0.30000000 0.10000000 -0.10000000\n-0.30000000 0.10000000 0.00000000\n-0.30000000 0.10000000 0.10000000\n-0.30000000 0.10000000 0.20000000\n-0.30000000 0.10000000 0.30000000\n-0.30000000 0.10000000 0.40000000\n-0.30000000 0.10000000 0.50000000\n-0.30000000 0.10000000 0.60000000\n-0.30000000 0.10000000 0.70000000\n-0.30000000 0.10000000 0.80000000\n-0.30000000 0.10000000 0.90000000\n-0.30000000 0.10000000 1.50000000\n-0.30000000 0.10000000 1.60000000\n-0.30000000 0.10000000 1.70000000\n-0.30000000 0.10000000 1.80000000\n-0.30000000 0.10000000 1.90000000\n-0.30000000 0.10000000 2.00000000\n-0.30000000 0.20000000 -1.40000000\n-0.30000000 0.20000000 -1.30000000\n-0.30000000 0.20000000 -1.20000000\n-0.30000000 0.20000000 -1.10000000\n-0.30000000 0.20000000 -1.00000000\n-0.30000000 0.20000000 -0.90000000\n-0.30000000 0.20000000 1.00000000\n-0.30000000 0.20000000 1.10000000\n-0.30000000 0.20000000 1.20000000\n-0.30000000 0.20000000 1.30000000\n-0.30000000 0.20000000 1.40000000\n-0.30000000 0.20000000 2.10000000\n-0.30000000 0.30000000 -1.60000000\n-0.30000000 0.30000000 -1.50000000\n-0.30000000 0.30000000 2.10000000\n-0.30000000 0.40000000 -1.80000000\n-0.30000000 0.40000000 -1.70000000\n-0.30000000 0.40000000 2.10000000\n-0.30000000 0.50000000 -1.90000000\n-0.30000000 0.50000000 2.10000000\n-0.30000000 0.60000000 -1.90000000\n-0.30000000 0.60000000 1.20000000\n-0.30000000 0.60000000 1.30000000\n-0.30000000 0.60000000 1.40000000\n-0.30000000 0.60000000 1.50000000\n-0.30000000 0.60000000 1.60000000\n-0.30000000 0.60000000 1.70000000\n-0.30000000 0.60000000 1.80000000\n-0.30000000 0.60000000 1.90000000\n-0.30000000 0.60000000 2.00000000\n-0.30000000 0.70000000 -1.90000000\n-0.30000000 0.70000000 0.50000000\n-0.30000000 0.70000000 0.60000000\n-0.30000000 0.70000000 0.70000000\n-0.30000000 0.70000000 0.80000000\n-0.30000000 0.70000000 0.90000000\n-0.30000000 0.70000000 1.00000000\n-0.30000000 0.70000000 1.10000000\n-0.30000000 0.80000000 -1.90000000\n-0.30000000 0.80000000 0.10000000\n-0.30000000 0.80000000 0.20000000\n-0.30000000 0.80000000 0.30000000\n-0.30000000 0.80000000 0.40000000\n-0.30000000 0.90000000 -1.80000000\n-0.30000000 0.90000000 0.00000000\n-0.30000000 1.00000000 -1.70000000\n-0.30000000 1.00000000 -1.60000000\n-0.30000000 1.00000000 -0.30000000\n-0.30000000 1.00000000 -0.20000000\n-0.30000000 1.00000000 -0.10000000\n-0.30000000 1.10000000 -1.50000000\n-0.30000000 1.10000000 -1.40000000\n-0.30000000 1.10000000 -1.30000000\n-0.30000000 1.10000000 -1.20000000\n-0.30000000 1.10000000 -0.80000000\n-0.30000000 1.10000000 -0.70000000\n-0.30000000 1.10000000 -0.60000000\n-0.30000000 1.10000000 -0.50000000\n-0.30000000 1.10000000 -0.40000000\n-0.30000000 1.20000000 -1.10000000\n-0.30000000 1.20000000 -1.00000000\n-0.30000000 1.20000000 -0.90000000\n-0.20000000 0.10000000 -1.00000000\n-0.20000000 0.10000000 -0.90000000\n-0.20000000 0.10000000 -0.80000000\n-0.20000000 0.10000000 -0.70000000\n-0.20000000 0.10000000 -0.60000000\n-0.20000000 0.10000000 -0.50000000\n-0.20000000 0.10000000 -0.40000000\n-0.20000000 0.10000000 -0.30000000\n-0.20000000 0.10000000 -0.20000000\n-0.20000000 0.10000000 -0.10000000\n-0.20000000 0.10000000 0.00000000\n-0.20000000 0.10000000 0.10000000\n-0.20000000 0.10000000 0.20000000\n-0.20000000 0.10000000 0.30000000\n-0.20000000 0.10000000 0.40000000\n-0.20000000 0.10000000 0.50000000\n-0.20000000 0.10000000 0.60000000\n-0.20000000 0.10000000 0.70000000\n-0.20000000 0.10000000 0.80000000\n-0.20000000 0.10000000 0.90000000\n-0.20000000 0.10000000 1.00000000\n-0.20000000 0.10000000 1.10000000\n-0.20000000 0.10000000 1.20000000\n-0.20000000 0.10000000 1.30000000\n-0.20000000 0.10000000 1.40000000\n-0.20000000 0.10000000 1.50000000\n-0.20000000 0.10000000 1.60000000\n-0.20000000 0.10000000 1.70000000\n-0.20000000 0.10000000 1.80000000\n-0.20000000 0.10000000 1.90000000\n-0.20000000 0.10000000 2.00000000\n-0.20000000 0.20000000 -1.50000000\n-0.20000000 0.20000000 -1.40000000\n-0.20000000 0.20000000 -1.30000000\n-0.20000000 0.20000000 -1.20000000\n-0.20000000 0.20000000 -1.10000000\n-0.20000000 0.20000000 2.10000000\n-0.20000000 0.30000000 -1.70000000\n-0.20000000 0.30000000 -1.60000000\n-0.20000000 0.30000000 2.10000000\n-0.20000000 0.40000000 -1.80000000\n-0.20000000 0.40000000 2.10000000\n-0.20000000 0.50000000 -1.90000000\n-0.20000000 0.50000000 2.10000000\n-0.20000000 0.60000000 -1.90000000\n-0.20000000 0.60000000 1.50000000\n-0.20000000 0.60000000 1.60000000\n-0.20000000 0.60000000 1.70000000\n-0.20000000 0.60000000 1.80000000\n-0.20000000 0.60000000 1.90000000\n-0.20000000 0.60000000 2.00000000\n-0.20000000 0.70000000 -1.90000000\n-0.20000000 0.70000000 0.90000000\n-0.20000000 0.70000000 1.00000000\n-0.20000000 0.70000000 1.10000000\n-0.20000000 0.70000000 1.20000000\n-0.20000000 0.70000000 1.30000000\n-0.20000000 0.70000000 1.40000000\n-0.20000000 0.80000000 -1.90000000\n-0.20000000 0.80000000 0.10000000\n-0.20000000 0.80000000 0.20000000\n-0.20000000 0.80000000 0.30000000\n-0.20000000 0.80000000 0.40000000\n-0.20000000 0.80000000 0.50000000\n-0.20000000 0.80000000 0.60000000\n-0.20000000 0.80000000 0.70000000\n-0.20000000 0.80000000 0.80000000\n-0.20000000 0.90000000 -1.90000000\n-0.20000000 0.90000000 0.00000000\n-0.20000000 1.00000000 -1.80000000\n-0.20000000 1.00000000 -1.70000000\n-0.20000000 1.00000000 -0.20000000\n-0.20000000 1.00000000 -0.10000000\n-0.20000000 1.10000000 -1.60000000\n-0.20000000 1.10000000 -1.50000000\n-0.20000000 1.10000000 -1.40000000\n-0.20000000 1.10000000 -1.30000000\n-0.20000000 1.10000000 -1.20000000\n-0.20000000 1.10000000 -0.70000000\n-0.20000000 1.10000000 -0.60000000\n-0.20000000 1.10000000 -0.50000000\n-0.20000000 1.10000000 -0.40000000\n-0.20000000 1.10000000 -0.30000000\n-0.20000000 1.20000000 -1.10000000\n-0.20000000 1.20000000 -1.00000000\n-0.20000000 1.20000000 -0.90000000\n-0.20000000 1.20000000 -0.80000000\n-0.10000000 0.10000000 -1.00000000\n-0.10000000 0.10000000 -0.90000000\n-0.10000000 0.10000000 -0.80000000\n-0.10000000 0.10000000 -0.70000000\n-0.10000000 0.10000000 -0.60000000\n-0.10000000 0.10000000 -0.50000000\n-0.10000000 0.10000000 -0.40000000\n-0.10000000 0.10000000 -0.30000000\n-0.10000000 0.10000000 -0.20000000\n-0.10000000 0.10000000 -0.10000000\n-0.10000000 0.10000000 0.00000000\n-0.10000000 0.10000000 0.10000000\n-0.10000000 0.10000000 0.20000000\n-0.10000000 0.10000000 0.30000000\n-0.10000000 0.10000000 0.40000000\n-0.10000000 0.10000000 0.50000000\n-0.10000000 0.10000000 0.60000000\n-0.10000000 0.10000000 0.70000000\n-0.10000000 0.10000000 0.80000000\n-0.10000000 0.10000000 0.90000000\n-0.10000000 0.10000000 1.00000000\n-0.10000000 0.10000000 1.10000000\n-0.10000000 0.10000000 1.20000000\n-0.10000000 0.10000000 1.30000000\n-0.10000000 0.10000000 1.40000000\n-0.10000000 0.10000000 1.50000000\n-0.10000000 0.10000000 1.60000000\n-0.10000000 0.10000000 1.70000000\n-0.10000000 0.10000000 1.80000000\n-0.10000000 0.10000000 1.90000000\n-0.10000000 0.10000000 2.00000000\n-0.10000000 0.20000000 -1.50000000\n-0.10000000 0.20000000 -1.40000000\n-0.10000000 0.20000000 -1.30000000\n-0.10000000 0.20000000 -1.20000000\n-0.10000000 0.20000000 -1.10000000\n-0.10000000 0.20000000 2.10000000\n-0.10000000 0.30000000 -1.70000000\n-0.10000000 0.30000000 -1.60000000\n-0.10000000 0.30000000 2.10000000\n-0.10000000 0.40000000 -1.80000000\n-0.10000000 0.40000000 2.10000000\n-0.10000000 0.50000000 -1.90000000\n-0.10000000 0.50000000 2.10000000\n-0.10000000 0.60000000 -1.90000000\n-0.10000000 0.60000000 1.60000000\n-0.10000000 0.60000000 1.70000000\n-0.10000000 0.60000000 1.80000000\n-0.10000000 0.60000000 1.90000000\n-0.10000000 0.60000000 2.00000000\n-0.10000000 0.70000000 -1.90000000\n-0.10000000 0.70000000 1.10000000\n-0.10000000 0.70000000 1.20000000\n-0.10000000 0.70000000 1.30000000\n-0.10000000 0.70000000 1.40000000\n-0.10000000 0.70000000 1.50000000\n-0.10000000 0.80000000 -1.90000000\n-0.10000000 0.80000000 0.10000000\n-0.10000000 0.80000000 0.20000000\n-0.10000000 0.80000000 0.30000000\n-0.10000000 0.80000000 0.40000000\n-0.10000000 0.80000000 0.50000000\n-0.10000000 0.80000000 0.60000000\n-0.10000000 0.80000000 0.70000000\n-0.10000000 0.80000000 0.80000000\n-0.10000000 0.80000000 0.90000000\n-0.10000000 0.80000000 1.00000000\n-0.10000000 0.90000000 -1.90000000\n-0.10000000 0.90000000 0.00000000\n-0.10000000 1.00000000 -1.80000000\n-0.10000000 1.00000000 -1.70000000\n-0.10000000 1.00000000 -0.20000000\n-0.10000000 1.00000000 -0.10000000\n-0.10000000 1.10000000 -1.60000000\n-0.10000000 1.10000000 -1.50000000\n-0.10000000 1.10000000 -1.40000000\n-0.10000000 1.10000000 -1.30000000\n-0.10000000 1.10000000 -0.60000000\n-0.10000000 1.10000000 -0.50000000\n-0.10000000 1.10000000 -0.40000000\n-0.10000000 1.10000000 -0.30000000\n-0.10000000 1.20000000 -1.20000000\n-0.10000000 1.20000000 -1.10000000\n-0.10000000 1.20000000 -1.00000000\n-0.10000000 1.20000000 -0.90000000\n-0.10000000 1.20000000 -0.80000000\n-0.10000000 1.20000000 -0.70000000\n0.00000000 0.10000000 -1.00000000\n0.00000000 0.10000000 -0.90000000\n0.00000000 0.10000000 -0.80000000\n0.00000000 0.10000000 -0.70000000\n0.00000000 0.10000000 -0.60000000\n0.00000000 0.10000000 -0.50000000\n0.00000000 0.10000000 -0.40000000\n0.00000000 0.10000000 -0.30000000\n0.00000000 0.10000000 -0.20000000\n0.00000000 0.10000000 -0.10000000\n0.00000000 0.10000000 0.00000000\n0.00000000 0.10000000 0.10000000\n0.00000000 0.10000000 0.20000000\n0.00000000 0.10000000 0.30000000\n0.00000000 0.10000000 0.40000000\n0.00000000 0.10000000 0.50000000\n0.00000000 0.10000000 0.60000000\n0.00000000 0.10000000 0.70000000\n0.00000000 0.10000000 0.80000000\n0.00000000 0.10000000 0.90000000\n0.00000000 0.10000000 1.00000000\n0.00000000 0.10000000 1.10000000\n0.00000000 0.10000000 1.20000000\n0.00000000 0.10000000 1.30000000\n0.00000000 0.10000000 1.40000000\n0.00000000 0.10000000 1.50000000\n0.00000000 0.10000000 1.60000000\n0.00000000 0.10000000 1.70000000\n0.00000000 0.10000000 1.80000000\n0.00000000 0.10000000 1.90000000\n0.00000000 0.10000000 2.00000000\n0.00000000 0.20000000 -1.50000000\n0.00000000 0.20000000 -1.40000000\n0.00000000 0.20000000 -1.30000000\n0.00000000 0.20000000 -1.20000000\n0.00000000 0.20000000 -1.10000000\n0.00000000 0.20000000 2.10000000\n0.00000000 0.30000000 -1.70000000\n0.00000000 0.30000000 -1.60000000\n0.00000000 0.30000000 2.10000000\n0.00000000 0.40000000 -1.90000000\n0.00000000 0.40000000 -1.80000000\n0.00000000 0.40000000 2.10000000\n0.00000000 0.50000000 -1.90000000\n0.00000000 0.50000000 2.10000000\n0.00000000 0.60000000 -1.90000000\n0.00000000 0.60000000 1.60000000\n0.00000000 0.60000000 1.70000000\n0.00000000 0.60000000 1.80000000\n0.00000000 0.60000000 1.90000000\n0.00000000 0.60000000 2.00000000\n0.00000000 0.70000000 -1.90000000\n0.00000000 0.70000000 1.10000000\n0.00000000 0.70000000 1.20000000\n0.00000000 0.70000000 1.30000000\n0.00000000 0.70000000 1.40000000\n0.00000000 0.70000000 1.50000000\n0.00000000 0.80000000 -1.90000000\n0.00000000 0.80000000 0.10000000\n0.00000000 0.80000000 0.20000000\n0.00000000 0.80000000 0.30000000\n0.00000000 0.80000000 0.40000000\n0.00000000 0.80000000 0.50000000\n0.00000000 0.80000000 0.60000000\n0.00000000 0.80000000 0.70000000\n0.00000000 0.80000000 0.80000000\n0.00000000 0.80000000 0.90000000\n0.00000000 0.80000000 1.00000000\n0.00000000 0.90000000 -1.90000000\n0.00000000 0.90000000 0.00000000\n0.00000000 1.00000000 -1.80000000\n0.00000000 1.00000000 -1.70000000\n0.00000000 1.00000000 -0.20000000\n0.00000000 1.00000000 -0.10000000\n0.00000000 1.10000000 -1.60000000\n0.00000000 1.10000000 -1.50000000\n0.00000000 1.10000000 -1.40000000\n0.00000000 1.10000000 -1.30000000\n0.00000000 1.10000000 -0.60000000\n0.00000000 1.10000000 -0.50000000\n0.00000000 1.10000000 -0.40000000\n0.00000000 1.10000000 -0.30000000\n0.00000000 1.20000000 -1.20000000\n0.00000000 1.20000000 -1.10000000\n0.00000000 1.20000000 -1.00000000\n0.00000000 1.20000000 -0.90000000\n0.00000000 1.20000000 -0.80000000\n0.00000000 1.20000000 -0.70000000\n0.10000000 0.10000000 -1.00000000\n0.10000000 0.10000000 -0.90000000\n0.10000000 0.10000000 -0.80000000\n0.10000000 0.10000000 -0.70000000\n0.10000000 0.10000000 -0.60000000\n0.10000000 0.10000000 -0.50000000\n0.10000000 0.10000000 -0.40000000\n0.10000000 0.10000000 -0.30000000\n0.10000000 0.10000000 -0.20000000\n0.10000000 0.10000000 -0.10000000\n0.10000000 0.10000000 0.00000000\n0.10000000 0.10000000 0.10000000\n0.10000000 0.10000000 0.20000000\n0.10000000 0.10000000 0.30000000\n0.10000000 0.10000000 0.40000000\n0.10000000 0.10000000 0.50000000\n0.10000000 0.10000000 0.60000000\n0.10000000 0.10000000 0.70000000\n0.10000000 0.10000000 0.80000000\n0.10000000 0.10000000 0.90000000\n0.10000000 0.10000000 1.00000000\n0.10000000 0.10000000 1.10000000\n0.10000000 0.10000000 1.20000000\n0.10000000 0.10000000 1.30000000\n0.10000000 0.10000000 1.40000000\n0.10000000 0.10000000 1.50000000\n0.10000000 0.10000000 1.60000000\n0.10000000 0.10000000 1.70000000\n0.10000000 0.10000000 1.80000000\n0.10000000 0.10000000 1.90000000\n0.10000000 0.10000000 2.00000000\n0.10000000 0.20000000 -1.50000000\n0.10000000 0.20000000 -1.40000000\n0.10000000 0.20000000 -1.30000000\n0.10000000 0.20000000 -1.20000000\n0.10000000 0.20000000 -1.10000000\n0.10000000 0.20000000 2.10000000\n0.10000000 0.30000000 -1.70000000\n0.10000000 0.30000000 -1.60000000\n0.10000000 0.30000000 2.10000000\n0.10000000 0.40000000 -1.80000000\n0.10000000 0.40000000 2.10000000\n0.10000000 0.50000000 -1.90000000\n0.10000000 0.50000000 2.10000000\n0.10000000 0.60000000 -1.90000000\n0.10000000 0.60000000 1.60000000\n0.10000000 0.60000000 1.70000000\n0.10000000 0.60000000 1.80000000\n0.10000000 0.60000000 1.90000000\n0.10000000 0.60000000 2.00000000\n0.10000000 0.70000000 -1.90000000\n0.10000000 0.70000000 1.10000000\n0.10000000 0.70000000 1.20000000\n0.10000000 0.70000000 1.30000000\n0.10000000 0.70000000 1.40000000\n0.10000000 0.70000000 1.50000000\n0.10000000 0.80000000 -1.90000000\n0.10000000 0.80000000 0.10000000\n0.10000000 0.80000000 0.20000000\n0.10000000 0.80000000 0.30000000\n0.10000000 0.80000000 0.40000000\n0.10000000 0.80000000 0.50000000\n0.10000000 0.80000000 0.60000000\n0.10000000 0.80000000 0.70000000\n0.10000000 0.80000000 0.80000000\n0.10000000 0.80000000 0.90000000\n0.10000000 0.80000000 1.00000000\n0.10000000 0.90000000 -1.90000000\n0.10000000 0.90000000 0.00000000\n0.10000000 1.00000000 -1.80000000\n0.10000000 1.00000000 -1.70000000\n0.10000000 1.00000000 -0.20000000\n0.10000000 1.00000000 -0.10000000\n0.10000000 1.10000000 -1.60000000\n0.10000000 1.10000000 -1.50000000\n0.10000000 1.10000000 -1.40000000\n0.10000000 1.10000000 -1.30000000\n0.10000000 1.10000000 -0.60000000\n0.10000000 1.10000000 -0.50000000\n0.10000000 1.10000000 -0.40000000\n0.10000000 1.10000000 -0.30000000\n0.10000000 1.20000000 -1.20000000\n0.10000000 1.20000000 -1.10000000\n0.10000000 1.20000000 -1.00000000\n0.10000000 1.20000000 -0.90000000\n0.10000000 1.20000000 -0.80000000\n0.10000000 1.20000000 -0.70000000\n0.20000000 0.10000000 -1.00000000\n0.20000000 0.10000000 -0.90000000\n0.20000000 0.10000000 -0.80000000\n0.20000000 0.10000000 -0.70000000\n0.20000000 0.10000000 -0.60000000\n0.20000000 0.10000000 -0.50000000\n0.20000000 0.10000000 -0.40000000\n0.20000000 0.10000000 -0.30000000\n0.20000000 0.10000000 -0.20000000\n0.20000000 0.10000000 -0.10000000\n0.20000000 0.10000000 0.00000000\n0.20000000 0.10000000 0.10000000\n0.20000000 0.10000000 0.20000000\n0.20000000 0.10000000 0.30000000\n0.20000000 0.10000000 0.40000000\n0.20000000 0.10000000 0.50000000\n0.20000000 0.10000000 0.60000000\n0.20000000 0.10000000 0.70000000\n0.20000000 0.10000000 0.80000000\n0.20000000 0.10000000 0.90000000\n0.20000000 0.10000000 1.00000000\n0.20000000 0.10000000 1.10000000\n0.20000000 0.10000000 1.20000000\n0.20000000 0.10000000 1.30000000\n0.20000000 0.10000000 1.40000000\n0.20000000 0.10000000 1.50000000\n0.20000000 0.10000000 1.60000000\n0.20000000 0.10000000 1.70000000\n0.20000000 0.10000000 1.80000000\n0.20000000 0.10000000 1.90000000\n0.20000000 0.10000000 2.00000000\n0.20000000 0.20000000 -1.50000000\n0.20000000 0.20000000 -1.40000000\n0.20000000 0.20000000 -1.30000000\n0.20000000 0.20000000 -1.20000000\n0.20000000 0.20000000 -1.10000000\n0.20000000 0.20000000 2.10000000\n0.20000000 0.30000000 -1.70000000\n0.20000000 0.30000000 -1.60000000\n0.20000000 0.30000000 2.10000000\n0.20000000 0.40000000 -1.80000000\n0.20000000 0.40000000 2.10000000\n0.20000000 0.50000000 -1.90000000\n0.20000000 0.50000000 2.10000000\n0.20000000 0.60000000 -1.90000000\n0.20000000 0.60000000 1.50000000\n0.20000000 0.60000000 1.60000000\n0.20000000 0.60000000 1.70000000\n0.20000000 0.60000000 1.80000000\n0.20000000 0.60000000 1.90000000\n0.20000000 0.60000000 2.00000000\n0.20000000 0.70000000 -1.90000000\n0.20000000 0.70000000 0.90000000\n0.20000000 0.70000000 1.00000000\n0.20000000 0.70000000 1.10000000\n0.20000000 0.70000000 1.20000000\n0.20000000 0.70000000 1.30000000\n0.20000000 0.70000000 1.40000000\n0.20000000 0.80000000 -1.90000000\n0.20000000 0.80000000 0.10000000\n0.20000000 0.80000000 0.20000000\n0.20000000 0.80000000 0.30000000\n0.20000000 0.80000000 0.40000000\n0.20000000 0.80000000 0.50000000\n0.20000000 0.80000000 0.60000000\n0.20000000 0.80000000 0.70000000\n0.20000000 0.80000000 0.80000000\n0.20000000 0.90000000 -1.90000000\n0.20000000 0.90000000 0.00000000\n0.20000000 1.00000000 -1.80000000\n0.20000000 1.00000000 -1.70000000\n0.20000000 1.00000000 -0.20000000\n0.20000000 1.00000000 -0.10000000\n0.20000000 1.10000000 -1.60000000\n0.20000000 1.10000000 -1.50000000\n0.20000000 1.10000000 -1.40000000\n0.20000000 1.10000000 -1.30000000\n0.20000000 1.10000000 -1.20000000\n0.20000000 1.10000000 -0.70000000\n0.20000000 1.10000000 -0.60000000\n0.20000000 1.10000000 -0.50000000\n0.20000000 1.10000000 -0.40000000\n0.20000000 1.10000000 -0.30000000\n0.20000000 1.20000000 -1.10000000\n0.20000000 1.20000000 -1.00000000\n0.20000000 1.20000000 -0.90000000\n0.20000000 1.20000000 -0.80000000\n0.30000000 0.10000000 -0.80000000\n0.30000000 0.10000000 -0.70000000\n0.30000000 0.10000000 -0.60000000\n0.30000000 0.10000000 -0.50000000\n0.30000000 0.10000000 -0.40000000\n0.30000000 0.10000000 -0.30000000\n0.30000000 0.10000000 -0.20000000\n0.30000000 0.10000000 -0.10000000\n0.30000000 0.10000000 0.00000000\n0.30000000 0.10000000 0.10000000\n0.30000000 0.10000000 0.20000000\n0.30000000 0.10000000 0.30000000\n0.30000000 0.10000000 0.40000000\n0.30000000 0.10000000 0.50000000\n0.30000000 0.10000000 0.60000000\n0.30000000 0.10000000 0.70000000\n0.30000000 0.10000000 0.80000000\n0.30000000 0.10000000 0.90000000\n0.30000000 0.10000000 1.50000000\n0.30000000 0.10000000 1.60000000\n0.30000000 0.10000000 1.70000000\n0.30000000 0.10000000 1.80000000\n0.30000000 0.10000000 1.90000000\n0.30000000 0.10000000 2.00000000\n0.30000000 0.20000000 -1.40000000\n0.30000000 0.20000000 -1.30000000\n0.30000000 0.20000000 -1.20000000\n0.30000000 0.20000000 -1.10000000\n0.30000000 0.20000000 -1.00000000\n0.30000000 0.20000000 -0.90000000\n0.30000000 0.20000000 1.00000000\n0.30000000 0.20000000 1.10000000\n0.30000000 0.20000000 1.20000000\n0.30000000 0.20000000 1.30000000\n0.30000000 0.20000000 1.40000000\n0.30000000 0.20000000 2.10000000\n0.30000000 0.30000000 -1.60000000\n0.30000000 0.30000000 -1.50000000\n0.30000000 0.30000000 2.10000000\n0.30000000 0.40000000 -1.80000000\n0.30000000 0.40000000 -1.70000000\n0.30000000 0.40000000 2.10000000\n0.30000000 0.50000000 -1.90000000\n0.30000000 0.50000000 2.10000000\n0.30000000 0.60000000 -1.90000000\n0.30000000 0.60000000 1.20000000\n0.30000000 0.60000000 1.30000000\n0.30000000 0.60000000 1.40000000\n0.30000000 0.60000000 1.50000000\n0.30000000 0.60000000 1.60000000\n0.30000000 0.60000000 1.70000000\n0.30000000 0.60000000 1.80000000\n0.30000000 0.60000000 1.90000000\n0.30000000 0.60000000 2.00000000\n0.30000000 0.70000000 -1.90000000\n0.30000000 0.70000000 0.50000000\n0.30000000 0.70000000 0.60000000\n0.30000000 0.70000000 0.70000000\n0.30000000 0.70000000 0.80000000\n0.30000000 0.70000000 0.90000000\n0.30000000 0.70000000 1.00000000\n0.30000000 0.70000000 1.10000000\n0.30000000 0.80000000 -1.90000000\n0.30000000 0.80000000 0.10000000\n0.30000000 0.80000000 0.20000000\n0.30000000 0.80000000 0.30000000\n0.30000000 0.80000000 0.40000000\n0.30000000 0.90000000 -1.80000000\n0.30000000 0.90000000 0.00000000\n0.30000000 1.00000000 -1.70000000\n0.30000000 1.00000000 -1.60000000\n0.30000000 1.00000000 -0.30000000\n0.30000000 1.00000000 -0.20000000\n0.30000000 1.00000000 -0.10000000\n0.30000000 1.10000000 -1.50000000\n0.30000000 1.10000000 -1.40000000\n0.30000000 1.10000000 -1.30000000\n0.30000000 1.10000000 -1.20000000\n0.30000000 1.10000000 -0.80000000\n0.30000000 1.10000000 -0.70000000\n0.30000000 1.10000000 -0.60000000\n0.30000000 1.10000000 -0.50000000\n0.30000000 1.10000000 -0.40000000\n0.30000000 1.20000000 -1.10000000\n0.30000000 1.20000000 -1.00000000\n0.30000000 1.20000000 -0.90000000\n0.40000000 0.10000000 -0.70000000\n0.40000000 0.10000000 -0.60000000\n0.40000000 0.10000000 -0.50000000\n0.40000000 0.10000000 -0.40000000\n0.40000000 0.10000000 -0.30000000\n0.40000000 0.10000000 -0.20000000\n0.40000000 0.10000000 -0.10000000\n0.40000000 0.10000000 0.00000000\n0.40000000 0.10000000 0.10000000\n0.40000000 0.10000000 0.20000000\n0.40000000 0.10000000 0.30000000\n0.40000000 0.10000000 0.40000000\n0.40000000 0.10000000 0.50000000\n0.40000000 0.10000000 0.60000000\n0.40000000 0.10000000 0.70000000\n0.40000000 0.10000000 0.80000000\n0.40000000 0.10000000 1.60000000\n0.40000000 0.10000000 1.70000000\n0.40000000 0.10000000 1.80000000\n0.40000000 0.10000000 1.90000000\n0.40000000 0.20000000 -1.40000000\n0.40000000 0.20000000 -1.30000000\n0.40000000 0.20000000 -1.20000000\n0.40000000 0.20000000 -1.10000000\n0.40000000 0.20000000 -1.00000000\n0.40000000 0.20000000 -0.90000000\n0.40000000 0.20000000 -0.80000000\n0.40000000 0.20000000 0.90000000\n0.40000000 0.20000000 1.00000000\n0.40000000 0.20000000 1.10000000\n0.40000000 0.20000000 1.20000000\n0.40000000 0.20000000 1.40000000\n0.40000000 0.20000000 1.50000000\n0.40000000 0.20000000 2.00000000\n0.40000000 0.20000000 2.10000000\n0.40000000 0.30000000 -1.60000000\n0.40000000 0.30000000 -1.50000000\n0.40000000 0.30000000 1.30000000\n0.40000000 0.30000000 2.10000000\n0.40000000 0.40000000 -1.70000000\n0.40000000 0.40000000 2.10000000\n0.40000000 0.50000000 -1.80000000\n0.40000000 0.50000000 1.30000000\n0.40000000 0.50000000 1.40000000\n0.40000000 0.50000000 2.10000000\n0.40000000 0.60000000 -1.90000000\n0.40000000 0.60000000 0.90000000\n0.40000000 0.60000000 1.00000000\n0.40000000 0.60000000 1.10000000\n0.40000000 0.60000000 1.20000000\n0.40000000 0.60000000 1.50000000\n0.40000000 0.60000000 1.60000000\n0.40000000 0.60000000 1.70000000\n0.40000000 0.60000000 1.80000000\n0.40000000 0.60000000 1.90000000\n0.40000000 0.60000000 2.00000000\n0.40000000 0.70000000 -1.90000000\n0.40000000 0.70000000 0.30000000\n0.40000000 0.70000000 0.40000000\n0.40000000 0.70000000 0.50000000\n0.40000000 0.70000000 0.60000000\n0.40000000 0.70000000 0.70000000\n0.40000000 0.70000000 0.80000000\n0.40000000 0.80000000 -1.80000000\n0.40000000 0.80000000 0.00000000\n0.40000000 0.80000000 0.10000000\n0.40000000 0.80000000 0.20000000\n0.40000000 0.90000000 -1.80000000\n0.40000000 0.90000000 -0.10000000\n0.40000000 1.00000000 -1.70000000\n0.40000000 1.00000000 -1.60000000\n0.40000000 1.00000000 -0.30000000\n0.40000000 1.00000000 -0.20000000\n0.40000000 1.10000000 -1.50000000\n0.40000000 1.10000000 -1.40000000\n0.40000000 1.10000000 -1.30000000\n0.40000000 1.10000000 -1.20000000\n0.40000000 1.10000000 -1.10000000\n0.40000000 1.10000000 -1.00000000\n0.40000000 1.10000000 -0.90000000\n0.40000000 1.10000000 -0.80000000\n0.40000000 1.10000000 -0.70000000\n0.40000000 1.10000000 -0.60000000\n0.40000000 1.10000000 -0.50000000\n0.40000000 1.10000000 -0.40000000\n0.50000000 0.10000000 -0.50000000\n0.50000000 0.10000000 -0.40000000\n0.50000000 0.10000000 -0.30000000\n0.50000000 0.10000000 -0.20000000\n0.50000000 0.10000000 -0.10000000\n0.50000000 0.10000000 0.00000000\n0.50000000 0.10000000 0.10000000\n0.50000000 0.10000000 0.20000000\n0.50000000 0.10000000 0.30000000\n0.50000000 0.10000000 0.40000000\n0.50000000 0.10000000 0.50000000\n0.50000000 0.10000000 0.60000000\n0.50000000 0.10000000 1.60000000\n0.50000000 0.10000000 1.70000000\n0.50000000 0.10000000 1.80000000\n0.50000000 0.10000000 1.90000000\n0.50000000 0.20000000 -1.30000000\n0.50000000 0.20000000 -1.20000000\n0.50000000 0.20000000 -1.10000000\n0.50000000 0.20000000 -1.00000000\n0.50000000 0.20000000 -0.90000000\n0.50000000 0.20000000 -0.80000000\n0.50000000 0.20000000 -0.70000000\n0.50000000 0.20000000 -0.60000000\n0.50000000 0.20000000 0.70000000\n0.50000000 0.20000000 0.80000000\n0.50000000 0.20000000 0.90000000\n0.50000000 0.20000000 1.00000000\n0.50000000 0.20000000 1.10000000\n0.50000000 0.20000000 1.50000000\n0.50000000 0.20000000 2.00000000\n0.50000000 0.20000000 2.10000000\n0.50000000 0.30000000 -1.50000000\n0.50000000 0.30000000 -1.40000000\n0.50000000 0.30000000 1.20000000\n0.50000000 0.30000000 1.30000000\n0.50000000 0.30000000 1.40000000\n0.50000000 0.30000000 2.10000000\n0.50000000 0.40000000 -1.70000000\n0.50000000 0.40000000 -1.60000000\n0.50000000 0.40000000 1.30000000\n0.50000000 0.40000000 1.40000000\n0.50000000 0.40000000 2.10000000\n0.50000000 0.50000000 -1.80000000\n0.50000000 0.50000000 1.20000000\n0.50000000 0.50000000 1.40000000\n0.50000000 0.50000000 2.10000000\n0.50000000 0.60000000 -1.80000000\n0.50000000 0.60000000 0.80000000\n0.50000000 0.60000000 0.90000000\n0.50000000 0.60000000 1.00000000\n0.50000000 0.60000000 1.10000000\n0.50000000 0.60000000 1.50000000\n0.50000000 0.60000000 1.60000000\n0.50000000 0.60000000 1.70000000\n0.50000000 0.60000000 1.80000000\n0.50000000 0.60000000 1.90000000\n0.50000000 0.60000000 2.00000000\n0.50000000 0.70000000 -1.80000000\n0.50000000 0.70000000 0.20000000\n0.50000000 0.70000000 0.30000000\n0.50000000 0.70000000 0.40000000\n0.50000000 0.70000000 0.50000000\n0.50000000 0.70000000 0.60000000\n0.50000000 0.70000000 0.70000000\n0.50000000 0.80000000 -1.80000000\n0.50000000 0.80000000 0.00000000\n0.50000000 0.80000000 0.10000000\n0.50000000 0.90000000 -1.70000000\n0.50000000 0.90000000 -0.20000000\n0.50000000 0.90000000 -0.10000000\n0.50000000 1.00000000 -1.60000000\n0.50000000 1.00000000 -1.50000000\n0.50000000 1.00000000 -0.40000000\n0.50000000 1.00000000 -0.30000000\n0.50000000 1.10000000 -1.40000000\n0.50000000 1.10000000 -1.30000000\n0.50000000 1.10000000 -1.20000000\n0.50000000 1.10000000 -1.10000000\n0.50000000 1.10000000 -1.00000000\n0.50000000 1.10000000 -0.90000000\n0.50000000 1.10000000 -0.80000000\n0.50000000 1.10000000 -0.70000000\n0.50000000 1.10000000 -0.60000000\n0.50000000 1.10000000 -0.50000000\n0.60000000 0.10000000 -0.10000000\n0.60000000 0.10000000 0.00000000\n0.60000000 0.10000000 0.10000000\n0.60000000 0.10000000 0.20000000\n0.60000000 0.10000000 0.30000000\n0.60000000 0.10000000 1.70000000\n0.60000000 0.10000000 1.80000000\n0.60000000 0.20000000 -1.10000000\n0.60000000 0.20000000 -1.00000000\n0.60000000 0.20000000 -0.90000000\n0.60000000 0.20000000 -0.80000000\n0.60000000 0.20000000 -0.70000000\n0.60000000 0.20000000 -0.60000000\n0.60000000 0.20000000 -0.50000000\n0.60000000 0.20000000 -0.40000000\n0.60000000 0.20000000 -0.30000000\n0.60000000 0.20000000 -0.20000000\n0.60000000 0.20000000 0.40000000\n0.60000000 0.20000000 0.50000000\n0.60000000 0.20000000 0.60000000\n0.60000000 0.20000000 0.70000000\n0.60000000 0.20000000 0.80000000\n0.60000000 0.20000000 0.90000000\n0.60000000 0.20000000 1.00000000\n0.60000000 0.20000000 1.50000000\n0.60000000 0.20000000 1.60000000\n0.60000000 0.20000000 1.90000000\n0.60000000 0.20000000 2.00000000\n0.60000000 0.30000000 -1.40000000\n0.60000000 0.30000000 -1.30000000\n0.60000000 0.30000000 -1.20000000\n0.60000000 0.30000000 1.10000000\n0.60000000 0.30000000 1.20000000\n0.60000000 0.30000000 1.50000000\n0.60000000 0.30000000 2.10000000\n0.60000000 0.40000000 -1.60000000\n0.60000000 0.40000000 -1.50000000\n0.60000000 0.40000000 1.10000000\n0.60000000 0.40000000 1.20000000\n0.60000000 0.40000000 1.50000000\n0.60000000 0.40000000 2.10000000\n0.60000000 0.50000000 -1.70000000\n0.60000000 0.50000000 1.00000000\n0.60000000 0.50000000 1.10000000\n0.60000000 0.50000000 1.50000000\n0.60000000 0.50000000 2.00000000\n0.60000000 0.60000000 -1.80000000\n0.60000000 0.60000000 0.70000000\n0.60000000 0.60000000 0.80000000\n0.60000000 0.60000000 0.90000000\n0.60000000 0.60000000 1.60000000\n0.60000000 0.60000000 1.70000000\n0.60000000 0.60000000 1.80000000\n0.60000000 0.60000000 1.90000000\n0.60000000 0.70000000 -1.80000000\n0.60000000 0.70000000 0.00000000\n0.60000000 0.70000000 0.10000000\n0.60000000 0.70000000 0.20000000\n0.60000000 0.70000000 0.30000000\n0.60000000 0.70000000 0.40000000\n0.60000000 0.70000000 0.50000000\n0.60000000 0.70000000 0.60000000\n0.60000000 0.80000000 -1.70000000\n0.60000000 0.80000000 -0.10000000\n0.60000000 0.90000000 -1.70000000\n0.60000000 0.90000000 -0.20000000\n0.60000000 1.00000000 -1.60000000\n0.60000000 1.00000000 -1.50000000\n0.60000000 1.00000000 -1.40000000\n0.60000000 1.00000000 -0.60000000\n0.60000000 1.00000000 -0.50000000\n0.60000000 1.00000000 -0.40000000\n0.60000000 1.00000000 -0.30000000\n0.60000000 1.10000000 -1.30000000\n0.60000000 1.10000000 -1.20000000\n0.60000000 1.10000000 -1.10000000\n0.60000000 1.10000000 -1.00000000\n0.60000000 1.10000000 -0.90000000\n0.60000000 1.10000000 -0.80000000\n0.60000000 1.10000000 -0.70000000\n0.70000000 0.10000000 -1.30000000\n0.70000000 0.10000000 -1.20000000\n0.70000000 0.10000000 -1.10000000\n0.70000000 0.10000000 1.60000000\n0.70000000 0.10000000 1.70000000\n0.70000000 0.10000000 1.80000000\n0.70000000 0.10000000 1.90000000\n0.70000000 0.20000000 -1.40000000\n0.70000000 0.20000000 -1.30000000\n0.70000000 0.20000000 -1.20000000\n0.70000000 0.20000000 -1.00000000\n0.70000000 0.20000000 -0.90000000\n0.70000000 0.20000000 -0.80000000\n0.70000000 0.20000000 -0.70000000\n0.70000000 0.20000000 -0.60000000\n0.70000000 0.20000000 -0.50000000\n0.70000000 0.20000000 -0.40000000\n0.70000000 0.20000000 -0.30000000\n0.70000000 0.20000000 -0.20000000\n0.70000000 0.20000000 -0.10000000\n0.70000000 0.20000000 0.00000000\n0.70000000 0.20000000 0.10000000\n0.70000000 0.20000000 0.20000000\n0.70000000 0.20000000 0.30000000\n0.70000000 0.20000000 0.40000000\n0.70000000 0.20000000 0.50000000\n0.70000000 0.20000000 0.60000000\n0.70000000 0.20000000 0.70000000\n0.70000000 0.20000000 0.80000000\n0.70000000 0.20000000 1.50000000\n0.70000000 0.20000000 2.00000000\n0.70000000 0.30000000 -1.40000000\n0.70000000 0.30000000 0.90000000\n0.70000000 0.30000000 1.00000000\n0.70000000 0.30000000 1.50000000\n0.70000000 0.30000000 2.10000000\n0.70000000 0.40000000 -1.50000000\n0.70000000 0.40000000 0.90000000\n0.70000000 0.40000000 1.00000000\n0.70000000 0.40000000 1.50000000\n0.70000000 0.40000000 2.10000000\n0.70000000 0.50000000 -1.60000000\n0.70000000 0.50000000 0.90000000\n0.70000000 0.50000000 1.00000000\n0.70000000 0.50000000 1.50000000\n0.70000000 0.50000000 2.00000000\n0.70000000 0.60000000 -1.70000000\n0.70000000 0.60000000 0.50000000\n0.70000000 0.60000000 0.60000000\n0.70000000 0.60000000 0.70000000\n0.70000000 0.60000000 0.80000000\n0.70000000 0.60000000 1.60000000\n0.70000000 0.60000000 1.70000000\n0.70000000 0.60000000 1.80000000\n0.70000000 0.60000000 1.90000000\n0.70000000 0.70000000 -1.70000000\n0.70000000 0.70000000 -0.10000000\n0.70000000 0.70000000 0.00000000\n0.70000000 0.70000000 0.10000000\n0.70000000 0.70000000 0.20000000\n0.70000000 0.70000000 0.30000000\n0.70000000 0.70000000 0.40000000\n0.70000000 0.80000000 -1.70000000\n0.70000000 0.80000000 -0.20000000\n0.70000000 0.90000000 -1.60000000\n0.70000000 0.90000000 -1.50000000\n0.70000000 0.90000000 -0.30000000\n0.70000000 1.00000000 -1.40000000\n0.70000000 1.00000000 -1.30000000\n0.70000000 1.00000000 -1.20000000\n0.70000000 1.00000000 -1.10000000\n0.70000000 1.00000000 -0.90000000\n0.70000000 1.00000000 -0.80000000\n0.70000000 1.00000000 -0.70000000\n0.70000000 1.00000000 -0.60000000\n0.70000000 1.00000000 -0.50000000\n0.70000000 1.00000000 -0.40000000\n0.70000000 1.10000000 -1.00000000\n0.80000000 0.00000000 -1.40000000\n0.80000000 0.00000000 -1.30000000\n0.80000000 0.00000000 -1.20000000\n0.80000000 0.00000000 -1.10000000\n0.80000000 0.00000000 -1.00000000\n0.80000000 0.00000000 1.60000000\n0.80000000 0.00000000 1.70000000\n0.80000000 0.00000000 1.80000000\n0.80000000 0.00000000 1.90000000\n0.80000000 0.00000000 2.00000000\n0.80000000 0.10000000 -1.50000000\n0.80000000 0.10000000 -1.40000000\n0.80000000 0.10000000 -1.00000000\n0.80000000 0.10000000 -0.90000000\n0.80000000 0.10000000 1.50000000\n0.80000000 0.10000000 2.00000000\n0.80000000 0.10000000 2.10000000\n0.80000000 0.20000000 -1.50000000\n0.80000000 0.20000000 -0.90000000\n0.80000000 0.20000000 -0.60000000\n0.80000000 0.20000000 -0.50000000\n0.80000000 0.20000000 -0.40000000\n0.80000000 0.20000000 -0.30000000\n0.80000000 0.20000000 -0.20000000\n0.80000000 0.20000000 -0.10000000\n0.80000000 0.20000000 0.00000000\n0.80000000 0.20000000 0.10000000\n0.80000000 0.20000000 0.20000000\n0.80000000 0.20000000 0.30000000\n0.80000000 0.20000000 0.40000000\n0.80000000 0.20000000 0.50000000\n0.80000000 0.20000000 1.40000000\n0.80000000 0.20000000 2.10000000\n0.80000000 0.30000000 -1.60000000\n0.80000000 0.30000000 -1.50000000\n0.80000000 0.30000000 -0.80000000\n0.80000000 0.30000000 -0.70000000\n0.80000000 0.30000000 0.60000000\n0.80000000 0.30000000 0.70000000\n0.80000000 0.30000000 0.80000000\n0.80000000 0.30000000 1.40000000\n0.80000000 0.30000000 2.10000000\n0.80000000 0.40000000 -1.60000000\n0.80000000 0.40000000 0.70000000\n0.80000000 0.40000000 0.80000000\n0.80000000 0.40000000 1.40000000\n0.80000000 0.40000000 2.10000000\n0.80000000 0.50000000 -1.50000000\n0.80000000 0.50000000 0.60000000\n0.80000000 0.50000000 0.70000000\n0.80000000 0.50000000 0.80000000\n0.80000000 0.50000000 1.40000000\n0.80000000 0.50000000 2.10000000\n0.80000000 0.60000000 -1.60000000\n0.80000000 0.60000000 0.20000000\n0.80000000 0.60000000 0.30000000\n0.80000000 0.60000000 0.40000000\n0.80000000 0.60000000 0.50000000\n0.80000000 0.60000000 0.60000000\n0.80000000 0.60000000 1.50000000\n0.80000000 0.60000000 2.00000000\n0.80000000 0.60000000 2.10000000\n0.80000000 0.70000000 -1.60000000\n0.80000000 0.70000000 -0.20000000\n0.80000000 0.70000000 -0.10000000\n0.80000000 0.70000000 0.00000000\n0.80000000 0.70000000 0.10000000\n0.80000000 0.70000000 1.60000000\n0.80000000 0.70000000 1.70000000\n0.80000000 0.70000000 1.80000000\n0.80000000 0.70000000 1.90000000\n0.80000000 0.70000000 2.00000000\n0.80000000 0.80000000 -1.60000000\n0.80000000 0.80000000 -1.50000000\n0.80000000 0.80000000 -0.30000000\n0.80000000 0.90000000 -1.50000000\n0.80000000 0.90000000 -1.40000000\n0.80000000 0.90000000 -0.50000000\n0.80000000 0.90000000 -0.40000000\n0.80000000 1.00000000 -1.30000000\n0.80000000 1.00000000 -1.20000000\n0.80000000 1.00000000 -1.10000000\n0.80000000 1.00000000 -1.00000000\n0.80000000 1.00000000 -0.90000000\n0.80000000 1.00000000 -0.80000000\n0.80000000 1.00000000 -0.70000000\n0.80000000 1.00000000 -0.60000000\n0.90000000 0.00000000 -1.40000000\n0.90000000 0.00000000 -1.30000000\n0.90000000 0.00000000 -1.20000000\n0.90000000 0.00000000 -1.10000000\n0.90000000 0.00000000 -1.00000000\n0.90000000 0.00000000 1.60000000\n0.90000000 0.00000000 1.70000000\n0.90000000 0.00000000 1.80000000\n0.90000000 0.00000000 1.90000000\n0.90000000 0.00000000 2.00000000\n0.90000000 0.10000000 -1.50000000\n0.90000000 0.10000000 -0.90000000\n0.90000000 0.10000000 1.50000000\n0.90000000 0.10000000 2.10000000\n0.90000000 0.20000000 -1.60000000\n0.90000000 0.20000000 -0.90000000\n0.90000000 0.20000000 1.40000000\n0.90000000 0.20000000 2.10000000\n0.90000000 0.30000000 -1.60000000\n0.90000000 0.30000000 -0.80000000\n0.90000000 0.30000000 -0.70000000\n0.90000000 0.30000000 -0.60000000\n0.90000000 0.30000000 -0.50000000\n0.90000000 0.30000000 -0.40000000\n0.90000000 0.30000000 -0.30000000\n0.90000000 0.30000000 -0.20000000\n0.90000000 0.30000000 -0.10000000\n0.90000000 0.30000000 0.00000000\n0.90000000 0.30000000 0.10000000\n0.90000000 0.30000000 0.20000000\n0.90000000 0.30000000 0.30000000\n0.90000000 0.30000000 0.40000000\n0.90000000 0.30000000 0.50000000\n0.90000000 0.30000000 1.40000000\n0.90000000 0.30000000 2.10000000\n0.90000000 0.40000000 -1.60000000\n0.90000000 0.40000000 -0.80000000\n0.90000000 0.40000000 -0.70000000\n0.90000000 0.40000000 -0.60000000\n0.90000000 0.40000000 0.20000000\n0.90000000 0.40000000 0.30000000\n0.90000000 0.40000000 0.40000000\n0.90000000 0.40000000 0.50000000\n0.90000000 0.40000000 0.60000000\n0.90000000 0.40000000 1.40000000\n0.90000000 0.40000000 2.10000000\n0.90000000 0.50000000 -1.60000000\n0.90000000 0.50000000 0.20000000\n0.90000000 0.50000000 0.30000000\n0.90000000 0.50000000 0.40000000\n0.90000000 0.50000000 0.50000000\n0.90000000 0.50000000 1.40000000\n0.90000000 0.50000000 2.10000000\n0.90000000 0.60000000 -1.50000000\n0.90000000 0.60000000 -0.40000000\n0.90000000 0.60000000 -0.30000000\n0.90000000 0.60000000 -0.20000000\n0.90000000 0.60000000 -0.10000000\n0.90000000 0.60000000 0.00000000\n0.90000000 0.60000000 0.10000000\n0.90000000 0.60000000 0.20000000\n0.90000000 0.60000000 0.30000000\n0.90000000 0.60000000 1.50000000\n0.90000000 0.60000000 2.10000000\n0.90000000 0.70000000 -1.50000000\n0.90000000 0.70000000 -1.40000000\n0.90000000 0.70000000 -0.40000000\n0.90000000 0.70000000 -0.30000000\n0.90000000 0.70000000 1.60000000\n0.90000000 0.70000000 1.70000000\n0.90000000 0.70000000 1.80000000\n0.90000000 0.70000000 1.90000000\n0.90000000 0.70000000 2.00000000\n0.90000000 0.80000000 -1.40000000\n0.90000000 0.80000000 -1.30000000\n0.90000000 0.80000000 -0.50000000\n0.90000000 0.80000000 -0.40000000\n0.90000000 0.90000000 -1.30000000\n0.90000000 0.90000000 -1.20000000\n0.90000000 0.90000000 -1.10000000\n0.90000000 0.90000000 -1.00000000\n0.90000000 0.90000000 -0.90000000\n0.90000000 0.90000000 -0.80000000\n0.90000000 0.90000000 -0.70000000\n0.90000000 0.90000000 -0.60000000\n0.90000000 0.90000000 -0.50000000\n1.00000000 0.00000000 -1.30000000\n1.00000000 0.00000000 -1.20000000\n1.00000000 0.00000000 -1.10000000\n1.00000000 0.00000000 1.70000000\n1.00000000 0.00000000 1.80000000\n1.00000000 0.10000000 -1.40000000\n1.00000000 0.10000000 -1.30000000\n1.00000000 0.10000000 -1.20000000\n1.00000000 0.10000000 -1.10000000\n1.00000000 0.10000000 -1.00000000\n1.00000000 0.10000000 1.50000000\n1.00000000 0.10000000 1.60000000\n1.00000000 0.10000000 1.70000000\n1.00000000 0.10000000 1.80000000\n1.00000000 0.10000000 1.90000000\n1.00000000 0.10000000 2.00000000\n1.00000000 0.20000000 -1.50000000\n1.00000000 0.20000000 -1.40000000\n1.00000000 0.20000000 -1.00000000\n1.00000000 0.20000000 -0.90000000\n1.00000000 0.20000000 1.50000000\n1.00000000 0.20000000 1.60000000\n1.00000000 0.20000000 1.70000000\n1.00000000 0.20000000 1.80000000\n1.00000000 0.20000000 1.90000000\n1.00000000 0.20000000 2.00000000\n1.00000000 0.20000000 2.10000000\n1.00000000 0.30000000 -1.50000000\n1.00000000 0.30000000 -1.40000000\n1.00000000 0.30000000 -1.00000000\n1.00000000 0.30000000 -0.90000000\n1.00000000 0.30000000 1.50000000\n1.00000000 0.30000000 1.60000000\n1.00000000 0.30000000 1.70000000\n1.00000000 0.30000000 1.80000000\n1.00000000 0.30000000 1.90000000\n1.00000000 0.30000000 2.00000000\n1.00000000 0.30000000 2.10000000\n1.00000000 0.40000000 -1.50000000\n1.00000000 0.40000000 -1.00000000\n1.00000000 0.40000000 -0.90000000\n1.00000000 0.40000000 -0.50000000\n1.00000000 0.40000000 -0.40000000\n1.00000000 0.40000000 -0.30000000\n1.00000000 0.40000000 -0.20000000\n1.00000000 0.40000000 -0.10000000\n1.00000000 0.40000000 0.00000000\n1.00000000 0.40000000 0.10000000\n1.00000000 0.40000000 1.50000000\n1.00000000 0.40000000 1.60000000\n1.00000000 0.40000000 1.70000000\n1.00000000 0.40000000 1.80000000\n1.00000000 0.40000000 1.90000000\n1.00000000 0.40000000 2.00000000\n1.00000000 0.40000000 2.10000000\n1.00000000 0.50000000 -1.50000000\n1.00000000 0.50000000 -1.40000000\n1.00000000 0.50000000 -1.00000000\n1.00000000 0.50000000 -0.90000000\n1.00000000 0.50000000 -0.80000000\n1.00000000 0.50000000 -0.70000000\n1.00000000 0.50000000 -0.60000000\n1.00000000 0.50000000 -0.50000000\n1.00000000 0.50000000 -0.40000000\n1.00000000 0.50000000 -0.30000000\n1.00000000 0.50000000 -0.20000000\n1.00000000 0.50000000 -0.10000000\n1.00000000 0.50000000 0.00000000\n1.00000000 0.50000000 0.10000000\n1.00000000 0.50000000 1.50000000\n1.00000000 0.50000000 1.60000000\n1.00000000 0.50000000 1.70000000\n1.00000000 0.50000000 1.80000000\n1.00000000 0.50000000 1.90000000\n1.00000000 0.50000000 2.00000000\n1.00000000 0.50000000 2.10000000\n1.00000000 0.60000000 -1.50000000\n1.00000000 0.60000000 -1.40000000\n1.00000000 0.60000000 -1.30000000\n1.00000000 0.60000000 -1.20000000\n1.00000000 0.60000000 -1.10000000\n1.00000000 0.60000000 -1.00000000\n1.00000000 0.60000000 -0.90000000\n1.00000000 0.60000000 -0.80000000\n1.00000000 0.60000000 -0.70000000\n1.00000000 0.60000000 -0.60000000\n1.00000000 0.60000000 -0.50000000\n1.00000000 0.60000000 1.50000000\n1.00000000 0.60000000 1.60000000\n1.00000000 0.60000000 1.70000000\n1.00000000 0.60000000 1.80000000\n1.00000000 0.60000000 1.90000000\n1.00000000 0.60000000 2.00000000\n1.00000000 0.70000000 -1.30000000\n1.00000000 0.70000000 -1.20000000\n1.00000000 0.70000000 -1.10000000\n1.00000000 0.70000000 -1.00000000\n1.00000000 0.70000000 -0.90000000\n1.00000000 0.70000000 -0.80000000\n1.00000000 0.70000000 -0.70000000\n1.00000000 0.70000000 -0.60000000\n1.00000000 0.70000000 -0.50000000\n1.00000000 0.70000000 1.70000000\n1.00000000 0.70000000 1.80000000\n1.00000000 0.70000000 1.90000000\n1.00000000 0.80000000 -1.20000000\n1.00000000 0.80000000 -1.10000000\n1.00000000 0.80000000 -1.00000000\n1.00000000 0.80000000 -0.90000000\n1.00000000 0.80000000 -0.80000000\n1.00000000 0.80000000 -0.70000000\n1.00000000 0.80000000 -0.60000000\n1.10000000 0.20000000 -1.30000000\n1.10000000 0.20000000 -1.20000000\n1.10000000 0.20000000 -1.10000000\n1.10000000 0.30000000 -1.30000000\n1.10000000 0.30000000 -1.20000000\n1.10000000 0.30000000 -1.10000000\n1.10000000 0.40000000 -1.40000000\n1.10000000 0.40000000 -1.30000000\n1.10000000 0.40000000 -1.20000000\n1.10000000 0.40000000 -1.10000000\n1.10000000 0.50000000 -1.30000000\n1.10000000 0.50000000 -1.20000000\n1.10000000 0.50000000 -1.10000000",    "# X Y Z\n-1.05000000 0.15000000 -1.35000000\n-1.05000000 0.15000000 -1.30000000\n-1.05000000 0.15000000 -1.25000000\n-1.05000000 0.15000000 -1.20000000\n-1.05000000 0.15000000 -1.15000000\n-1.05000000 0.15000000 -1.10000000\n-1.05000000 0.20000000 -1.40000000\n-1.05000000 0.20000000 -1.35000000\n-1.05000000 0.20000000 -1.30000000\n-1.05000000 0.20000000 -1.25000000\n-1.05000000 0.20000000 -1.20000000\n-1.05000000 0.20000000 -1.15000000\n-1.05000000 0.20000000 -1.10000000\n-1.05000000 0.20000000 -1.05000000\n-1.05000000 0.20000000 -1.00000000\n-1.05000000 0.20000000 1.70000000\n-1.05000000 0.20000000 1.75000000\n-1.05000000 0.20000000 1.80000000\n-1.05000000 0.20000000 1.85000000\n-1.05000000 0.25000000 -1.40000000\n-1.05000000 0.25000000 -1.35000000\n-1.05000000 0.25000000 -1.30000000\n-1.05000000 0.25000000 -1.25000000\n-1.05000000 0.25000000 -1.20000000\n-1.05000000 0.25000000 -1.15000000\n-1.05000000 0.25000000 -1.10000000\n-1.05000000 0.25000000 -1.05000000\n-1.05000000 0.25000000 -1.00000000\n-1.05000000 0.25000000 1.65000000\n-1.05000000 0.25000000 1.70000000\n-1.05000000 0.25000000 1.75000000\n-1.05000000 0.25000000 1.80000000\n-1.05000000 0.25000000 1.85000000\n-1.05000000 0.25000000 1.90000000\n-1.05000000 0.30000000 -1.45000000\n-1.05000000 0.30000000 -1.40000000\n-1.05000000 0.30000000 -1.35000000\n-1.05000000 0.30000000 -1.30000000\n-1.05000000 0.30000000 -1.25000000\n-1.05000000 0.30000000 -1.20000000\n-1.05000000 0.30000000 -1.15000000\n-1.05000000 0.30000000 -1.10000000\n-1.05000000 0.30000000 -1.05000000\n-1.05000000 0.30000000 -1.00000000\n-1.05000000 0.30000000 1.65000000\n-1.05000000 0.30000000 1.70000000\n-1.05000000 0.30000000 1.75000000\n-1.05000000 0.30000000 1.80000000\n-1.05000000 0.30000000 1.85000000\n-1.05000000 0.30000000 1.90000000\n-1.05000000 0.30000000 1.95000000\n-1.05000000 0.35000000 -1.45000000\n-1.05000000 0.35000000 -1.40000000\n-1.05000000 0.35000000 -1.35000000\n-1.05000000 0.35000000 -1.30000000\n-1.05000000 0.35000000 -1.25000000\n-1.05000000 0.35000000 -1.20000000\n-1.05000000 0.35000000 -1.15000000\n-1.05000000 0.35000000 -1.10000000\n-1.05000000 0.35000000 -1.05000000\n-1.05000000 0.35000000 -1.00000000\n-1.05000000 0.35000000 1.60000000\n-1.05000000 0.35000000 1.65000000\n-1.05000000 0.35000000 1.70000000\n-1.05000000 0.35000000 1.75000000\n-1.05000000 0.35000000 1.80000000\n-1.05000000 0.35000000 1.85000000\n-1.05000000 0.35000000 1.90000000\n-1.05000000 0.35000000 1.95000000\n-1.05000000 0.40000000 -1.45000000\n-1.05000000 0.40000000 -1.40000000\n-1.05000000 0.40000000 -1.35000000\n-1.05000000 0.40000000 -1.30000000\n-1.05000000 0.40000000 -1.25000000\n-1.05000000 0.40000000 -1.20000000\n-1.05000000 0.40000000 -1.15000000\n-1.05000000 0.40000000 -1.10000000\n-1.05000000 0.40000000 -1.05000000\n-1.05000000 0.40000000 -1.00000000\n-1.05000000 0.40000000 1.65000000\n-1.05000000 0.40000000 1.70000000\n-1.05000000 0.40000000 1.75000000\n-1.05000000 0.40000000 1.80000000\n-1.05000000 0.40000000 1.85000000\n-1.05000000 0.40000000 1.90000000\n-1.05000000 0.40000000 1.95000000\n-1.05000000 0.45000000 -1.40000000\n-1.05000000 0.45000000 -1.35000000\n-1.05000000 0.45000000 -1.30000000\n-1.05000000 0.45000000 -1.25000000\n-1.05000000 0.45000000 -1.20000000\n-1.05000000 0.45000000 -1.15000000\n-1.05000000 0.45000000 -1.10000000\n-1.05000000 0.45000000 -1.05000000\n-1.05000000 0.45000000 -1.00000000\n-1.05000000 0.45000000 1.65000000\n-1.05000000 0.45000000 1.70000000\n-1.05000000 0.45000000 1.75000000\n-1.05000000 0.45000000 1.80000000\n-1.05000000 0.45000000 1.85000000\n-1.05000000 0.45000000 1.90000000\n-1.05000000 0.50000000 -1.40000000\n-1.05000000 0.50000000 -1.35000000\n-1.05000000 0.50000000 -1.30000000\n-1.05000000 0.50000000 -1.25000000\n-1.05000000 0.50000000 -1.20000000\n-1.05000000 0.50000000 -1.15000000\n-1.05000000 0.50000000 -1.10000000\n-1.05000000 0.50000000 -1.05000000\n-1.05000000 0.50000000 -1.00000000\n-1.05000000 0.50000000 1.70000000\n-1.05000000 0.50000000 1.75000000\n-1.05000000 0.50000000 1.80000000\n-1.05000000 0.50000000 1.85000000\n-1.05000000 0.55000000 -1.35000000\n-1.05000000 0.55000000 -1.30000000\n-1.05000000 0.55000000 -1.25000000\n-1.05000000 0.55000000 -1.20000000\n-1.05000000 0.55000000 -1.15000000\n-1.05000000 0.55000000 -1.10000000\n-1.05000000 0.55000000 -1.05000000\n-1.05000000 0.60000000 -1.25000000\n-1.05000000 0.60000000 -1.20000000\n-1.05000000 0.60000000 -1.15000000\n-1.00000000 0.05000000 -1.35000000\n-1.00000000 0.05000000 -1.30000000\n-1.00000000 0.05000000 -1.25000000\n-1.00000000 0.05000000 -1.20000000\n-1.00000000 0.05000000 -1.15000000\n-1.00000000 0.05000000 -1.10000000\n-1.00000000 0.05000000 -1.05000000\n-1.00000000 0.05000000 1.75000000\n-1.00000000 0.05000000 1.80000000\n-1.00000000 0.10000000 -1.40000000\n-1.00000000 0.10000000 -1.35000000\n-1.00000000 0.10000000 -1.30000000\n-1.00000000 0.10000000 -1.25000000\n-1.00000000 0.10000000 -1.20000000\n-1.00000000 0.10000000 -1.15000000\n-1.00000000 0.10000000 -1.10000000\n-1.00000000 0.10000000 -1.05000000\n-1.00000000 0.10000000 -1.00000000\n-1.00000000 0.10000000 1.60000000\n-1.00000000 0.10000000 1.65000000\n-1.00000000 0.10000000 1.70000000\n-1.00000000 0.10000000 1.75000000\n-1.00000000 0.10000000 1.80000000\n-1.00000000 0.10000000 1.85000000\n-1.00000000 0.10000000 1.90000000\n-1.00000000 0.10000000 1.95000000\n-1.00000000 0.15000000 -1.45000000\n-1.00000000 0.15000000 -1.40000000\n-1.00000000 0.15000000 -1.05000000\n-1.00000000 0.15000000 -1.00000000\n-1.00000000 0.15000000 -0.95000000\n-1.00000000 0.15000000 1.55000000\n-1.00000000 0.15000000 1.60000000\n-1.00000000 0.15000000 1.65000000\n-1.00000000 0.15000000 1.70000000\n-1.00000000 0.15000000 1.75000000\n-1.00000000 0.15000000 1.80000000\n-1.00000000 0.15000000 1.85000000\n-1.00000000 0.15000000 1.90000000\n-1.00000000 0.15000000 1.95000000\n-1.00000000 0.15000000 2.00000000\n-1.00000000 0.20000000 -1.50000000\n-1.00000000 0.20000000 -1.45000000\n-1.00000000 0.20000000 -0.95000000\n-1.00000000 0.20000000 1.55000000\n-1.00000000 0.20000000 1.60000000\n-1.00000000 0.20000000 1.65000000\n-1.00000000 0.20000000 1.90000000\n-1.00000000 0.20000000 1.95000000\n-1.00000000 0.20000000 2.00000000\n-1.00000000 0.20000000 2.05000000\n-1.00000000 0.25000000 -1.50000000\n-1.00000000 0.25000000 -1.45000000\n-1.00000000 0.25000000 -0.95000000\n-1.00000000 0.25000000 -0.90000000\n-1.00000000 0.25000000 1.50000000\n-1.00000000 0.25000000 1.55000000\n-1.00000000 0.25000000 1.60000000\n-1.00000000 0.25000000 1.95000000\n-1.00000000 0.25000000 2.00000000\n-1.00000000 0.25000000 2.05000000\n-1.00000000 0.30000000 -1.50000000\n-1.00000000 0.30000000 -0.95000000\n-1.00000000 0.30000000 -0.90000000\n-1.00000000 0.30000000 1.50000000\n-1.00000000 0.30000000 1.55000000\n-1.00000000 0.30000000 1.60000000\n-1.00000000 0.30000000 2.00000000\n-1.00000000 0.30000000 2.05000000\n-1.00000000 0.35000000 -1.50000000\n-1.00000000 0.35000000 -0.95000000\n-1.00000000 0.35000000 -0.90000000\n-1.00000000 0.35000000 1.50000000\n-1.00000000 0.35000000 1.55000000\n-1.00000000 0.35000000 2.00000000\n-1.00000000 0.35000000 2.05000000\n-1.00000000 0.40000000 -1.50000000\n-1.00000000 0.40000000 -0.95000000\n-1.00000000 0.40000000 -0.90000000\n-1.00000000 0.40000000 1.50000000\n-1.00000000 0.40000000 1.55000000\n-1.00000000 0.40000000 1.60000000\n-1.00000000 0.40000000 2.00000000\n-1.00000000 0.40000000 2.05000000\n-1.00000000 0.45000000 -1.50000000\n-1.00000000 0.45000000 -1.45000000\n-1.00000000 0.45000000 -0.95000000\n-1.00000000 0.45000000 -0.90000000\n-1.00000000 0.45000000 1.50000000\n-1.00000000 0.45000000 1.55000000\n-1.00000000 0.45000000 1.60000000\n-1.00000000 0.45000000 1.95000000\n-1.00000000 0.45000000 2.00000000\n-1.00000000 0.45000000 2.05000000\n-1.00000000 0.50000000 -1.50000000\n-1.00000000 0.50000000 -1.45000000\n-1.00000000 0.50000000 -0.95000000\n-1.00000000 0.50000000 -0.90000000\n-1.00000000 0.50000000 -0.85000000\n-1.00000000 0.50000000 -0.80000000\n-1.00000000 0.50000000 -0.75000000\n-1.00000000 0.50000000 1.55000000\n-1.00000000 0.50000000 1.60000000\n-1.00000000 0.50000000 1.65000000\n-1.00000000 0.50000000 1.90000000\n-1.00000000 0.50000000 1.95000000\n-1.00000000 0.50000000 2.00000000\n-1.00000000 0.50000000 2.05000000\n-1.00000000 0.55000000 -1.45000000\n-1.00000000 0.55000000 -1.40000000\n-1.00000000 0.55000000 -1.00000000\n-1.00000000 0.55000000 -0.95000000\n-1.00000000 0.55000000 -0.90000000\n-1.00000000 0.55000000 -0.85000000\n-1.00000000 0.55000000 -0.80000000\n-1.00000000 0.55000000 -0.75000000\n-1.00000000 0.55000000 -0.70000000\n-1.00000000 0.55000000 -0.65000000\n-1.00000000 0.55000000 1.55000000\n-1.00000000 0.55000000 1.60000000\n-1.00000000 0.55000000 1.65000000\n-1.00000000 0.55000000 1.70000000\n-1.00000000 0.55000000 1.75000000\n-1.00000000 0.55000000 1.80000000\n-1.00000000 0.55000000 1.85000000\n-1.00000000 0.55000000 1.90000000\n-1.00000000 0.55000000 1.95000000\n-1.00000000 0.55000000 2.00000000\n-1.00000000 0.60000000 -1.40000000\n-1.00000000 0.60000000 -1.35000000\n-1.00000000 0.60000000 -1.30000000\n-1.00000000 0.60000000 -1.10000000\n-1.00000000 0.60000000 -1.05000000\n-1.00000000 0.60000000 -1.00000000\n-1.00000000 0.60000000 -0.95000000\n-1.00000000 0.60000000 -0.90000000\n-1.00000000 0.60000000 -0.85000000\n-1.00000000 0.60000000 -0.80000000\n-1.00000000 0.60000000 -0.75000000\n-1.00000000 0.60000000 -0.70000000\n-1.00000000 0.60000000 -0.65000000\n-1.00000000 0.60000000 -0.60000000\n-1.00000000 0.60000000 1.60000000\n-1.00000000 0.60000000 1.65000000\n-1.00000000 0.60000000 1.70000000\n-1.00000000 0.60000000 1.75000000\n-1.00000000 0.60000000 1.80000000\n-1.00000000 0.60000000 1.85000000\n-1.00000000 0.60000000 1.90000000\n-1.00000000 0.60000000 1.95000000\n-1.00000000 0.65000000 -1.35000000\n-1.00000000 0.65000000 -1.30000000\n-1.00000000 0.65000000 -1.25000000\n-1.00000000 0.65000000 -1.20000000\n-1.00000000 0.65000000 -1.15000000\n-1.00000000 0.65000000 -1.10000000\n-1.00000000 0.65000000 -1.05000000\n-1.00000000 0.65000000 -1.00000000\n-1.00000000 0.65000000 -0.95000000\n-1.00000000 0.65000000 -0.90000000\n-1.00000000 0.65000000 -0.85000000\n-1.00000000 0.65000000 -0.80000000\n-1.00000000 0.65000000 -0.75000000\n-1.00000000 0.65000000 -0.70000000\n-1.00000000 0.65000000 -0.65000000\n-1.00000000 0.65000000 -0.60000000\n-1.00000000 0.65000000 1.70000000\n-1.00000000 0.65000000 1.75000000\n-1.00000000 0.65000000 1.80000000\n-1.00000000 0.65000000 1.85000000\n-1.00000000 0.70000000 -1.20000000\n-1.00000000 0.70000000 -1.15000000\n-1.00000000 0.70000000 -1.10000000\n-1.00000000 0.70000000 -1.05000000\n-1.00000000 0.70000000 -1.00000000\n-1.00000000 0.70000000 -0.95000000\n-1.00000000 0.70000000 -0.90000000\n-1.00000000 0.70000000 -0.85000000\n-1.00000000 0.70000000 -0.80000000\n-1.00000000 0.70000000 -0.75000000\n-1.00000000 0.70000000 -0.70000000\n-1.00000000 0.70000000 -0.65000000\n-1.00000000 0.70000000 -0.60000000\n-1.00000000 0.75000000 -1.15000000\n-1.00000000 0.75000000 -1.10000000\n-1.00000000 0.75000000 -1.05000000\n-1.00000000 0.75000000 -1.00000000\n-1.00000000 0.75000000 -0.95000000\n-1.00000000 0.75000000 -0.90000000\n-1.00000000 0.75000000 -0.85000000\n-1.00000000 0.75000000 -0.80000000\n-1.00000000 0.75000000 -0.75000000\n-1.00000000 0.75000000 -0.70000000\n-1.00000000 0.75000000 -0.65000000\n-1.00000000 0.80000000 -1.10000000\n-1.00000000 0.80000000 -1.05000000\n-1.00000000 0.80000000 -1.00000000\n-1.00000000 0.80000000 -0.95000000\n-1.00000000 0.80000000 -0.90000000\n-1.00000000 0.80000000 -0.85000000\n-1.00000000 0.80000000 -0.80000000\n-1.00000000 0.80000000 -0.75000000\n-0.95000000 0.00000000 -1.35000000\n-0.95000000 0.00000000 -1.30000000\n-0.95000000 0.00000000 -1.25000000\n-0.95000000 0.00000000 -1.20000000\n-0.95000000 0.00000000 -1.15000000\n-0.95000000 0.00000000 -1.10000000\n-0.95000000 0.00000000 1.70000000\n-0.95000000 0.00000000 1.75000000\n-0.95000000 0.00000000 1.80000000\n-0.95000000 0.00000000 1.85000000\n-0.95000000 0.05000000 -1.40000000\n-0.95000000 0.05000000 -1.05000000\n-0.95000000 0.05000000 -1.00000000\n-0.95000000 0.05000000 1.60000000\n-0.95000000 0.05000000 1.65000000\n-0.95000000 0.05000000 1.70000000\n-0.95000000 0.05000000 1.85000000\n-0.95000000 0.05000000 1.90000000\n-0.95000000 0.05000000 1.95000000\n-0.95000000 0.10000000 -1.45000000\n-0.95000000 0.10000000 -0.95000000\n-0.95000000 0.10000000 1.55000000\n-0.95000000 0.10000000 2.00000000\n-0.95000000 0.10000000 2.05000000\n-0.95000000 0.15000000 -1.50000000\n-0.95000000 0.15000000 -0.90000000\n-0.95000000 0.15000000 1.50000000\n-0.95000000 0.15000000 2.05000000\n-0.95000000 0.20000000 -1.55000000\n-0.95000000 0.20000000 -0.90000000\n-0.95000000 0.20000000 1.45000000\n-0.95000000 0.20000000 1.50000000\n-0.95000000 0.20000000 2.10000000\n-0.95000000 0.25000000 -1.55000000\n-0.95000000 0.25000000 -0.85000000\n-0.95000000 0.25000000 1.45000000\n-0.95000000 0.25000000 2.10000000\n-0.95000000 0.30000000 -1.55000000\n-0.95000000 0.30000000 -0.85000000\n-0.95000000 0.30000000 1.45000000\n-0.95000000 0.30000000 2.10000000\n-0.95000000 0.35000000 -1.55000000\n-0.95000000 0.35000000 -0.85000000\n-0.95000000 0.35000000 -0.50000000\n-0.95000000 0.35000000 -0.45000000\n-0.95000000 0.35000000 -0.40000000\n-0.95000000 0.35000000 -0.35000000\n-0.95000000 0.35000000 -0.30000000\n-0.95000000 0.35000000 -0.25000000\n-0.95000000 0.35000000 -0.20000000\n-0.95000000 0.35000000 -0.15000000\n-0.95000000 0.35000000 -0.10000000\n-0.95000000 0.35000000 -0.05000000\n-0.95000000 0.35000000 0.00000000\n-0.95000000 0.35000000 0.05000000\n-0.95000000 0.35000000 0.10000000\n-0.95000000 0.35000000 0.15000000\n-0.95000000 0.35000000 0.20000000\n-0.95000000 0.35000000 1.45000000\n-0.95000000 0.35000000 2.10000000\n-0.95000000 0.40000000 -1.55000000\n-0.95000000 0.40000000 -0.85000000\n-0.95000000 0.40000000 -0.65000000\n-0.95000000 0.40000000 -0.60000000\n-0.95000000 0.40000000 -0.55000000\n-0.95000000 0.40000000 -0.50000000\n-0.95000000 0.40000000 -0.45000000\n-0.95000000 0.40000000 -0.40000000\n-0.95000000 0.40000000 -0.35000000\n-0.95000000 0.40000000 -0.30000000\n-0.95000000 0.40000000 -0.25000000\n-0.95000000 0.40000000 -0.20000000\n-0.95000000 0.40000000 -0.15000000\n-0.95000000 0.40000000 -0.10000000\n-0.95000000 0.40000000 -0.05000000\n-0.95000000 0.40000000 0.00000000\n-0.95000000 0.40000000 0.05000000\n-0.95000000 0.40000000 0.10000000\n-0.95000000 0.40000000 0.15000000\n-0.95000000 0.40000000 0.20000000\n-0.95000000 0.40000000 0.25000000\n-0.95000000 0.40000000 0.30000000\n-0.95000000 0.40000000 1.45000000\n-0.95000000 0.40000000 2.10000000\n-0.95000000 0.45000000 -1.55000000\n-0.95000000 0.45000000 -0.85000000\n-0.95000000 0.45000000 -0.80000000\n-0.95000000 0.45000000 -0.75000000\n-0.95000000 0.45000000 -0.70000000\n-0.95000000 0.45000000 -0.65000000\n-0.95000000 0.45000000 -0.60000000\n-0.95000000 0.45000000 -0.55000000\n-0.95000000 0.45000000 -0.50000000\n-0.95000000 0.45000000 -0.45000000\n-0.95000000 0.45000000 -0.40000000\n-0.95000000 0.45000000 -0.35000000\n-0.95000000 0.45000000 -0.30000000\n-0.95000000 0.45000000 -0.25000000\n-0.95000000 0.45000000 -0.20000000\n-0.95000000 0.45000000 -0.15000000\n-0.95000000 0.45000000 -0.10000000\n-0.95000000 0.45000000 -0.05000000\n-0.95000000 0.45000000 0.00000000\n-0.95000000 0.45000000 0.05000000\n-0.95000000 0.45000000 0.10000000\n-0.95000000 0.45000000 0.15000000\n-0.95000000 0.45000000 0.20000000\n-0.95000000 0.45000000 0.25000000\n-0.95000000 0.45000000 0.30000000\n-0.95000000 0.45000000 1.45000000\n-0.95000000 0.45000000 2.10000000\n-0.95000000 0.50000000 -1.55000000\n-0.95000000 0.50000000 -0.70000000\n-0.95000000 0.50000000 -0.65000000\n-0.95000000 0.50000000 -0.60000000\n-0.95000000 0.50000000 -0.55000000\n-0.95000000 0.50000000 -0.50000000\n-0.95000000 0.50000000 -0.45000000\n-0.95000000 0.50000000 -0.40000000\n-0.95000000 0.50000000 -0.35000000\n-0.95000000 0.50000000 -0.30000000\n-0.95000000 0.50000000 -0.25000000\n-0.95000000 0.50000000 -0.20000000\n-0.95000000 0.50000000 -0.15000000\n-0.95000000 0.50000000 -0.10000000\n-0.95000000 0.50000000 -0.05000000\n-0.95000000 0.50000000 0.00000000\n-0.95000000 0.50000000 0.05000000\n-0.95000000 0.50000000 0.10000000\n-0.95000000 0.50000000 0.15000000\n-0.95000000 0.50000000 0.20000000\n-0.95000000 0.50000000 0.25000000\n-0.95000000 0.50000000 1.45000000\n-0.95000000 0.50000000 1.50000000\n-0.95000000 0.50000000 2.10000000\n-0.95000000 0.55000000 -1.50000000\n-0.95000000 0.55000000 -0.60000000\n-0.95000000 0.55000000 -0.55000000\n-0.95000000 0.55000000 -0.50000000\n-0.95000000 0.55000000 -0.45000000\n-0.95000000 0.55000000 -0.40000000\n-0.95000000 0.55000000 -0.35000000\n-0.95000000 0.55000000 -0.30000000\n-0.95000000 0.55000000 -0.25000000\n-0.95000000 0.55000000 -0.20000000\n-0.95000000 0.55000000 -0.15000000\n-0.95000000 0.55000000 -0.10000000\n-0.95000000 0.55000000 -0.05000000\n-0.95000000 0.55000000 0.00000000\n-0.95000000 0.55000000 0.05000000\n-0.95000000 0.55000000 1.50000000\n-0.95000000 0.55000000 2.05000000\n-0.95000000 0.60000000 -1.45000000\n-0.95000000 0.60000000 -0.55000000\n-0.95000000 0.60000000 -0.50000000\n-0.95000000 0.60000000 -0.45000000\n-0.95000000 0.60000000 1.55000000\n-0.95000000 0.60000000 2.00000000\n-0.95000000 0.60000000 2.05000000\n-0.95000000 0.65000000 -1.40000000\n-0.95000000 0.65000000 -0.55000000\n-0.95000000 0.65000000 -0.50000000\n-0.95000000 0.65000000 -0.45000000\n-0.95000000 0.65000000 1.60000000\n-0.95000000 0.65000000 1.65000000\n-0.95000000 0.65000000 1.90000000\n-0.95000000 0.65000000 1.95000000\n-0.95000000 0.65000000 2.00000000\n-0.95000000 0.70000000 -1.35000000\n-0.95000000 0.70000000 -1.30000000\n-0.95000000 0.70000000 -1.25000000\n-0.95000000 0.70000000 -0.55000000\n-0.95000000 0.70000000 -0.50000000\n-0.95000000 0.70000000 1.70000000\n-0.95000000 0.70000000 1.75000000\n-0.95000000 0.70000000 1.80000000\n-0.95000000 0.70000000 1.85000000\n-0.95000000 0.70000000 1.90000000\n-0.95000000 0.75000000 -1.30000000\n-0.95000000 0.75000000 -1.25000000\n-0.95000000 0.75000000 -1.20000000\n-0.95000000 0.75000000 -0.60000000\n-0.95000000 0.75000000 -0.55000000\n-0.95000000 0.75000000 -0.50000000\n-0.95000000 0.80000000 -1.25000000\n-0.95000000 0.80000000 -1.20000000\n-0.95000000 0.80000000 -1.15000000\n-0.95000000 0.80000000 -0.70000000\n-0.95000000 0.80000000 -0.65000000\n-0.95000000 0.80000000 -0.60000000\n-0.95000000 0.85000000 -1.20000000\n-0.95000000 0.85000000 -1.15000000\n-0.95000000 0.85000000 -1.10000000\n-0.95000000 0.85000000 -1.05000000\n-0.95000000 0.85000000 -1.00000000\n-0.95000000 0.85000000 -0.95000000\n-0.95000000 0.85000000 -0.90000000\n-0.95000000 0.85000000 -0.85000000\n-0.95000000 0.85000000 -0.80000000\n-0.95000000 0.85000000 -0.75000000\n-0.95000000 0.85000000 -0.70000000\n-0.90000000 0.00000000 -1.35000000\n-0.90000000 0.00000000 -1.30000000\n-0.90000000 0.00000000 -1.25000000\n-0.90000000 0.00000000 -1.20000000\n-0.90000000 0.00000000 -1.15000000\n-0.90000000 0.00000000 -1.10000000\n-0.90000000 0.00000000 -1.05000000\n-0.90000000 0.00000000 1.65000000\n-0.90000000 0.00000000 1.70000000\n-0.90000000 0.00000000 1.75000000\n-0.90000000 0.00000000 1.80000000\n-0.90000000 0.00000000 1.85000000\n-0.90000000 0.00000000 1.90000000\n-0.90000000 0.00000000 1.95000000\n-0.90000000 0.05000000 -1.45000000\n-0.90000000 0.05000000 -1.40000000\n-0.90000000 0.05000000 -1.00000000\n-0.90000000 0.05000000 1.55000000\n-0.90000000 0.05000000 1.60000000\n-0.90000000 0.05000000 2.00000000\n-0.90000000 0.10000000 -1.50000000\n-0.90000000 0.10000000 -0.95000000\n-0.90000000 0.10000000 1.50000000\n-0.90000000 0.10000000 2.05000000\n-0.90000000 0.15000000 -1.50000000\n-0.90000000 0.15000000 -0.90000000\n-0.90000000 0.15000000 1.45000000\n-0.90000000 0.15000000 2.10000000\n-0.90000000 0.20000000 -1.55000000\n-0.90000000 0.20000000 -0.85000000\n-0.90000000 0.20000000 1.45000000\n-0.90000000 0.20000000 2.10000000\n-0.90000000 0.25000000 -1.55000000\n-0.90000000 0.25000000 -0.85000000\n-0.90000000 0.25000000 1.45000000\n-0.90000000 0.25000000 2.15000000\n-0.90000000 0.30000000 -1.55000000\n-0.90000000 0.30000000 -0.85000000\n-0.90000000 0.30000000 -0.50000000\n-0.90000000 0.30000000 -0.45000000\n-0.90000000 0.30000000 -0.40000000\n-0.90000000 0.30000000 -0.35000000\n-0.90000000 0.30000000 -0.30000000\n-0.90000000 0.30000000 -0.25000000\n-0.90000000 0.30000000 -0.20000000\n-0.90000000 0.30000000 -0.15000000\n-0.90000000 0.30000000 -0.10000000\n-0.90000000 0.30000000 -0.05000000\n-0.90000000 0.30000000 0.00000000\n-0.90000000 0.30000000 0.05000000\n-0.90000000 0.30000000 0.10000000\n-0.90000000 0.30000000 0.15000000\n-0.90000000 0.30000000 0.20000000\n-0.90000000 0.30000000 0.25000000\n-0.90000000 0.30000000 0.30000000\n-0.90000000 0.30000000 0.35000000\n-0.90000000 0.30000000 1.40000000\n-0.90000000 0.30000000 2.15000000\n-0.90000000 0.35000000 -1.55000000\n-0.90000000 0.35000000 -0.85000000\n-0.90000000 0.35000000 -0.75000000\n-0.90000000 0.35000000 -0.70000000\n-0.90000000 0.35000000 -0.65000000\n-0.90000000 0.35000000 -0.60000000\n-0.90000000 0.35000000 -0.55000000\n-0.90000000 0.35000000 0.25000000\n-0.90000000 0.35000000 0.30000000\n-0.90000000 0.35000000 0.35000000\n-0.90000000 0.35000000 0.40000000\n-0.90000000 0.35000000 0.45000000\n-0.90000000 0.35000000 1.40000000\n-0.90000000 0.35000000 2.15000000\n-0.90000000 0.40000000 -1.55000000\n-0.90000000 0.40000000 -0.80000000\n-0.90000000 0.40000000 -0.75000000\n-0.90000000 0.40000000 -0.70000000\n-0.90000000 0.40000000 0.35000000\n-0.90000000 0.40000000 0.40000000\n-0.90000000 0.40000000 0.45000000\n-0.90000000 0.40000000 0.50000000\n-0.90000000 0.40000000 1.40000000\n-0.90000000 0.40000000 2.15000000\n-0.90000000 0.45000000 -1.55000000\n-0.90000000 0.45000000 0.35000000\n-0.90000000 0.45000000 0.40000000\n-0.90000000 0.45000000 0.45000000\n-0.90000000 0.45000000 0.50000000\n-0.90000000 0.45000000 1.45000000\n-0.90000000 0.45000000 2.15000000\n-0.90000000 0.50000000 -1.55000000\n-0.90000000 0.50000000 0.30000000\n-0.90000000 0.50000000 0.35000000\n-0.90000000 0.50000000 0.40000000\n-0.90000000 0.50000000 0.45000000\n-0.90000000 0.50000000 1.45000000\n-0.90000000 0.50000000 2.10000000\n-0.90000000 0.55000000 -1.50000000\n-0.90000000 0.55000000 0.10000000\n-0.90000000 0.55000000 0.15000000\n-0.90000000 0.55000000 0.20000000\n-0.90000000 0.55000000 0.25000000\n-0.90000000 0.55000000 0.30000000\n-0.90000000 0.55000000 0.35000000\n-0.90000000 0.55000000 1.45000000\n-0.90000000 0.55000000 2.10000000\n-0.90000000 0.60000000 -1.50000000\n-0.90000000 0.60000000 -0.40000000\n-0.90000000 0.60000000 -0.35000000\n-0.90000000 0.60000000 -0.30000000\n-0.90000000 0.60000000 -0.25000000\n-0.90000000 0.60000000 -0.20000000\n-0.90000000 0.60000000 -0.15000000\n-0.90000000 0.60000000 -0.10000000\n-0.90000000 0.60000000 -0.05000000\n-0.90000000 0.60000000 0.00000000\n-0.90000000 0.60000000 0.05000000\n-0.90000000 0.60000000 0.10000000\n-0.90000000 0.60000000 1.50000000\n-0.90000000 0.60000000 2.05000000\n-0.90000000 0.65000000 -1.45000000\n-0.90000000 0.65000000 -0.40000000\n-0.90000000 0.65000000 -0.35000000\n-0.90000000 0.65000000 1.55000000\n-0.90000000 0.65000000 1.60000000\n-0.90000000 0.65000000 2.00000000\n-0.90000000 0.70000000 -1.45000000\n-0.90000000 0.70000000 -1.40000000\n-0.90000000 0.70000000 -0.45000000\n-0.90000000 0.70000000 -0.40000000\n-0.90000000 0.70000000 1.65000000\n-0.90000000 0.70000000 1.70000000\n-0.90000000 0.70000000 1.75000000\n-0.90000000 0.70000000 1.80000000\n-0.90000000 0.70000000 1.85000000\n-0.90000000 0.70000000 1.90000000\n-0.90000000 0.70000000 1.95000000\n-0.90000000 0.75000000 -1.40000000\n-0.90000000 0.75000000 -1.35000000\n-0.90000000 0.75000000 -0.45000000\n-0.90000000 0.75000000 -0.40000000\n-0.90000000 0.80000000 -1.35000000\n-0.90000000 0.80000000 -1.30000000\n-0.90000000 0.80000000 -0.55000000\n-0.90000000 0.80000000 -0.50000000\n-0.90000000 0.80000000 -0.45000000\n-0.90000000 0.85000000 -1.30000000\n-0.90000000 0.85000000 -1.25000000\n-0.90000000 0.85000000 -0.65000000\n-0.90000000 0.85000000 -0.60000000\n-0.90000000 0.85000000 -0.55000000\n-0.90000000 0.90000000 -1.20000000\n-0.90000000 0.90000000 -1.15000000\n-0.90000000 0.90000000 -1.10000000\n-0.90000000 0.90000000 -1.05000000\n-0.90000000 0.90000000 -1.00000000\n-0.90000000 0.90000000 -0.95000000\n-0.90000000 0.90000000 -0.90000000\n-0.90000000 0.90000000 -0.85000000\n-0.90000000 0.90000000 -0.80000000\n-0.90000000 0.90000000 -0.75000000\n-0.90000000 0.90000000 -0.70000000\n-0.90000000 0.90000000 -0.65000000\n-0.85000000 0.00000000 -1.35000000\n-0.85000000 0.00000000 -1.30000000\n-0.85000000 0.00000000 -1.25000000\n-0.85000000 0.00000000 -1.20000000\n-0.85000000 0.00000000 -1.15000000\n-0.85000000 0.00000000 -1.10000000\n-0.85000000 0.00000000 -1.05000000\n-0.85000000 0.00000000 1.65000000\n-0.85000000 0.00000000 1.70000000\n-0.85000000 0.00000000 1.75000000\n-0.85000000 0.00000000 1.80000000\n-0.85000000 0.00000000 1.85000000\n-0.85000000 0.00000000 1.90000000\n-0.85000000 0.00000000 1.95000000\n-0.85000000 0.05000000 -1.45000000\n-0.85000000 0.05000000 -1.40000000\n-0.85000000 0.05000000 -1.00000000\n-0.85000000 0.05000000 1.55000000\n-0.85000000 0.05000000 1.60000000\n-0.85000000 0.05000000 2.00000000\n-0.85000000 0.10000000 -1.50000000\n-0.85000000 0.10000000 -0.95000000\n-0.85000000 0.10000000 1.50000000\n-0.85000000 0.10000000 2.05000000\n-0.85000000 0.15000000 -1.50000000\n-0.85000000 0.15000000 -0.90000000\n-0.85000000 0.15000000 1.45000000\n-0.85000000 0.15000000 2.10000000\n-0.85000000 0.20000000 -1.55000000\n-0.85000000 0.20000000 -0.85000000\n-0.85000000 0.20000000 1.45000000\n-0.85000000 0.20000000 2.10000000\n-0.85000000 0.25000000 -1.55000000\n-0.85000000 0.25000000 -0.85000000\n-0.85000000 0.25000000 -0.40000000\n-0.85000000 0.25000000 -0.35000000\n-0.85000000 0.25000000 -0.30000000\n-0.85000000 0.25000000 -0.25000000\n-0.85000000 0.25000000 -0.20000000\n-0.85000000 0.25000000 -0.15000000\n-0.85000000 0.25000000 -0.10000000\n-0.85000000 0.25000000 -0.05000000\n-0.85000000 0.25000000 0.00000000\n-0.85000000 0.25000000 0.05000000\n-0.85000000 0.25000000 0.10000000\n-0.85000000 0.25000000 0.15000000\n-0.85000000 0.25000000 0.20000000\n-0.85000000 0.25000000 0.25000000\n-0.85000000 0.25000000 0.30000000\n-0.85000000 0.25000000 1.45000000\n-0.85000000 0.25000000 2.15000000\n-0.85000000 0.30000000 -1.55000000\n-0.85000000 0.30000000 -0.85000000\n-0.85000000 0.30000000 -0.75000000\n-0.85000000 0.30000000 -0.70000000\n-0.85000000 0.30000000 -0.65000000\n-0.85000000 0.30000000 -0.60000000\n-0.85000000 0.30000000 -0.55000000\n-0.85000000 0.30000000 -0.50000000\n-0.85000000 0.30000000 -0.45000000\n-0.85000000 0.30000000 0.35000000\n-0.85000000 0.30000000 0.40000000\n-0.85000000 0.30000000 0.45000000\n-0.85000000 0.30000000 0.50000000\n-0.85000000 0.30000000 0.55000000\n-0.85000000 0.30000000 1.40000000\n-0.85000000 0.30000000 2.15000000\n-0.85000000 0.35000000 -1.55000000\n-0.85000000 0.35000000 -0.80000000\n-0.85000000 0.35000000 0.50000000\n-0.85000000 0.35000000 0.55000000\n-0.85000000 0.35000000 0.60000000\n-0.85000000 0.35000000 0.65000000\n-0.85000000 0.35000000 1.40000000\n-0.85000000 0.35000000 2.15000000\n-0.85000000 0.40000000 -1.55000000\n-0.85000000 0.40000000 0.55000000\n-0.85000000 0.40000000 0.60000000\n-0.85000000 0.40000000 0.65000000\n-0.85000000 0.40000000 1.40000000\n-0.85000000 0.40000000 2.15000000\n-0.85000000 0.45000000 -1.55000000\n-0.85000000 0.45000000 0.55000000\n-0.85000000 0.45000000 0.60000000\n-0.85000000 0.45000000 0.65000000\n-0.85000000 0.45000000 1.45000000\n-0.85000000 0.45000000 2.15000000\n-0.85000000 0.50000000 -1.55000000\n-0.85000000 0.50000000 0.50000000\n-0.85000000 0.50000000 0.55000000\n-0.85000000 0.50000000 0.60000000\n-0.85000000 0.50000000 1.45000000\n-0.85000000 0.50000000 2.10000000\n-0.85000000 0.55000000 -1.50000000\n-0.85000000 0.55000000 0.35000000\n-0.85000000 0.55000000 0.40000000\n-0.85000000 0.55000000 0.45000000\n-0.85000000 0.55000000 0.50000000\n-0.85000000 0.55000000 1.45000000\n-0.85000000 0.55000000 2.10000000\n-0.85000000 0.60000000 -1.50000000\n-0.85000000 0.60000000 0.00000000\n-0.85000000 0.60000000 0.05000000\n-0.85000000 0.60000000 0.10000000\n-0.85000000 0.60000000 0.15000000\n-0.85000000 0.60000000 0.20000000\n-0.85000000 0.60000000 0.25000000\n-0.85000000 0.60000000 0.30000000\n-0.85000000 0.60000000 1.50000000\n-0.85000000 0.60000000 2.05000000\n-0.85000000 0.65000000 -1.50000000\n-0.85000000 0.65000000 -0.30000000\n-0.85000000 0.65000000 -0.25000000\n-0.85000000 0.65000000 -0.20000000\n-0.85000000 0.65000000 -0.15000000\n-0.85000000 0.65000000 -0.10000000\n-0.85000000 0.65000000 -0.05000000\n-0.85000000 0.65000000 1.55000000\n-0.85000000 0.65000000 2.00000000\n-0.85000000 0.70000000 -1.50000000\n-0.85000000 0.70000000 -0.35000000\n-0.85000000 0.70000000 -0.30000000\n-0.85000000 0.70000000 1.60000000\n-0.85000000 0.70000000 1.65000000\n-0.85000000 0.70000000 1.70000000\n-0.85000000 0.70000000 1.75000000\n-0.85000000 0.70000000 1.80000000\n-0.85000000 0.70000000 1.85000000\n-0.85000000 0.70000000 1.90000000\n-0.85000000 0.70000000 1.95000000\n-0.85000000 0.75000000 -1.50000000\n-0.85000000 0.75000000 -1.45000000\n-0.85000000 0.75000000 -0.35000000\n-0.85000000 0.75000000 -0.30000000\n-0.85000000 0.80000000 -1.45000000\n-0.85000000 0.80000000 -1.40000000\n-0.85000000 0.80000000 -0.40000000\n-0.85000000 0.85000000 -1.40000000\n-0.85000000 0.85000000 -1.35000000\n-0.85000000 0.85000000 -0.50000000\n-0.85000000 0.85000000 -0.45000000\n-0.85000000 0.90000000 -1.30000000\n-0.85000000 0.90000000 -1.25000000\n-0.85000000 0.90000000 -0.65000000\n-0.85000000 0.90000000 -0.60000000\n-0.85000000 0.90000000 -0.55000000\n-0.85000000 0.95000000 -1.20000000\n-0.85000000 0.95000000 -1.15000000\n-0.85000000 0.95000000 -1.10000000\n-0.85000000 0.95000000 -1.05000000\n-0.85000000 0.95000000 -1.00000000\n-0.85000000 0.95000000 -0.95000000\n-0.85000000 0.95000000 -0.90000000\n-0.85000000 0.95000000 -0.85000000\n-0.85000000 0.95000000 -0.80000000\n-0.85000000 0.95000000 -0.75000000\n-0.85000000 0.95000000 -0.70000000\n-0.80000000 0.00000000 -1.30000000\n-0.80000000 0.00000000 -1.25000000\n-0.80000000 0.00000000 -1.20000000\n-0.80000000 0.00000000 -1.15000000\n-0.80000000 0.00000000 1.65000000\n-0.80000000 0.00000000 1.70000000\n-0.80000000 0.00000000 1.75000000\n-0.80000000 0.00000000 1.80000000\n-0.80000000 0.00000000 1.85000000\n-0.80000000 0.00000000 1.90000000\n-0.80000000 0.05000000 -1.40000000\n-0.80000000 0.05000000 -1.35000000\n-0.80000000 0.05000000 -1.10000000\n-0.80000000 0.05000000 -1.05000000\n-0.80000000 0.05000000 -1.00000000\n-0.80000000 0.05000000 1.55000000\n-0.80000000 0.05000000 1.60000000\n-0.80000000 0.05000000 1.95000000\n-0.80000000 0.05000000 2.00000000\n-0.80000000 0.10000000 -1.45000000\n-0.80000000 0.10000000 -1.40000000\n-0.80000000 0.10000000 -1.00000000\n-0.80000000 0.10000000 -0.95000000\n-0.80000000 0.10000000 1.50000000\n-0.80000000 0.10000000 2.05000000\n-0.80000000 0.15000000 -1.50000000\n-0.80000000 0.15000000 -1.45000000\n-0.80000000 0.15000000 -0.95000000\n-0.80000000 0.15000000 -0.90000000\n-0.80000000 0.15000000 1.50000000\n-0.80000000 0.15000000 2.10000000\n-0.80000000 0.20000000 -1.50000000\n-0.80000000 0.20000000 -0.90000000\n-0.80000000 0.20000000 1.45000000\n-0.80000000 0.20000000 2.10000000\n-0.80000000 0.25000000 -1.55000000\n-0.80000000 0.25000000 -0.90000000\n-0.80000000 0.25000000 -0.65000000\n-0.80000000 0.25000000 -0.60000000\n-0.80000000 0.25000000 -0.55000000\n-0.80000000 0.25000000 -0.50000000\n-0.80000000 0.25000000 -0.45000000\n-0.80000000 0.25000000 -0.40000000\n-0.80000000 0.25000000 -0.35000000\n-0.80000000 0.25000000 -0.30000000\n-0.80000000 0.25000000 -0.25000000\n-0.80000000 0.25000000 -0.20000000\n-0.80000000 0.25000000 -0.15000000\n-0.80000000 0.25000000 -0.10000000\n-0.80000000 0.25000000 -0.05000000\n-0.80000000 0.25000000 0.00000000\n-0.80000000 0.25000000 0.05000000\n-0.80000000 0.25000000 0.10000000\n-0.80000000 0.25000000 0.15000000\n-0.80000000 0.25000000 0.20000000\n-0.80000000 0.25000000 0.25000000\n-0.80000000 0.25000000 0.30000000\n-0.80000000 0.25000000 0.35000000\n-0.80000000 0.25000000 0.40000000\n-0.80000000 0.25000000 0.45000000\n-0.80000000 0.25000000 0.50000000\n-0.80000000 0.25000000 0.55000000\n-0.80000000 0.25000000 1.45000000\n-0.80000000 0.25000000 2.15000000\n-0.80000000 0.30000000 -1.55000000\n-0.80000000 0.30000000 -0.85000000\n-0.80000000 0.30000000 -0.80000000\n-0.80000000 0.30000000 -0.75000000\n-0.80000000 0.30000000 -0.70000000\n-0.80000000 0.30000000 0.60000000\n-0.80000000 0.30000000 0.65000000\n-0.80000000 0.30000000 0.70000000\n-0.80000000 0.30000000 1.45000000\n-0.80000000 0.30000000 2.15000000\n-0.80000000 0.35000000 -1.55000000\n-0.80000000 0.35000000 0.70000000\n-0.80000000 0.35000000 0.75000000\n-0.80000000 0.35000000 0.80000000\n-0.80000000 0.35000000 1.45000000\n-0.80000000 0.35000000 2.15000000\n-0.80000000 0.40000000 -1.55000000\n-0.80000000 0.40000000 0.70000000\n-0.80000000 0.40000000 0.75000000\n-0.80000000 0.40000000 0.80000000\n-0.80000000 0.40000000 1.45000000\n-0.80000000 0.40000000 2.15000000\n-0.80000000 0.45000000 -1.55000000\n-0.80000000 0.45000000 0.70000000\n-0.80000000 0.45000000 0.75000000\n-0.80000000 0.45000000 0.80000000\n-0.80000000 0.45000000 1.45000000\n-0.80000000 0.45000000 2.15000000\n-0.80000000 0.50000000 -1.50000000\n-0.80000000 0.50000000 0.65000000\n-0.80000000 0.50000000 0.70000000\n-0.80000000 0.50000000 0.75000000\n-0.80000000 0.50000000 1.45000000\n-0.80000000 0.50000000 2.10000000\n-0.80000000 0.55000000 -1.55000000\n-0.80000000 0.55000000 0.55000000\n-0.80000000 0.55000000 0.60000000\n-0.80000000 0.55000000 0.65000000\n-0.80000000 0.55000000 1.45000000\n-0.80000000 0.55000000 2.10000000\n-0.80000000 0.60000000 -1.55000000\n-0.80000000 0.60000000 0.25000000\n-0.80000000 0.60000000 0.30000000\n-0.80000000 0.60000000 0.35000000\n-0.80000000 0.60000000 0.40000000\n-0.80000000 0.60000000 0.45000000\n-0.80000000 0.60000000 0.50000000\n-0.80000000 0.60000000 1.50000000\n-0.80000000 0.60000000 2.05000000\n-0.80000000 0.65000000 -1.55000000\n-0.80000000 0.65000000 -0.20000000\n-0.80000000 0.65000000 -0.15000000\n-0.80000000 0.65000000 -0.10000000\n-0.80000000 0.65000000 -0.05000000\n-0.80000000 0.65000000 0.00000000\n-0.80000000 0.65000000 0.05000000\n-0.80000000 0.65000000 0.10000000\n-0.80000000 0.65000000 0.15000000\n-0.80000000 0.65000000 0.20000000\n-0.80000000 0.65000000 1.55000000\n-0.80000000 0.65000000 1.60000000\n-0.80000000 0.65000000 1.95000000\n-0.80000000 0.65000000 2.00000000\n-0.80000000 0.70000000 -1.55000000\n-0.80000000 0.70000000 -0.25000000\n-0.80000000 0.70000000 1.65000000\n-0.80000000 0.70000000 1.70000000\n-0.80000000 0.70000000 1.75000000\n-0.80000000 0.70000000 1.80000000\n-0.80000000 0.70000000 1.85000000\n-0.80000000 0.70000000 1.90000000\n-0.80000000 0.75000000 -1.55000000\n-0.80000000 0.75000000 -0.25000000\n-0.80000000 0.80000000 -1.55000000\n-0.80000000 0.80000000 -1.50000000\n-0.80000000 0.80000000 -0.35000000\n-0.80000000 0.80000000 -0.30000000\n-0.80000000 0.85000000 -1.50000000\n-0.80000000 0.85000000 -1.45000000\n-0.80000000 0.85000000 -0.40000000\n-0.80000000 0.85000000 -0.35000000\n-0.80000000 0.90000000 -1.40000000\n-0.80000000 0.90000000 -1.35000000\n-0.80000000 0.90000000 -0.50000000\n-0.80000000 0.90000000 -0.45000000\n-0.80000000 0.95000000 -1.30000000\n-0.80000000 0.95000000 -1.25000000\n-0.80000000 0.95000000 -1.20000000\n-0.80000000 0.95000000 -1.15000000\n-0.80000000 0.95000000 -1.10000000\n-0.80000000 0.95000000 -0.75000000\n-0.80000000 0.95000000 -0.70000000\n-0.80000000 0.95000000 -0.65000000\n-0.80000000 0.95000000 -0.60000000\n-0.80000000 0.95000000 -0.55000000\n-0.80000000 1.00000000 -1.05000000\n-0.80000000 1.00000000 -1.00000000\n-0.80000000 1.00000000 -0.95000000\n-0.80000000 1.00000000 -0.90000000\n-0.80000000 1.00000000 -0.85000000\n-0.80000000 1.00000000 -0.80000000\n-0.75000000 0.05000000 -1.30000000\n-0.75000000 0.05000000 -1.25000000\n-0.75000000 0.05000000 -1.20000000\n-0.75000000 0.05000000 -1.15000000\n-0.75000000 0.05000000 1.65000000\n-0.75000000 0.05000000 1.70000000\n-0.75000000 0.05000000 1.75000000\n-0.75000000 0.05000000 1.80000000\n-0.75000000 0.05000000 1.85000000\n-0.75000000 0.05000000 1.90000000\n-0.75000000 0.10000000 -1.35000000\n-0.75000000 0.10000000 -1.30000000\n-0.75000000 0.10000000 -1.25000000\n-0.75000000 0.10000000 -1.20000000\n-0.75000000 0.10000000 -1.15000000\n-0.75000000 0.10000000 -1.10000000\n-0.75000000 0.10000000 -1.05000000\n-0.75000000 0.10000000 1.55000000\n-0.75000000 0.10000000 1.60000000\n-0.75000000 0.10000000 1.65000000\n-0.75000000 0.10000000 1.70000000\n-0.75000000 0.10000000 1.85000000\n-0.75000000 0.10000000 1.90000000\n-0.75000000 0.10000000 1.95000000\n-0.75000000 0.10000000 2.00000000\n-0.75000000 0.15000000 -1.40000000\n-0.75000000 0.15000000 -1.35000000\n-0.75000000 0.15000000 -1.30000000\n-0.75000000 0.15000000 -1.25000000\n-0.75000000 0.15000000 -1.20000000\n-0.75000000 0.15000000 -1.15000000\n-0.75000000 0.15000000 -1.10000000\n-0.75000000 0.15000000 -1.05000000\n-0.75000000 0.15000000 -1.00000000\n-0.75000000 0.15000000 1.55000000\n-0.75000000 0.15000000 1.60000000\n-0.75000000 0.15000000 1.95000000\n-0.75000000 0.15000000 2.00000000\n-0.75000000 0.15000000 2.05000000\n-0.75000000 0.20000000 -1.45000000\n-0.75000000 0.20000000 -1.40000000\n-0.75000000 0.20000000 -1.35000000\n-0.75000000 0.20000000 -1.05000000\n-0.75000000 0.20000000 -1.00000000\n-0.75000000 0.20000000 -0.95000000\n-0.75000000 0.20000000 -0.45000000\n-0.75000000 0.20000000 -0.40000000\n-0.75000000 0.20000000 -0.35000000\n-0.75000000 0.20000000 -0.30000000\n-0.75000000 0.20000000 -0.25000000\n-0.75000000 0.20000000 -0.20000000\n-0.75000000 0.20000000 -0.15000000\n-0.75000000 0.20000000 -0.10000000\n-0.75000000 0.20000000 -0.05000000\n-0.75000000 0.20000000 0.00000000\n-0.75000000 0.20000000 0.05000000\n-0.75000000 0.20000000 0.10000000\n-0.75000000 0.20000000 0.15000000\n-0.75000000 0.20000000 0.20000000\n-0.75000000 0.20000000 0.25000000\n-0.75000000 0.20000000 0.30000000\n-0.75000000 0.20000000 0.35000000\n-0.75000000 0.20000000 0.40000000\n-0.75000000 0.20000000 0.45000000\n-0.75000000 0.20000000 1.50000000\n-0.75000000 0.20000000 1.55000000\n-0.75000000 0.20000000 2.00000000\n-0.75000000 0.20000000 2.05000000\n-0.75000000 0.25000000 -1.50000000\n-0.75000000 0.25000000 -1.45000000\n-0.75000000 0.25000000 -1.40000000\n-0.75000000 0.25000000 -0.95000000\n-0.75000000 0.25000000 -0.80000000\n-0.75000000 0.25000000 -0.75000000\n-0.75000000 0.25000000 -0.70000000\n-0.75000000 0.25000000 -0.65000000\n-0.75000000 0.25000000 -0.60000000\n-0.75000000 0.25000000 -0.55000000\n-0.75000000 0.25000000 -0.50000000\n-0.75000000 0.25000000 0.50000000\n-0.75000000 0.25000000 0.55000000\n-0.75000000 0.25000000 0.60000000\n-0.75000000 0.25000000 0.65000000\n-0.75000000 0.25000000 0.70000000\n-0.75000000 0.25000000 1.50000000\n-0.75000000 0.25000000 2.05000000\n-0.75000000 0.25000000 2.10000000\n-0.75000000 0.30000000 -1.50000000\n-0.75000000 0.30000000 -1.45000000\n-0.75000000 0.30000000 -1.40000000\n-0.75000000 0.30000000 -0.90000000\n-0.75000000 0.30000000 -0.85000000\n-0.75000000 0.30000000 0.75000000\n-0.75000000 0.30000000 0.80000000\n-0.75000000 0.30000000 0.85000000\n-0.75000000 0.30000000 1.45000000\n-0.75000000 0.30000000 2.05000000\n-0.75000000 0.30000000 2.10000000\n-0.75000000 0.35000000 -1.50000000\n-0.75000000 0.35000000 -1.45000000\n-0.75000000 0.35000000 -1.40000000\n-0.75000000 0.35000000 0.85000000\n-0.75000000 0.35000000 0.90000000\n-0.75000000 0.35000000 1.45000000\n-0.75000000 0.35000000 2.05000000\n-0.75000000 0.35000000 2.10000000\n-0.75000000 0.40000000 -1.50000000\n-0.75000000 0.40000000 0.85000000\n-0.75000000 0.40000000 0.90000000\n-0.75000000 0.40000000 1.45000000\n-0.75000000 0.40000000 2.05000000\n-0.75000000 0.40000000 2.10000000\n-0.75000000 0.45000000 -1.50000000\n-0.75000000 0.45000000 0.85000000\n-0.75000000 0.45000000 0.90000000\n-0.75000000 0.45000000 1.50000000\n-0.75000000 0.45000000 2.05000000\n-0.75000000 0.45000000 2.10000000\n-0.75000000 0.50000000 -1.55000000\n-0.75000000 0.50000000 0.80000000\n-0.75000000 0.50000000 0.85000000\n-0.75000000 0.50000000 1.50000000\n-0.75000000 0.50000000 2.00000000\n-0.75000000 0.50000000 2.05000000\n-0.75000000 0.55000000 -1.60000000\n-0.75000000 0.55000000 0.65000000\n-0.75000000 0.55000000 0.70000000\n-0.75000000 0.55000000 0.75000000\n-0.75000000 0.55000000 1.50000000\n-0.75000000 0.55000000 1.55000000\n-0.75000000 0.55000000 1.60000000\n-0.75000000 0.55000000 1.95000000\n-0.75000000 0.55000000 2.00000000\n-0.75000000 0.55000000 2.05000000\n-0.75000000 0.60000000 -1.60000000\n-0.75000000 0.60000000 0.45000000\n-0.75000000 0.60000000 0.50000000\n-0.75000000 0.60000000 0.55000000\n-0.75000000 0.60000000 0.60000000\n-0.75000000 0.60000000 1.55000000\n-0.75000000 0.60000000 1.60000000\n-0.75000000 0.60000000 1.65000000\n-0.75000000 0.60000000 1.70000000\n-0.75000000 0.60000000 1.85000000\n-0.75000000 0.60000000 1.90000000\n-0.75000000 0.60000000 1.95000000\n-0.75000000 0.60000000 2.00000000\n-0.75000000 0.65000000 -1.60000000\n-0.75000000 0.65000000 0.05000000\n-0.75000000 0.65000000 0.10000000\n-0.75000000 0.65000000 0.15000000\n-0.75000000 0.65000000 0.20000000\n-0.75000000 0.65000000 0.25000000\n-0.75000000 0.65000000 0.30000000\n-0.75000000 0.65000000 0.35000000\n-0.75000000 0.65000000 0.40000000\n-0.75000000 0.65000000 1.65000000\n-0.75000000 0.65000000 1.70000000\n-0.75000000 0.65000000 1.75000000\n-0.75000000 0.65000000 1.80000000\n-0.75000000 0.65000000 1.85000000\n-0.75000000 0.65000000 1.90000000\n-0.75000000 0.65000000 1.95000000\n-0.75000000 0.70000000 -1.60000000\n-0.75000000 0.70000000 -0.20000000\n-0.75000000 0.70000000 -0.15000000\n-0.75000000 0.70000000 -0.10000000\n-0.75000000 0.70000000 -0.05000000\n-0.75000000 0.70000000 0.00000000\n-0.75000000 0.75000000 -1.60000000\n-0.75000000 0.75000000 -0.20000000\n-0.75000000 0.80000000 -1.60000000\n-0.75000000 0.80000000 -0.25000000\n-0.75000000 0.85000000 -1.55000000\n-0.75000000 0.85000000 -0.35000000\n-0.75000000 0.85000000 -0.30000000\n-0.75000000 0.90000000 -1.50000000\n-0.75000000 0.90000000 -1.45000000\n-0.75000000 0.90000000 -0.45000000\n-0.75000000 0.90000000 -0.40000000\n-0.75000000 0.95000000 -1.40000000\n-0.75000000 0.95000000 -1.35000000\n-0.75000000 0.95000000 -1.30000000\n-0.75000000 0.95000000 -0.60000000\n-0.75000000 0.95000000 -0.55000000\n-0.75000000 0.95000000 -0.50000000\n-0.75000000 1.00000000 -1.25000000\n-0.75000000 1.00000000 -1.20000000\n-0.75000000 1.00000000 -1.15000000\n-0.75000000 1.00000000 -1.10000000\n-0.75000000 1.00000000 -1.05000000\n-0.75000000 1.00000000 -1.00000000\n-0.75000000 1.00000000 -0.95000000\n-0.75000000 1.00000000 -0.90000000\n-0.75000000 1.00000000 -0.85000000\n-0.75000000 1.00000000 -0.80000000\n-0.75000000 1.00000000 -0.75000000\n-0.75000000 1.00000000 -0.70000000\n-0.75000000 1.00000000 -0.65000000\n-0.70000000 0.10000000 1.75000000\n-0.70000000 0.10000000 1.80000000\n-0.70000000 0.15000000 1.65000000\n-0.70000000 0.15000000 1.70000000\n-0.70000000 0.15000000 1.85000000\n-0.70000000 0.15000000 1.90000000\n-0.70000000 0.20000000 -1.30000000\n-0.70000000 0.20000000 -1.25000000\n-0.70000000 0.20000000 -1.20000000\n-0.70000000 0.20000000 -1.15000000\n-0.70000000 0.20000000 -1.10000000\n-0.70000000 0.20000000 -0.60000000\n-0.70000000 0.20000000 -0.55000000\n-0.70000000 0.20000000 -0.50000000\n-0.70000000 0.20000000 -0.45000000\n-0.70000000 0.20000000 -0.40000000\n-0.70000000 0.20000000 -0.35000000\n-0.70000000 0.20000000 -0.30000000\n-0.70000000 0.20000000 -0.25000000\n-0.70000000 0.20000000 -0.20000000\n-0.70000000 0.20000000 -0.15000000\n-0.70000000 0.20000000 -0.10000000\n-0.70000000 0.20000000 -0.05000000\n-0.70000000 0.20000000 0.00000000\n-0.70000000 0.20000000 0.05000000\n-0.70000000 0.20000000 0.10000000\n-0.70000000 0.20000000 0.15000000\n-0.70000000 0.20000000 0.20000000\n-0.70000000 0.20000000 0.25000000\n-0.70000000 0.20000000 0.30000000\n-0.70000000 0.20000000 0.35000000\n-0.70000000 0.20000000 0.40000000\n-0.70000000 0.20000000 0.45000000\n-0.70000000 0.20000000 0.50000000\n-0.70000000 0.20000000 0.55000000\n-0.70000000 0.20000000 0.60000000\n-0.70000000 0.20000000 1.60000000\n-0.70000000 0.20000000 1.95000000\n-0.70000000 0.25000000 -1.35000000\n-0.70000000 0.25000000 -1.30000000\n-0.70000000 0.25000000 -1.25000000\n-0.70000000 0.25000000 -1.20000000\n-0.70000000 0.25000000 -1.15000000\n-0.70000000 0.25000000 -1.05000000\n-0.70000000 0.25000000 -1.00000000\n-0.70000000 0.25000000 -0.95000000\n-0.70000000 0.25000000 -0.90000000\n-0.70000000 0.25000000 -0.85000000\n-0.70000000 0.25000000 -0.80000000\n-0.70000000 0.25000000 -0.75000000\n-0.70000000 0.25000000 -0.70000000\n-0.70000000 0.25000000 -0.65000000\n-0.70000000 0.25000000 0.65000000\n-0.70000000 0.25000000 0.70000000\n-0.70000000 0.25000000 0.75000000\n-0.70000000 0.25000000 0.80000000\n-0.70000000 0.25000000 0.85000000\n-0.70000000 0.25000000 1.55000000\n-0.70000000 0.25000000 2.00000000\n-0.70000000 0.30000000 -1.35000000\n-0.70000000 0.30000000 0.90000000\n-0.70000000 0.30000000 0.95000000\n-0.70000000 0.30000000 1.50000000\n-0.70000000 0.30000000 2.00000000\n-0.70000000 0.35000000 -1.35000000\n-0.70000000 0.35000000 0.95000000\n-0.70000000 0.35000000 1.00000000\n-0.70000000 0.35000000 1.50000000\n-0.70000000 0.35000000 2.00000000\n-0.70000000 0.40000000 -1.50000000\n-0.70000000 0.40000000 -1.45000000\n-0.70000000 0.40000000 -1.40000000\n-0.70000000 0.40000000 0.95000000\n-0.70000000 0.40000000 1.00000000\n-0.70000000 0.40000000 1.50000000\n-0.70000000 0.40000000 2.00000000\n-0.70000000 0.45000000 -1.55000000\n-0.70000000 0.45000000 0.95000000\n-0.70000000 0.45000000 1.00000000\n-0.70000000 0.45000000 1.55000000\n-0.70000000 0.45000000 2.00000000\n-0.70000000 0.50000000 -1.60000000\n-0.70000000 0.50000000 0.90000000\n-0.70000000 0.50000000 1.55000000\n-0.70000000 0.50000000 1.60000000\n-0.70000000 0.50000000 1.95000000\n-0.70000000 0.55000000 -1.65000000\n-0.70000000 0.55000000 0.75000000\n-0.70000000 0.55000000 0.80000000\n-0.70000000 0.55000000 0.85000000\n-0.70000000 0.55000000 1.65000000\n-0.70000000 0.55000000 1.70000000\n-0.70000000 0.55000000 1.85000000\n-0.70000000 0.55000000 1.90000000\n-0.70000000 0.60000000 -1.65000000\n-0.70000000 0.60000000 0.55000000\n-0.70000000 0.60000000 0.60000000\n-0.70000000 0.60000000 0.65000000\n-0.70000000 0.60000000 0.70000000\n-0.70000000 0.60000000 1.75000000\n-0.70000000 0.60000000 1.80000000\n-0.70000000 0.65000000 -1.65000000\n-0.70000000 0.65000000 0.25000000\n-0.70000000 0.65000000 0.30000000\n-0.70000000 0.65000000 0.35000000\n-0.70000000 0.65000000 0.40000000\n-0.70000000 0.65000000 0.45000000\n-0.70000000 0.65000000 0.50000000\n-0.70000000 0.70000000 -1.65000000\n-0.70000000 0.70000000 -0.10000000\n-0.70000000 0.70000000 -0.05000000\n-0.70000000 0.70000000 0.00000000\n-0.70000000 0.70000000 0.05000000\n-0.70000000 0.70000000 0.10000000\n-0.70000000 0.70000000 0.15000000\n-0.70000000 0.70000000 0.20000000\n-0.70000000 0.75000000 -1.65000000\n-0.70000000 0.75000000 -0.15000000\n-0.70000000 0.80000000 -1.65000000\n-0.70000000 0.80000000 -0.20000000\n-0.70000000 0.85000000 -1.60000000\n-0.70000000 0.85000000 -0.25000000\n-0.70000000 0.90000000 -1.55000000\n-0.70000000 0.90000000 -1.50000000\n-0.70000000 0.90000000 -0.35000000\n-0.70000000 0.90000000 -0.30000000\n-0.70000000 0.95000000 -1.45000000\n-0.70000000 0.95000000 -1.40000000\n-0.70000000 0.95000000 -0.50000000\n-0.70000000 0.95000000 -0.45000000\n-0.70000000 0.95000000 -0.40000000\n-0.70000000 1.00000000 -1.35000000\n-0.70000000 1.00000000 -1.30000000\n-0.70000000 1.00000000 -1.25000000\n-0.70000000 1.00000000 -1.20000000\n-0.70000000 1.00000000 -0.75000000\n-0.70000000 1.00000000 -0.70000000\n-0.70000000 1.00000000 -0.65000000\n-0.70000000 1.00000000 -0.60000000\n-0.70000000 1.00000000 -0.55000000\n-0.70000000 1.05000000 -1.15000000\n-0.70000000 1.05000000 -1.10000000\n-0.70000000 1.05000000 -1.05000000\n-0.70000000 1.05000000 -1.00000000\n-0.70000000 1.05000000 -0.95000000\n-0.70000000 1.05000000 -0.90000000\n-0.70000000 1.05000000 -0.85000000\n-0.70000000 1.05000000 -0.80000000\n-0.65000000 0.15000000 -0.25000000\n-0.65000000 0.15000000 -0.20000000\n-0.65000000 0.15000000 -0.15000000\n-0.65000000 0.15000000 -0.10000000\n-0.65000000 0.15000000 -0.05000000\n-0.65000000 0.15000000 0.00000000\n-0.65000000 0.15000000 0.05000000\n-0.65000000 0.15000000 0.10000000\n-0.65000000 0.15000000 0.15000000\n-0.65000000 0.15000000 0.20000000\n-0.65000000 0.15000000 0.25000000\n-0.65000000 0.15000000 0.30000000\n-0.65000000 0.15000000 0.35000000\n-0.65000000 0.15000000 1.70000000\n-0.65000000 0.15000000 1.75000000\n-0.65000000 0.15000000 1.80000000\n-0.65000000 0.20000000 -0.75000000\n-0.65000000 0.20000000 -0.70000000\n-0.65000000 0.20000000 -0.65000000\n-0.65000000 0.20000000 -0.60000000\n-0.65000000 0.20000000 -0.55000000\n-0.65000000 0.20000000 -0.50000000\n-0.65000000 0.20000000 -0.45000000\n-0.65000000 0.20000000 -0.40000000\n-0.65000000 0.20000000 -0.35000000\n-0.65000000 0.20000000 -0.30000000\n-0.65000000 0.20000000 0.40000000\n-0.65000000 0.20000000 0.45000000\n-0.65000000 0.20000000 0.50000000\n-0.65000000 0.20000000 0.55000000\n-0.65000000 0.20000000 0.60000000\n-0.65000000 0.20000000 0.65000000\n-0.65000000 0.20000000 0.70000000\n-0.65000000 0.20000000 0.75000000\n-0.65000000 0.20000000 1.60000000\n-0.65000000 0.20000000 1.65000000\n-0.65000000 0.20000000 1.85000000\n-0.65000000 0.20000000 1.90000000\n-0.65000000 0.20000000 1.95000000\n-0.65000000 0.25000000 -1.10000000\n-0.65000000 0.25000000 -1.05000000\n-0.65000000 0.25000000 -1.00000000\n-0.65000000 0.25000000 -0.95000000\n-0.65000000 0.25000000 -0.90000000\n-0.65000000 0.25000000 -0.85000000\n-0.65000000 0.25000000 -0.80000000\n-0.65000000 0.25000000 0.80000000\n-0.65000000 0.25000000 0.85000000\n-0.65000000 0.25000000 0.90000000\n-0.65000000 0.25000000 1.50000000\n-0.65000000 0.25000000 1.55000000\n-0.65000000 0.25000000 2.00000000\n-0.65000000 0.30000000 -1.35000000\n-0.65000000 0.30000000 -1.30000000\n-0.65000000 0.30000000 -1.25000000\n-0.65000000 0.30000000 -1.20000000\n-0.65000000 0.30000000 -1.15000000\n-0.65000000 0.30000000 0.95000000\n-0.65000000 0.30000000 1.00000000\n-0.65000000 0.30000000 1.05000000\n-0.65000000 0.30000000 1.50000000\n-0.65000000 0.30000000 2.00000000\n-0.65000000 0.35000000 -1.45000000\n-0.65000000 0.35000000 -1.40000000\n-0.65000000 0.35000000 1.05000000\n-0.65000000 0.35000000 1.50000000\n-0.65000000 0.35000000 2.00000000\n-0.65000000 0.40000000 -1.55000000\n-0.65000000 0.40000000 -1.50000000\n-0.65000000 0.40000000 1.05000000\n-0.65000000 0.40000000 1.50000000\n-0.65000000 0.40000000 2.00000000\n-0.65000000 0.45000000 -1.60000000\n-0.65000000 0.45000000 1.05000000\n-0.65000000 0.45000000 1.50000000\n-0.65000000 0.45000000 2.00000000\n-0.65000000 0.50000000 -1.65000000\n-0.65000000 0.50000000 0.95000000\n-0.65000000 0.50000000 1.00000000\n-0.65000000 0.50000000 1.55000000\n-0.65000000 0.50000000 1.95000000\n-0.65000000 0.55000000 -1.70000000\n-0.65000000 0.55000000 0.85000000\n-0.65000000 0.55000000 0.90000000\n-0.65000000 0.55000000 1.60000000\n-0.65000000 0.55000000 1.65000000\n-0.65000000 0.55000000 1.70000000\n-0.65000000 0.55000000 1.75000000\n-0.65000000 0.55000000 1.80000000\n-0.65000000 0.55000000 1.85000000\n-0.65000000 0.55000000 1.90000000\n-0.65000000 0.60000000 -1.70000000\n-0.65000000 0.60000000 0.65000000\n-0.65000000 0.60000000 0.70000000\n-0.65000000 0.60000000 0.75000000\n-0.65000000 0.60000000 0.80000000\n-0.65000000 0.65000000 -1.70000000\n-0.65000000 0.65000000 0.40000000\n-0.65000000 0.65000000 0.45000000\n-0.65000000 0.65000000 0.50000000\n-0.65000000 0.65000000 0.55000000\n-0.65000000 0.65000000 0.60000000\n-0.65000000 0.70000000 -1.70000000\n-0.65000000 0.70000000 -0.05000000\n-0.65000000 0.70000000 0.00000000\n-0.65000000 0.70000000 0.05000000\n-0.65000000 0.70000000 0.10000000\n-0.65000000 0.70000000 0.15000000\n-0.65000000 0.70000000 0.20000000\n-0.65000000 0.70000000 0.25000000\n-0.65000000 0.70000000 0.30000000\n-0.65000000 0.70000000 0.35000000\n-0.65000000 0.75000000 -1.70000000\n-0.65000000 0.75000000 -0.10000000\n-0.65000000 0.80000000 -1.70000000\n-0.65000000 0.80000000 -0.15000000\n-0.65000000 0.85000000 -1.65000000\n-0.65000000 0.85000000 -0.20000000\n-0.65000000 0.90000000 -1.60000000\n-0.65000000 0.90000000 -0.30000000\n-0.65000000 0.90000000 -0.25000000\n-0.65000000 0.95000000 -1.55000000\n-0.65000000 0.95000000 -1.50000000\n-0.65000000 0.95000000 -1.45000000\n-0.65000000 0.95000000 -0.40000000\n-0.65000000 0.95000000 -0.35000000\n-0.65000000 1.00000000 -1.40000000\n-0.65000000 1.00000000 -1.35000000\n-0.65000000 1.00000000 -1.30000000\n-0.65000000 1.00000000 -0.60000000\n-0.65000000 1.00000000 -0.55000000\n-0.65000000 1.00000000 -0.50000000\n-0.65000000 1.00000000 -0.45000000\n-0.65000000 1.05000000 -1.25000000\n-0.65000000 1.05000000 -1.20000000\n-0.65000000 1.05000000 -1.15000000\n-0.65000000 1.05000000 -1.10000000\n-0.65000000 1.05000000 -1.05000000\n-0.65000000 1.05000000 -1.00000000\n-0.65000000 1.05000000 -0.95000000\n-0.65000000 1.05000000 -0.90000000\n-0.65000000 1.05000000 -0.85000000\n-0.65000000 1.05000000 -0.80000000\n-0.65000000 1.05000000 -0.75000000\n-0.65000000 1.05000000 -0.70000000\n-0.65000000 1.05000000 -0.65000000\n-0.60000000 0.15000000 -0.45000000\n-0.60000000 0.15000000 -0.40000000\n-0.60000000 0.15000000 -0.35000000\n-0.60000000 0.15000000 -0.30000000\n-0.60000000 0.15000000 -0.25000000\n-0.60000000 0.15000000 -0.20000000\n-0.60000000 0.15000000 -0.15000000\n-0.60000000 0.15000000 -0.10000000\n-0.60000000 0.15000000 -0.05000000\n-0.60000000 0.15000000 0.00000000\n-0.60000000 0.15000000 0.05000000\n-0.60000000 0.15000000 0.10000000\n-0.60000000 0.15000000 0.15000000\n-0.60000000 0.15000000 0.20000000\n-0.60000000 0.15000000 0.25000000\n-0.60000000 0.15000000 0.30000000\n-0.60000000 0.15000000 0.35000000\n-0.60000000 0.15000000 0.40000000\n-0.60000000 0.15000000 0.45000000\n-0.60000000 0.15000000 0.50000000\n-0.60000000 0.15000000 0.55000000\n-0.60000000 0.15000000 1.60000000\n-0.60000000 0.15000000 1.65000000\n-0.60000000 0.15000000 1.70000000\n-0.60000000 0.15000000 1.75000000\n-0.60000000 0.15000000 1.80000000\n-0.60000000 0.15000000 1.85000000\n-0.60000000 0.15000000 1.90000000\n-0.60000000 0.20000000 -0.85000000\n-0.60000000 0.20000000 -0.80000000\n-0.60000000 0.20000000 -0.75000000\n-0.60000000 0.20000000 -0.70000000\n-0.60000000 0.20000000 -0.65000000\n-0.60000000 0.20000000 -0.60000000\n-0.60000000 0.20000000 -0.55000000\n-0.60000000 0.20000000 -0.50000000\n-0.60000000 0.20000000 0.60000000\n-0.60000000 0.20000000 0.65000000\n-0.60000000 0.20000000 0.70000000\n-0.60000000 0.20000000 0.75000000\n-0.60000000 0.20000000 0.80000000\n-0.60000000 0.20000000 0.85000000\n-0.60000000 0.20000000 1.55000000\n-0.60000000 0.20000000 1.95000000\n-0.60000000 0.25000000 -1.20000000\n-0.60000000 0.25000000 -1.15000000\n-0.60000000 0.25000000 -1.10000000\n-0.60000000 0.25000000 -1.05000000\n-0.60000000 0.25000000 -1.00000000\n-0.60000000 0.25000000 -0.95000000\n-0.60000000 0.25000000 -0.90000000\n-0.60000000 0.25000000 0.90000000\n-0.60000000 0.25000000 0.95000000\n-0.60000000 0.25000000 1.00000000\n-0.60000000 0.25000000 1.50000000\n-0.60000000 0.25000000 2.00000000\n-0.60000000 0.30000000 -1.40000000\n-0.60000000 0.30000000 -1.35000000\n-0.60000000 0.30000000 -1.30000000\n-0.60000000 0.30000000 -1.25000000\n-0.60000000 0.30000000 1.05000000\n-0.60000000 0.30000000 1.10000000\n-0.60000000 0.30000000 1.45000000\n-0.60000000 0.30000000 2.05000000\n-0.60000000 0.35000000 -1.50000000\n-0.60000000 0.35000000 -1.45000000\n-0.60000000 0.35000000 1.10000000\n-0.60000000 0.35000000 1.15000000\n-0.60000000 0.35000000 1.45000000\n-0.60000000 0.35000000 2.05000000\n-0.60000000 0.40000000 -1.60000000\n-0.60000000 0.40000000 -1.55000000\n-0.60000000 0.40000000 1.10000000\n-0.60000000 0.40000000 1.15000000\n-0.60000000 0.40000000 1.45000000\n-0.60000000 0.40000000 2.05000000\n-0.60000000 0.45000000 -1.65000000\n-0.60000000 0.45000000 1.10000000\n-0.60000000 0.45000000 1.50000000\n-0.60000000 0.45000000 2.00000000\n-0.60000000 0.50000000 -1.70000000\n-0.60000000 0.50000000 1.05000000\n-0.60000000 0.50000000 1.10000000\n-0.60000000 0.50000000 1.50000000\n-0.60000000 0.50000000 2.00000000\n-0.60000000 0.55000000 -1.70000000\n-0.60000000 0.55000000 0.90000000\n-0.60000000 0.55000000 0.95000000\n-0.60000000 0.55000000 1.00000000\n-0.60000000 0.55000000 1.55000000\n-0.60000000 0.55000000 1.60000000\n-0.60000000 0.55000000 1.65000000\n-0.60000000 0.55000000 1.70000000\n-0.60000000 0.55000000 1.75000000\n-0.60000000 0.55000000 1.80000000\n-0.60000000 0.55000000 1.85000000\n-0.60000000 0.55000000 1.90000000\n-0.60000000 0.55000000 1.95000000\n-0.60000000 0.60000000 -1.75000000\n-0.60000000 0.60000000 0.75000000\n-0.60000000 0.60000000 0.80000000\n-0.60000000 0.60000000 0.85000000\n-0.60000000 0.65000000 -1.75000000\n-0.60000000 0.65000000 0.50000000\n-0.60000000 0.65000000 0.55000000\n-0.60000000 0.65000000 0.60000000\n-0.60000000 0.65000000 0.65000000\n-0.60000000 0.65000000 0.70000000\n-0.60000000 0.70000000 -1.75000000\n-0.60000000 0.70000000 0.05000000\n-0.60000000 0.70000000 0.10000000\n-0.60000000 0.70000000 0.15000000\n-0.60000000 0.70000000 0.20000000\n-0.60000000 0.70000000 0.25000000\n-0.60000000 0.70000000 0.30000000\n-0.60000000 0.70000000 0.35000000\n-0.60000000 0.70000000 0.40000000\n-0.60000000 0.70000000 0.45000000\n-0.60000000 0.75000000 -1.75000000\n-0.60000000 0.75000000 -0.05000000\n-0.60000000 0.75000000 0.00000000\n-0.60000000 0.80000000 -1.75000000\n-0.60000000 0.80000000 -0.10000000\n-0.60000000 0.85000000 -1.70000000\n-0.60000000 0.85000000 -0.15000000\n-0.60000000 0.90000000 -1.65000000\n-0.60000000 0.90000000 -0.25000000\n-0.60000000 0.90000000 -0.20000000\n-0.60000000 0.95000000 -1.60000000\n-0.60000000 0.95000000 -1.55000000\n-0.60000000 0.95000000 -0.35000000\n-0.60000000 0.95000000 -0.30000000\n-0.60000000 1.00000000 -1.50000000\n-0.60000000 1.00000000 -1.45000000\n-0.60000000 1.00000000 -1.40000000\n-0.60000000 1.00000000 -0.50000000\n-0.60000000 1.00000000 -0.45000000\n-0.60000000 1.00000000 -0.40000000\n-0.60000000 1.05000000 -1.35000000\n-0.60000000 1.05000000 -1.30000000\n-0.60000000 1.05000000 -1.25000000\n-0.60000000 1.05000000 -1.20000000\n-0.60000000 1.05000000 -1.15000000\n-0.60000000 1.05000000 -1.10000000\n-0.60000000 1.05000000 -0.85000000\n-0.60000000 1.05000000 -0.80000000\n-0.60000000 1.05000000 -0.75000000\n-0.60000000 1.05000000 -0.70000000\n-0.60000000 1.05000000 -0.65000000\n-0.60000000 1.05000000 -0.60000000\n-0.60000000 1.05000000 -0.55000000\n-0.60000000 1.10000000 -1.05000000\n-0.60000000 1.10000000 -1.00000000\n-0.60000000 1.10000000 -0.95000000\n-0.60000000 1.10000000 -0.90000000\n-0.55000000 0.15000000 -0.60000000\n-0.55000000 0.15000000 -0.55000000\n-0.55000000 0.15000000 -0.50000000\n-0.55000000 0.15000000 -0.45000000\n-0.55000000 0.15000000 -0.40000000\n-0.55000000 0.15000000 -0.35000000\n-0.55000000 0.15000000 -0.30000000\n-0.55000000 0.15000000 -0.25000000\n-0.55000000 0.15000000 -0.20000000\n-0.55000000 0.15000000 -0.15000000\n-0.55000000 0.15000000 -0.10000000\n-0.55000000 0.15000000 -0.05000000\n-0.55000000 0.15000000 0.00000000\n-0.55000000 0.15000000 0.05000000\n-0.55000000 0.15000000 0.10000000\n-0.55000000 0.15000000 0.15000000\n-0.55000000 0.15000000 0.20000000\n-0.55000000 0.15000000 0.25000000\n-0.55000000 0.15000000 0.30000000\n-0.55000000 0.15000000 0.35000000\n-0.55000000 0.15000000 0.40000000\n-0.55000000 0.15000000 0.45000000\n-0.55000000 0.15000000 0.50000000\n-0.55000000 0.15000000 0.55000000\n-0.55000000 0.15000000 0.60000000\n-0.55000000 0.15000000 0.65000000\n-0.55000000 0.15000000 1.60000000\n-0.55000000 0.15000000 1.65000000\n-0.55000000 0.15000000 1.70000000\n-0.55000000 0.15000000 1.75000000\n-0.55000000 0.15000000 1.80000000\n-0.55000000 0.15000000 1.85000000\n-0.55000000 0.15000000 1.90000000\n-0.55000000 0.20000000 -1.05000000\n-0.55000000 0.20000000 -1.00000000\n-0.55000000 0.20000000 -0.95000000\n-0.55000000 0.20000000 -0.90000000\n-0.55000000 0.20000000 -0.85000000\n-0.55000000 0.20000000 -0.80000000\n-0.55000000 0.20000000 -0.75000000\n-0.55000000 0.20000000 -0.70000000\n-0.55000000 0.20000000 -0.65000000\n-0.55000000 0.20000000 0.70000000\n-0.55000000 0.20000000 0.75000000\n-0.55000000 0.20000000 0.80000000\n-0.55000000 0.20000000 0.85000000\n-0.55000000 0.20000000 0.90000000\n-0.55000000 0.20000000 0.95000000\n-0.55000000 0.20000000 1.50000000\n-0.55000000 0.20000000 1.55000000\n-0.55000000 0.20000000 1.95000000\n-0.55000000 0.20000000 2.00000000\n-0.55000000 0.25000000 -1.30000000\n-0.55000000 0.25000000 -1.25000000\n-0.55000000 0.25000000 -1.20000000\n-0.55000000 0.25000000 -1.15000000\n-0.55000000 0.25000000 -1.10000000\n-0.55000000 0.25000000 1.00000000\n-0.55000000 0.25000000 1.05000000\n-0.55000000 0.25000000 1.10000000\n-0.55000000 0.25000000 1.45000000\n-0.55000000 0.25000000 2.05000000\n-0.55000000 0.30000000 -1.45000000\n-0.55000000 0.30000000 -1.40000000\n-0.55000000 0.30000000 -1.35000000\n-0.55000000 0.30000000 1.15000000\n-0.55000000 0.30000000 1.45000000\n-0.55000000 0.30000000 2.05000000\n-0.55000000 0.35000000 -1.55000000\n-0.55000000 0.35000000 -1.50000000\n-0.55000000 0.35000000 1.20000000\n-0.55000000 0.35000000 1.45000000\n-0.55000000 0.35000000 2.05000000\n-0.55000000 0.40000000 -1.60000000\n-0.55000000 0.40000000 1.20000000\n-0.55000000 0.40000000 1.45000000\n-0.55000000 0.40000000 2.05000000\n-0.55000000 0.45000000 -1.65000000\n-0.55000000 0.45000000 1.15000000\n-0.55000000 0.45000000 1.20000000\n-0.55000000 0.45000000 1.45000000\n-0.55000000 0.45000000 2.05000000\n-0.55000000 0.50000000 -1.70000000\n-0.55000000 0.50000000 1.10000000\n-0.55000000 0.50000000 1.15000000\n-0.55000000 0.50000000 1.50000000\n-0.55000000 0.50000000 2.00000000\n-0.55000000 0.55000000 -1.75000000\n-0.55000000 0.55000000 0.95000000\n-0.55000000 0.55000000 1.00000000\n-0.55000000 0.55000000 1.05000000\n-0.55000000 0.55000000 1.55000000\n-0.55000000 0.55000000 1.60000000\n-0.55000000 0.55000000 1.90000000\n-0.55000000 0.55000000 1.95000000\n-0.55000000 0.60000000 -1.75000000\n-0.55000000 0.60000000 0.80000000\n-0.55000000 0.60000000 0.85000000\n-0.55000000 0.60000000 0.90000000\n-0.55000000 0.60000000 1.65000000\n-0.55000000 0.60000000 1.70000000\n-0.55000000 0.60000000 1.75000000\n-0.55000000 0.60000000 1.80000000\n-0.55000000 0.60000000 1.85000000\n-0.55000000 0.65000000 -1.80000000\n-0.55000000 0.65000000 0.55000000\n-0.55000000 0.65000000 0.60000000\n-0.55000000 0.65000000 0.65000000\n-0.55000000 0.65000000 0.70000000\n-0.55000000 0.65000000 0.75000000\n-0.55000000 0.70000000 -1.80000000\n-0.55000000 0.70000000 0.20000000\n-0.55000000 0.70000000 0.25000000\n-0.55000000 0.70000000 0.30000000\n-0.55000000 0.70000000 0.35000000\n-0.55000000 0.70000000 0.40000000\n-0.55000000 0.70000000 0.45000000\n-0.55000000 0.70000000 0.50000000\n-0.55000000 0.75000000 -1.80000000\n-0.55000000 0.75000000 0.00000000\n-0.55000000 0.75000000 0.05000000\n-0.55000000 0.75000000 0.10000000\n-0.55000000 0.75000000 0.15000000\n-0.55000000 0.80000000 -1.75000000\n-0.55000000 0.80000000 -0.05000000\n-0.55000000 0.85000000 -1.75000000\n-0.55000000 0.85000000 -0.10000000\n-0.55000000 0.90000000 -1.70000000\n-0.55000000 0.90000000 -1.65000000\n-0.55000000 0.90000000 -0.20000000\n-0.55000000 0.90000000 -0.15000000\n-0.55000000 0.95000000 -1.60000000\n-0.55000000 0.95000000 -0.30000000\n-0.55000000 0.95000000 -0.25000000\n-0.55000000 1.00000000 -1.55000000\n-0.55000000 1.00000000 -1.50000000\n-0.55000000 1.00000000 -1.45000000\n-0.55000000 1.00000000 -0.45000000\n-0.55000000 1.00000000 -0.40000000\n-0.55000000 1.00000000 -0.35000000\n-0.55000000 1.05000000 -1.40000000\n-0.55000000 1.05000000 -1.35000000\n-0.55000000 1.05000000 -1.30000000\n-0.55000000 1.05000000 -1.25000000\n-0.55000000 1.05000000 -0.65000000\n-0.55000000 1.05000000 -0.60000000\n-0.55000000 1.05000000 -0.55000000\n-0.55000000 1.05000000 -0.50000000\n-0.55000000 1.10000000 -1.20000000\n-0.55000000 1.10000000 -1.15000000\n-0.55000000 1.10000000 -1.10000000\n-0.55000000 1.10000000 -1.05000000\n-0.55000000 1.10000000 -1.00000000\n-0.55000000 1.10000000 -0.95000000\n-0.55000000 1.10000000 -0.90000000\n-0.55000000 1.10000000 -0.85000000\n-0.55000000 1.10000000 -0.80000000\n-0.55000000 1.10000000 -0.75000000\n-0.55000000 1.10000000 -0.70000000\n-0.50000000 0.15000000 -0.70000000\n-0.50000000 0.15000000 -0.65000000\n-0.50000000 0.15000000 -0.60000000\n-0.50000000 0.15000000 -0.55000000\n-0.50000000 0.15000000 -0.50000000\n-0.50000000 0.15000000 -0.45000000\n-0.50000000 0.15000000 -0.40000000\n-0.50000000 0.15000000 -0.35000000\n-0.50000000 0.15000000 -0.30000000\n-0.50000000 0.15000000 -0.25000000\n-0.50000000 0.15000000 -0.20000000\n-0.50000000 0.15000000 -0.15000000\n-0.50000000 0.15000000 -0.10000000\n-0.50000000 0.15000000 -0.05000000\n-0.50000000 0.15000000 0.00000000\n-0.50000000 0.15000000 0.05000000\n-0.50000000 0.15000000 0.10000000\n-0.50000000 0.15000000 0.15000000\n-0.50000000 0.15000000 0.20000000\n-0.50000000 0.15000000 0.25000000\n-0.50000000 0.15000000 0.30000000\n-0.50000000 0.15000000 0.35000000\n-0.50000000 0.15000000 0.40000000\n-0.50000000 0.15000000 0.45000000\n-0.50000000 0.15000000 0.50000000\n-0.50000000 0.15000000 0.55000000\n-0.50000000 0.15000000 0.60000000\n-0.50000000 0.15000000 0.65000000\n-0.50000000 0.15000000 0.70000000\n-0.50000000 0.15000000 0.75000000\n-0.50000000 0.15000000 0.80000000\n-0.50000000 0.15000000 1.55000000\n-0.50000000 0.15000000 1.60000000\n-0.50000000 0.15000000 1.65000000\n-0.50000000 0.15000000 1.70000000\n-0.50000000 0.15000000 1.75000000\n-0.50000000 0.15000000 1.80000000\n-0.50000000 0.15000000 1.85000000\n-0.50000000 0.15000000 1.90000000\n-0.50000000 0.15000000 1.95000000\n-0.50000000 0.20000000 -1.15000000\n-0.50000000 0.20000000 -1.10000000\n-0.50000000 0.20000000 -1.05000000\n-0.50000000 0.20000000 -1.00000000\n-0.50000000 0.20000000 -0.95000000\n-0.50000000 0.20000000 -0.90000000\n-0.50000000 0.20000000 -0.85000000\n-0.50000000 0.20000000 -0.80000000\n-0.50000000 0.20000000 -0.75000000\n-0.50000000 0.20000000 0.85000000\n-0.50000000 0.20000000 0.90000000\n-0.50000000 0.20000000 0.95000000\n-0.50000000 0.20000000 1.00000000\n-0.50000000 0.20000000 1.50000000\n-0.50000000 0.20000000 2.00000000\n-0.50000000 0.25000000 -1.35000000\n-0.50000000 0.25000000 -1.30000000\n-0.50000000 0.25000000 -1.25000000\n-0.50000000 0.25000000 -1.20000000\n-0.50000000 0.25000000 1.05000000\n-0.50000000 0.25000000 1.10000000\n-0.50000000 0.25000000 1.15000000\n-0.50000000 0.25000000 1.45000000\n-0.50000000 0.25000000 2.05000000\n-0.50000000 0.30000000 -1.50000000\n-0.50000000 0.30000000 -1.45000000\n-0.50000000 0.30000000 -1.40000000\n-0.50000000 0.30000000 1.20000000\n-0.50000000 0.30000000 1.45000000\n-0.50000000 0.30000000 2.05000000\n-0.50000000 0.35000000 -1.55000000\n-0.50000000 0.35000000 1.25000000\n-0.50000000 0.35000000 1.45000000\n-0.50000000 0.35000000 2.05000000\n-0.50000000 0.40000000 -1.65000000\n-0.50000000 0.40000000 -1.60000000\n-0.50000000 0.40000000 1.25000000\n-0.50000000 0.40000000 1.45000000\n-0.50000000 0.40000000 2.05000000\n-0.50000000 0.45000000 -1.70000000\n-0.50000000 0.45000000 1.25000000\n-0.50000000 0.45000000 1.45000000\n-0.50000000 0.45000000 2.05000000\n-0.50000000 0.50000000 -1.75000000\n-0.50000000 0.50000000 1.15000000\n-0.50000000 0.50000000 1.20000000\n-0.50000000 0.50000000 1.45000000\n-0.50000000 0.50000000 2.05000000\n-0.50000000 0.55000000 -1.80000000\n-0.50000000 0.55000000 1.05000000\n-0.50000000 0.55000000 1.10000000\n-0.50000000 0.55000000 1.50000000\n-0.50000000 0.55000000 1.55000000\n-0.50000000 0.55000000 1.95000000\n-0.50000000 0.55000000 2.00000000\n-0.50000000 0.60000000 -1.80000000\n-0.50000000 0.60000000 0.85000000\n-0.50000000 0.60000000 0.90000000\n-0.50000000 0.60000000 0.95000000\n-0.50000000 0.60000000 1.00000000\n-0.50000000 0.60000000 1.60000000\n-0.50000000 0.60000000 1.65000000\n-0.50000000 0.60000000 1.70000000\n-0.50000000 0.60000000 1.75000000\n-0.50000000 0.60000000 1.80000000\n-0.50000000 0.60000000 1.85000000\n-0.50000000 0.60000000 1.90000000\n-0.50000000 0.65000000 -1.80000000\n-0.50000000 0.65000000 0.65000000\n-0.50000000 0.65000000 0.70000000\n-0.50000000 0.65000000 0.75000000\n-0.50000000 0.65000000 0.80000000\n-0.50000000 0.70000000 -1.80000000\n-0.50000000 0.70000000 0.30000000\n-0.50000000 0.70000000 0.35000000\n-0.50000000 0.70000000 0.40000000\n-0.50000000 0.70000000 0.45000000\n-0.50000000 0.70000000 0.50000000\n-0.50000000 0.70000000 0.55000000\n-0.50000000 0.70000000 0.60000000\n-0.50000000 0.75000000 -1.80000000\n-0.50000000 0.75000000 0.00000000\n-0.50000000 0.75000000 0.05000000\n-0.50000000 0.75000000 0.10000000\n-0.50000000 0.75000000 0.15000000\n-0.50000000 0.75000000 0.20000000\n-0.50000000 0.75000000 0.25000000\n-0.50000000 0.80000000 -1.80000000\n-0.50000000 0.80000000 -0.05000000\n-0.50000000 0.85000000 -1.75000000\n-0.50000000 0.85000000 -0.10000000\n-0.50000000 0.90000000 -1.70000000\n-0.50000000 0.90000000 -0.15000000\n-0.50000000 0.95000000 -1.65000000\n-0.50000000 0.95000000 -0.25000000\n-0.50000000 0.95000000 -0.20000000\n-0.50000000 1.00000000 -1.60000000\n-0.50000000 1.00000000 -1.55000000\n-0.50000000 1.00000000 -1.50000000\n-0.50000000 1.00000000 -0.40000000\n-0.50000000 1.00000000 -0.35000000\n-0.50000000 1.00000000 -0.30000000\n-0.50000000 1.05000000 -1.45000000\n-0.50000000 1.05000000 -1.40000000\n-0.50000000 1.05000000 -1.35000000\n-0.50000000 1.05000000 -0.55000000\n-0.50000000 1.05000000 -0.50000000\n-0.50000000 1.05000000 -0.45000000\n-0.50000000 1.10000000 -1.30000000\n-0.50000000 1.10000000 -1.25000000\n-0.50000000 1.10000000 -1.20000000\n-0.50000000 1.10000000 -1.15000000\n-0.50000000 1.10000000 -1.10000000\n-0.50000000 1.10000000 -1.05000000\n-0.50000000 1.10000000 -1.00000000\n-0.50000000 1.10000000 -0.95000000\n-0.50000000 1.10000000 -0.90000000\n-0.50000000 1.10000000 -0.85000000\n-0.50000000 1.10000000 -0.80000000\n-0.50000000 1.10000000 -0.75000000\n-0.50000000 1.10000000 -0.70000000\n-0.50000000 1.10000000 -0.65000000\n-0.50000000 1.10000000 -0.60000000\n-0.45000000 0.10000000 -0.20000000\n-0.45000000 0.10000000 -0.15000000\n-0.45000000 0.10000000 -0.10000000\n-0.45000000 0.10000000 -0.05000000\n-0.45000000 0.10000000 0.00000000\n-0.45000000 0.10000000 0.05000000\n-0.45000000 0.10000000 0.10000000\n-0.45000000 0.10000000 0.15000000\n-0.45000000 0.10000000 0.20000000\n-0.45000000 0.10000000 0.25000000\n-0.45000000 0.10000000 0.30000000\n-0.45000000 0.10000000 0.35000000\n-0.45000000 0.10000000 0.40000000\n-0.45000000 0.10000000 1.65000000\n-0.45000000 0.10000000 1.70000000\n-0.45000000 0.10000000 1.75000000\n-0.45000000 0.10000000 1.80000000\n-0.45000000 0.10000000 1.85000000\n-0.45000000 0.15000000 -0.80000000\n-0.45000000 0.15000000 -0.75000000\n-0.45000000 0.15000000 -0.70000000\n-0.45000000 0.15000000 -0.65000000\n-0.45000000 0.15000000 -0.60000000\n-0.45000000 0.15000000 -0.55000000\n-0.45000000 0.15000000 -0.50000000\n-0.45000000 0.15000000 -0.45000000\n-0.45000000 0.15000000 -0.40000000\n-0.45000000 0.15000000 -0.35000000\n-0.45000000 0.15000000 -0.30000000\n-0.45000000 0.15000000 -0.25000000\n-0.45000000 0.15000000 0.45000000\n-0.45000000 0.15000000 0.50000000\n-0.45000000 0.15000000 0.55000000\n-0.45000000 0.15000000 0.60000000\n-0.45000000 0.15000000 0.65000000\n-0.45000000 0.15000000 0.70000000\n-0.45000000 0.15000000 0.75000000\n-0.45000000 0.15000000 0.80000000\n-0.45000000 0.15000000 0.85000000\n-0.45000000 0.15000000 1.55000000\n-0.45000000 0.15000000 1.60000000\n-0.45000000 0.15000000 1.90000000\n-0.45000000 0.15000000 1.95000000\n-0.45000000 0.20000000 -1.20000000\n-0.45000000 0.20000000 -1.15000000\n-0.45000000 0.20000000 -1.10000000\n-0.45000000 0.20000000 -1.05000000\n-0.45000000 0.20000000 -1.00000000\n-0.45000000 0.20000000 -0.95000000\n-0.45000000 0.20000000 -0.90000000\n-0.45000000 0.20000000 -0.85000000\n-0.45000000 0.20000000 0.90000000\n-0.45000000 0.20000000 0.95000000\n-0.45000000 0.20000000 1.00000000\n-0.45000000 0.20000000 1.05000000\n-0.45000000 0.20000000 1.10000000\n-0.45000000 0.20000000 1.50000000\n-0.45000000 0.20000000 2.00000000\n-0.45000000 0.20000000 2.05000000\n-0.45000000 0.25000000 -1.40000000\n-0.45000000 0.25000000 -1.35000000\n-0.45000000 0.25000000 -1.30000000\n-0.45000000 0.25000000 -1.25000000\n-0.45000000 0.25000000 1.15000000\n-0.45000000 0.25000000 1.20000000\n-0.45000000 0.25000000 1.45000000\n-0.45000000 0.25000000 2.05000000\n-0.45000000 0.30000000 -1.50000000\n-0.45000000 0.30000000 -1.45000000\n-0.45000000 0.30000000 1.25000000\n-0.45000000 0.30000000 1.40000000\n-0.45000000 0.30000000 2.10000000\n-0.45000000 0.35000000 -1.60000000\n-0.45000000 0.35000000 -1.55000000\n-0.45000000 0.35000000 1.30000000\n-0.45000000 0.35000000 1.40000000\n-0.45000000 0.35000000 2.10000000\n-0.45000000 0.40000000 -1.65000000\n-0.45000000 0.40000000 1.30000000\n-0.45000000 0.40000000 1.40000000\n-0.45000000 0.40000000 2.10000000\n-0.45000000 0.45000000 -1.75000000\n-0.45000000 0.45000000 -1.70000000\n-0.45000000 0.45000000 1.30000000\n-0.45000000 0.45000000 1.45000000\n-0.45000000 0.45000000 2.10000000\n-0.45000000 0.50000000 -1.80000000\n-0.45000000 0.50000000 1.20000000\n-0.45000000 0.50000000 1.25000000\n-0.45000000 0.50000000 1.45000000\n-0.45000000 0.50000000 2.05000000\n-0.45000000 0.55000000 -1.80000000\n-0.45000000 0.55000000 1.10000000\n-0.45000000 0.55000000 1.15000000\n-0.45000000 0.55000000 1.50000000\n-0.45000000 0.55000000 1.55000000\n-0.45000000 0.55000000 1.95000000\n-0.45000000 0.55000000 2.00000000\n-0.45000000 0.60000000 -1.80000000\n-0.45000000 0.60000000 0.90000000\n-0.45000000 0.60000000 0.95000000\n-0.45000000 0.60000000 1.00000000\n-0.45000000 0.60000000 1.05000000\n-0.45000000 0.60000000 1.60000000\n-0.45000000 0.60000000 1.65000000\n-0.45000000 0.60000000 1.70000000\n-0.45000000 0.60000000 1.75000000\n-0.45000000 0.60000000 1.80000000\n-0.45000000 0.60000000 1.85000000\n-0.45000000 0.60000000 1.90000000\n-0.45000000 0.65000000 -1.85000000\n-0.45000000 0.65000000 0.70000000\n-0.45000000 0.65000000 0.75000000\n-0.45000000 0.65000000 0.80000000\n-0.45000000 0.65000000 0.85000000\n-0.45000000 0.70000000 -1.85000000\n-0.45000000 0.70000000 0.40000000\n-0.45000000 0.70000000 0.45000000\n-0.45000000 0.70000000 0.50000000\n-0.45000000 0.70000000 0.55000000\n-0.45000000 0.70000000 0.60000000\n-0.45000000 0.70000000 0.65000000\n-0.45000000 0.75000000 -1.85000000\n-0.45000000 0.75000000 0.05000000\n-0.45000000 0.75000000 0.10000000\n-0.45000000 0.75000000 0.15000000\n-0.45000000 0.75000000 0.20000000\n-0.45000000 0.75000000 0.25000000\n-0.45000000 0.75000000 0.30000000\n-0.45000000 0.75000000 0.35000000\n-0.45000000 0.80000000 -1.80000000\n-0.45000000 0.80000000 0.00000000\n-0.45000000 0.85000000 -1.80000000\n-0.45000000 0.85000000 -0.05000000\n-0.45000000 0.90000000 -1.75000000\n-0.45000000 0.90000000 -0.15000000\n-0.45000000 0.90000000 -0.10000000\n-0.45000000 0.95000000 -1.70000000\n-0.45000000 0.95000000 -0.20000000\n-0.45000000 1.00000000 -1.65000000\n-0.45000000 1.00000000 -1.60000000\n-0.45000000 1.00000000 -1.55000000\n-0.45000000 1.00000000 -0.35000000\n-0.45000000 1.00000000 -0.30000000\n-0.45000000 1.00000000 -0.25000000\n-0.45000000 1.05000000 -1.50000000\n-0.45000000 1.05000000 -1.45000000\n-0.45000000 1.05000000 -1.40000000\n-0.45000000 1.05000000 -0.50000000\n-0.45000000 1.05000000 -0.45000000\n-0.45000000 1.05000000 -0.40000000\n-0.45000000 1.10000000 -1.35000000\n-0.45000000 1.10000000 -1.30000000\n-0.45000000 1.10000000 -1.25000000\n-0.45000000 1.10000000 -1.20000000\n-0.45000000 1.10000000 -1.15000000\n-0.45000000 1.10000000 -1.10000000\n-0.45000000 1.10000000 -1.05000000\n-0.45000000 1.10000000 -1.00000000\n-0.45000000 1.10000000 -0.95000000\n-0.45000000 1.10000000 -0.90000000\n-0.45000000 1.10000000 -0.85000000\n-0.45000000 1.10000000 -0.80000000\n-0.45000000 1.10000000 -0.75000000\n-0.45000000 1.10000000 -0.70000000\n-0.45000000 1.10000000 -0.65000000\n-0.45000000 1.10000000 -0.60000000\n-0.45000000 1.10000000 -0.55000000\n-0.40000000 0.10000000 -0.40000000\n-0.40000000 0.10000000 -0.35000000\n-0.40000000 0.10000000 -0.30000000\n-0.40000000 0.10000000 -0.25000000\n-0.40000000 0.10000000 -0.20000000\n-0.40000000 0.10000000 -0.15000000\n-0.40000000 0.10000000 -0.10000000\n-0.40000000 0.10000000 -0.05000000\n-0.40000000 0.10000000 0.00000000\n-0.40000000 0.10000000 0.05000000\n-0.40000000 0.10000000 0.10000000\n-0.40000000 0.10000000 0.15000000\n-0.40000000 0.10000000 0.20000000\n-0.40000000 0.10000000 0.25000000\n-0.40000000 0.10000000 0.30000000\n-0.40000000 0.10000000 0.35000000\n-0.40000000 0.10000000 0.40000000\n-0.40000000 0.10000000 0.45000000\n-0.40000000 0.10000000 0.50000000\n-0.40000000 0.10000000 0.55000000\n-0.40000000 0.10000000 1.65000000\n-0.40000000 0.10000000 1.70000000\n-0.40000000 0.10000000 1.75000000\n-0.40000000 0.10000000 1.80000000\n-0.40000000 0.10000000 1.85000000\n-0.40000000 0.10000000 1.90000000\n-0.40000000 0.15000000 -0.90000000\n-0.40000000 0.15000000 -0.85000000\n-0.40000000 0.15000000 -0.80000000\n-0.40000000 0.15000000 -0.75000000\n-0.40000000 0.15000000 -0.70000000\n-0.40000000 0.15000000 -0.65000000\n-0.40000000 0.15000000 -0.60000000\n-0.40000000 0.15000000 -0.55000000\n-0.40000000 0.15000000 -0.50000000\n-0.40000000 0.15000000 -0.45000000\n-0.40000000 0.15000000 0.60000000\n-0.40000000 0.15000000 0.65000000\n-0.40000000 0.15000000 0.70000000\n-0.40000000 0.15000000 0.75000000\n-0.40000000 0.15000000 0.80000000\n-0.40000000 0.15000000 0.85000000\n-0.40000000 0.15000000 0.90000000\n-0.40000000 0.15000000 0.95000000\n-0.40000000 0.15000000 1.50000000\n-0.40000000 0.15000000 1.55000000\n-0.40000000 0.15000000 1.60000000\n-0.40000000 0.15000000 1.95000000\n-0.40000000 0.15000000 2.00000000\n-0.40000000 0.20000000 -1.25000000\n-0.40000000 0.20000000 -1.20000000\n-0.40000000 0.20000000 -1.15000000\n-0.40000000 0.20000000 -1.10000000\n-0.40000000 0.20000000 -1.05000000\n-0.40000000 0.20000000 -1.00000000\n-0.40000000 0.20000000 -0.95000000\n-0.40000000 0.20000000 1.00000000\n-0.40000000 0.20000000 1.05000000\n-0.40000000 0.20000000 1.10000000\n-0.40000000 0.20000000 1.45000000\n-0.40000000 0.20000000 2.05000000\n-0.40000000 0.25000000 -1.40000000\n-0.40000000 0.25000000 -1.35000000\n-0.40000000 0.25000000 -1.30000000\n-0.40000000 0.25000000 1.15000000\n-0.40000000 0.25000000 1.20000000\n-0.40000000 0.25000000 1.25000000\n-0.40000000 0.25000000 1.45000000\n-0.40000000 0.25000000 2.10000000\n-0.40000000 0.30000000 -1.55000000\n-0.40000000 0.30000000 -1.50000000\n-0.40000000 0.30000000 -1.45000000\n-0.40000000 0.30000000 1.30000000\n-0.40000000 0.30000000 1.40000000\n-0.40000000 0.30000000 2.10000000\n-0.40000000 0.35000000 -1.60000000\n-0.40000000 0.35000000 1.35000000\n-0.40000000 0.35000000 2.10000000\n-0.40000000 0.40000000 -1.70000000\n-0.40000000 0.40000000 -1.65000000\n-0.40000000 0.40000000 1.35000000\n-0.40000000 0.40000000 2.10000000\n-0.40000000 0.45000000 -1.75000000\n-0.40000000 0.45000000 1.30000000\n-0.40000000 0.45000000 1.40000000\n-0.40000000 0.45000000 2.10000000\n-0.40000000 0.50000000 -1.80000000\n-0.40000000 0.50000000 1.25000000\n-0.40000000 0.50000000 1.30000000\n-0.40000000 0.50000000 1.45000000\n-0.40000000 0.50000000 2.05000000\n-0.40000000 0.55000000 -1.85000000\n-0.40000000 0.55000000 1.10000000\n-0.40000000 0.55000000 1.15000000\n-0.40000000 0.55000000 1.20000000\n-0.40000000 0.55000000 1.50000000\n-0.40000000 0.55000000 2.00000000\n-0.40000000 0.60000000 -1.85000000\n-0.40000000 0.60000000 0.95000000\n-0.40000000 0.60000000 1.00000000\n-0.40000000 0.60000000 1.05000000\n-0.40000000 0.60000000 1.55000000\n-0.40000000 0.60000000 1.60000000\n-0.40000000 0.60000000 1.65000000\n-0.40000000 0.60000000 1.70000000\n-0.40000000 0.60000000 1.75000000\n-0.40000000 0.60000000 1.80000000\n-0.40000000 0.60000000 1.85000000\n-0.40000000 0.60000000 1.90000000\n-0.40000000 0.60000000 1.95000000\n-0.40000000 0.65000000 -1.85000000\n-0.40000000 0.65000000 0.75000000\n-0.40000000 0.65000000 0.80000000\n-0.40000000 0.65000000 0.85000000\n-0.40000000 0.65000000 0.90000000\n-0.40000000 0.70000000 -1.85000000\n-0.40000000 0.70000000 0.45000000\n-0.40000000 0.70000000 0.50000000\n-0.40000000 0.70000000 0.55000000\n-0.40000000 0.70000000 0.60000000\n-0.40000000 0.70000000 0.65000000\n-0.40000000 0.70000000 0.70000000\n-0.40000000 0.75000000 -1.85000000\n-0.40000000 0.75000000 0.05000000\n-0.40000000 0.75000000 0.10000000\n-0.40000000 0.75000000 0.15000000\n-0.40000000 0.75000000 0.20000000\n-0.40000000 0.75000000 0.25000000\n-0.40000000 0.75000000 0.30000000\n-0.40000000 0.75000000 0.35000000\n-0.40000000 0.75000000 0.40000000\n-0.40000000 0.80000000 -1.85000000\n-0.40000000 0.80000000 0.00000000\n-0.40000000 0.85000000 -1.80000000\n-0.40000000 0.85000000 -0.05000000\n-0.40000000 0.90000000 -1.75000000\n-0.40000000 0.90000000 -0.10000000\n-0.40000000 0.95000000 -1.70000000\n-0.40000000 0.95000000 -0.20000000\n-0.40000000 0.95000000 -0.15000000\n-0.40000000 1.00000000 -1.65000000\n-0.40000000 1.00000000 -1.60000000\n-0.40000000 1.00000000 -0.30000000\n-0.40000000 1.00000000 -0.25000000\n-0.40000000 1.05000000 -1.55000000\n-0.40000000 1.05000000 -1.50000000\n-0.40000000 1.05000000 -1.45000000\n-0.40000000 1.05000000 -0.45000000\n-0.40000000 1.05000000 -0.40000000\n-0.40000000 1.05000000 -0.35000000\n-0.40000000 1.10000000 -1.40000000\n-0.40000000 1.10000000 -1.35000000\n-0.40000000 1.10000000 -1.30000000\n-0.40000000 1.10000000 -1.25000000\n-0.40000000 1.10000000 -1.20000000\n-0.40000000 1.10000000 -0.80000000\n-0.40000000 1.10000000 -0.75000000\n-0.40000000 1.10000000 -0.70000000\n-0.40000000 1.10000000 -0.65000000\n-0.40000000 1.10000000 -0.60000000\n-0.40000000 1.10000000 -0.55000000\n-0.40000000 1.10000000 -0.50000000\n-0.40000000 1.15000000 -1.15000000\n-0.40000000 1.15000000 -1.10000000\n-0.40000000 1.15000000 -1.05000000\n-0.40000000 1.15000000 -1.00000000\n-0.40000000 1.15000000 -0.95000000\n-0.40000000 1.15000000 -0.90000000\n-0.40000000 1.15000000 -0.85000000\n-0.35000000 0.10000000 -0.50000000\n-0.35000000 0.10000000 -0.45000000\n-0.35000000 0.10000000 -0.40000000\n-0.35000000 0.10000000 -0.35000000\n-0.35000000 0.10000000 -0.30000000\n-0.35000000 0.10000000 -0.25000000\n-0.35000000 0.10000000 -0.20000000\n-0.35000000 0.10000000 -0.15000000\n-0.35000000 0.10000000 -0.10000000\n-0.35000000 0.10000000 -0.05000000\n-0.35000000 0.10000000 0.00000000\n-0.35000000 0.10000000 0.05000000\n-0.35000000 0.10000000 0.10000000\n-0.35000000 0.10000000 0.15000000\n-0.35000000 0.10000000 0.20000000\n-0.35000000 0.10000000 0.25000000\n-0.35000000 0.10000000 0.30000000\n-0.35000000 0.10000000 0.35000000\n-0.35000000 0.10000000 0.40000000\n-0.35000000 0.10000000 0.45000000\n-0.35000000 0.10000000 0.50000000\n-0.35000000 0.10000000 0.55000000\n-0.35000000 0.10000000 0.60000000\n-0.35000000 0.10000000 0.65000000\n-0.35000000 0.10000000 1.60000000\n-0.35000000 0.10000000 1.65000000\n-0.35000000 0.10000000 1.70000000\n-0.35000000 0.10000000 1.75000000\n-0.35000000 0.10000000 1.80000000\n-0.35000000 0.10000000 1.85000000\n-0.35000000 0.10000000 1.90000000\n-0.35000000 0.15000000 -1.05000000\n-0.35000000 0.15000000 -1.00000000\n-0.35000000 0.15000000 -0.95000000\n-0.35000000 0.15000000 -0.90000000\n-0.35000000 0.15000000 -0.85000000\n-0.35000000 0.15000000 -0.80000000\n-0.35000000 0.15000000 -0.75000000\n-0.35000000 0.15000000 -0.70000000\n-0.35000000 0.15000000 -0.65000000\n-0.35000000 0.15000000 -0.60000000\n-0.35000000 0.15000000 -0.55000000\n-0.35000000 0.15000000 0.70000000\n-0.35000000 0.15000000 0.75000000\n-0.35000000 0.15000000 0.80000000\n-0.35000000 0.15000000 0.85000000\n-0.35000000 0.15000000 0.90000000\n-0.35000000 0.15000000 0.95000000\n-0.35000000 0.15000000 1.00000000\n-0.35000000 0.15000000 1.50000000\n-0.35000000 0.15000000 1.55000000\n-0.35000000 0.15000000 1.95000000\n-0.35000000 0.15000000 2.00000000\n-0.35000000 0.20000000 -1.30000000\n-0.35000000 0.20000000 -1.25000000\n-0.35000000 0.20000000 -1.20000000\n-0.35000000 0.20000000 -1.15000000\n-0.35000000 0.20000000 -1.10000000\n-0.35000000 0.20000000 1.05000000\n-0.35000000 0.20000000 1.10000000\n-0.35000000 0.20000000 1.15000000\n-0.35000000 0.20000000 1.45000000\n-0.35000000 0.20000000 2.05000000\n-0.35000000 0.25000000 -1.45000000\n-0.35000000 0.25000000 -1.40000000\n-0.35000000 0.25000000 -1.35000000\n-0.35000000 0.25000000 1.20000000\n-0.35000000 0.25000000 1.25000000\n-0.35000000 0.25000000 1.30000000\n-0.35000000 0.25000000 1.40000000\n-0.35000000 0.25000000 2.10000000\n-0.35000000 0.30000000 -1.55000000\n-0.35000000 0.30000000 -1.50000000\n-0.35000000 0.30000000 1.35000000\n-0.35000000 0.30000000 2.10000000\n-0.35000000 0.35000000 -1.65000000\n-0.35000000 0.35000000 -1.60000000\n-0.35000000 0.35000000 2.10000000\n-0.35000000 0.40000000 -1.75000000\n-0.35000000 0.40000000 -1.70000000\n-0.35000000 0.40000000 2.10000000\n-0.35000000 0.45000000 -1.80000000\n-0.35000000 0.45000000 1.35000000\n-0.35000000 0.45000000 2.10000000\n-0.35000000 0.50000000 -1.80000000\n-0.35000000 0.50000000 1.35000000\n-0.35000000 0.50000000 1.40000000\n-0.35000000 0.50000000 2.05000000\n-0.35000000 0.55000000 -1.85000000\n-0.35000000 0.55000000 1.20000000\n-0.35000000 0.55000000 1.25000000\n-0.35000000 0.55000000 1.30000000\n-0.35000000 0.55000000 1.35000000\n-0.35000000 0.55000000 1.45000000\n-0.35000000 0.55000000 1.50000000\n-0.35000000 0.55000000 2.00000000\n-0.35000000 0.55000000 2.05000000\n-0.35000000 0.60000000 -1.85000000\n-0.35000000 0.60000000 1.00000000\n-0.35000000 0.60000000 1.05000000\n-0.35000000 0.60000000 1.10000000\n-0.35000000 0.60000000 1.15000000\n-0.35000000 0.60000000 1.55000000\n-0.35000000 0.60000000 1.60000000\n-0.35000000 0.60000000 1.65000000\n-0.35000000 0.60000000 1.70000000\n-0.35000000 0.60000000 1.80000000\n-0.35000000 0.60000000 1.85000000\n-0.35000000 0.60000000 1.90000000\n-0.35000000 0.60000000 1.95000000\n-0.35000000 0.65000000 -1.90000000\n-0.35000000 0.65000000 0.80000000\n-0.35000000 0.65000000 0.85000000\n-0.35000000 0.65000000 0.90000000\n-0.35000000 0.65000000 0.95000000\n-0.35000000 0.65000000 1.75000000\n-0.35000000 0.70000000 -1.90000000\n-0.35000000 0.70000000 0.50000000\n-0.35000000 0.70000000 0.55000000\n-0.35000000 0.70000000 0.60000000\n-0.35000000 0.70000000 0.65000000\n-0.35000000 0.70000000 0.70000000\n-0.35000000 0.70000000 0.75000000\n-0.35000000 0.75000000 -1.85000000\n-0.35000000 0.75000000 0.10000000\n-0.35000000 0.75000000 0.15000000\n-0.35000000 0.75000000 0.20000000\n-0.35000000 0.75000000 0.25000000\n-0.35000000 0.75000000 0.30000000\n-0.35000000 0.75000000 0.35000000\n-0.35000000 0.75000000 0.40000000\n-0.35000000 0.75000000 0.45000000\n-0.35000000 0.80000000 -1.85000000\n-0.35000000 0.80000000 0.05000000\n-0.35000000 0.85000000 -1.85000000\n-0.35000000 0.85000000 0.00000000\n-0.35000000 0.90000000 -1.80000000\n-0.35000000 0.90000000 -0.10000000\n-0.35000000 0.90000000 -0.05000000\n-0.35000000 0.95000000 -1.75000000\n-0.35000000 0.95000000 -1.70000000\n-0.35000000 0.95000000 -0.15000000\n-0.35000000 1.00000000 -1.65000000\n-0.35000000 1.00000000 -1.60000000\n-0.35000000 1.00000000 -0.30000000\n-0.35000000 1.00000000 -0.25000000\n-0.35000000 1.00000000 -0.20000000\n-0.35000000 1.05000000 -1.55000000\n-0.35000000 1.05000000 -1.50000000\n-0.35000000 1.05000000 -0.45000000\n-0.35000000 1.05000000 -0.40000000\n-0.35000000 1.05000000 -0.35000000\n-0.35000000 1.10000000 -1.45000000\n-0.35000000 1.10000000 -1.40000000\n-0.35000000 1.10000000 -1.35000000\n-0.35000000 1.10000000 -1.30000000\n-0.35000000 1.10000000 -1.25000000\n-0.35000000 1.10000000 -0.70000000\n-0.35000000 1.10000000 -0.65000000\n-0.35000000 1.10000000 -0.60000000\n-0.35000000 1.10000000 -0.55000000\n-0.35000000 1.10000000 -0.50000000\n-0.35000000 1.15000000 -1.20000000\n-0.35000000 1.15000000 -1.15000000\n-0.35000000 1.15000000 -1.10000000\n-0.35000000 1.15000000 -1.05000000\n-0.35000000 1.15000000 -1.00000000\n-0.35000000 1.15000000 -0.95000000\n-0.35000000 1.15000000 -0.90000000\n-0.35000000 1.15000000 -0.85000000\n-0.35000000 1.15000000 -0.80000000\n-0.35000000 1.15000000 -0.75000000\n-0.30000000 0.10000000 -0.55000000\n-0.30000000 0.10000000 -0.50000000\n-0.30000000 0.10000000 -0.45000000\n-0.30000000 0.10000000 -0.40000000\n-0.30000000 0.10000000 -0.35000000\n-0.30000000 0.10000000 -0.30000000\n-0.30000000 0.10000000 -0.25000000\n-0.30000000 0.10000000 -0.20000000\n-0.30000000 0.10000000 -0.15000000\n-0.30000000 0.10000000 -0.10000000\n-0.30000000 0.10000000 -0.05000000\n-0.30000000 0.10000000 0.00000000\n-0.30000000 0.10000000 0.05000000\n-0.30000000 0.10000000 0.10000000\n-0.30000000 0.10000000 0.15000000\n-0.30000000 0.10000000 0.20000000\n-0.30000000 0.10000000 0.25000000\n-0.30000000 0.10000000 0.30000000\n-0.30000000 0.10000000 0.35000000\n-0.30000000 0.10000000 0.40000000\n-0.30000000 0.10000000 0.45000000\n-0.30000000 0.10000000 0.50000000\n-0.30000000 0.10000000 0.55000000\n-0.30000000 0.10000000 0.60000000\n-0.30000000 0.10000000 0.65000000\n-0.30000000 0.10000000 0.70000000\n-0.30000000 0.10000000 1.60000000\n-0.30000000 0.10000000 1.65000000\n-0.30000000 0.10000000 1.70000000\n-0.30000000 0.10000000 1.75000000\n-0.30000000 0.10000000 1.80000000\n-0.30000000 0.10000000 1.85000000\n-0.30000000 0.10000000 1.90000000\n-0.30000000 0.15000000 -1.10000000\n-0.30000000 0.15000000 -1.05000000\n-0.30000000 0.15000000 -1.00000000\n-0.30000000 0.15000000 -0.95000000\n-0.30000000 0.15000000 -0.90000000\n-0.30000000 0.15000000 -0.85000000\n-0.30000000 0.15000000 -0.80000000\n-0.30000000 0.15000000 -0.75000000\n-0.30000000 0.15000000 -0.70000000\n-0.30000000 0.15000000 -0.65000000\n-0.30000000 0.15000000 -0.60000000\n-0.30000000 0.15000000 0.75000000\n-0.30000000 0.15000000 0.80000000\n-0.30000000 0.15000000 0.85000000\n-0.30000000 0.15000000 0.90000000\n-0.30000000 0.15000000 0.95000000\n-0.30000000 0.15000000 1.00000000\n-0.30000000 0.15000000 1.50000000\n-0.30000000 0.15000000 1.55000000\n-0.30000000 0.15000000 1.95000000\n-0.30000000 0.15000000 2.00000000\n-0.30000000 0.20000000 -1.35000000\n-0.30000000 0.20000000 -1.30000000\n-0.30000000 0.20000000 -1.25000000\n-0.30000000 0.20000000 -1.20000000\n-0.30000000 0.20000000 -1.15000000\n-0.30000000 0.20000000 1.05000000\n-0.30000000 0.20000000 1.10000000\n-0.30000000 0.20000000 1.15000000\n-0.30000000 0.20000000 1.20000000\n-0.30000000 0.20000000 1.25000000\n-0.30000000 0.20000000 1.30000000\n-0.30000000 0.20000000 1.35000000\n-0.30000000 0.20000000 1.45000000\n-0.30000000 0.20000000 2.05000000\n-0.30000000 0.25000000 -1.45000000\n-0.30000000 0.25000000 -1.40000000\n-0.30000000 0.25000000 1.35000000\n-0.30000000 0.25000000 1.40000000\n-0.30000000 0.25000000 2.10000000\n-0.30000000 0.30000000 -1.60000000\n-0.30000000 0.30000000 -1.55000000\n-0.30000000 0.30000000 -1.50000000\n-0.30000000 0.30000000 2.10000000\n-0.30000000 0.35000000 -1.70000000\n-0.30000000 0.35000000 -1.65000000\n-0.30000000 0.35000000 2.10000000\n-0.30000000 0.40000000 -1.75000000\n-0.30000000 0.40000000 2.10000000\n-0.30000000 0.45000000 -1.80000000\n-0.30000000 0.45000000 2.10000000\n-0.30000000 0.50000000 -1.85000000\n-0.30000000 0.50000000 2.10000000\n-0.30000000 0.55000000 -1.85000000\n-0.30000000 0.55000000 1.40000000\n-0.30000000 0.55000000 1.45000000\n-0.30000000 0.55000000 1.50000000\n-0.30000000 0.55000000 2.00000000\n-0.30000000 0.55000000 2.05000000\n-0.30000000 0.60000000 -1.90000000\n-0.30000000 0.60000000 1.20000000\n-0.30000000 0.60000000 1.25000000\n-0.30000000 0.60000000 1.30000000\n-0.30000000 0.60000000 1.35000000\n-0.30000000 0.60000000 1.40000000\n-0.30000000 0.60000000 1.55000000\n-0.30000000 0.60000000 1.60000000\n-0.30000000 0.60000000 1.65000000\n-0.30000000 0.60000000 1.90000000\n-0.30000000 0.60000000 1.95000000\n-0.30000000 0.65000000 -1.90000000\n-0.30000000 0.65000000 1.00000000\n-0.30000000 0.65000000 1.05000000\n-0.30000000 0.65000000 1.10000000\n-0.30000000 0.65000000 1.15000000\n-0.30000000 0.65000000 1.20000000\n-0.30000000 0.65000000 1.70000000\n-0.30000000 0.65000000 1.75000000\n-0.30000000 0.65000000 1.80000000\n-0.30000000 0.65000000 1.85000000\n-0.30000000 0.70000000 -1.90000000\n-0.30000000 0.70000000 0.60000000\n-0.30000000 0.70000000 0.65000000\n-0.30000000 0.70000000 0.70000000\n-0.30000000 0.70000000 0.75000000\n-0.30000000 0.70000000 0.80000000\n-0.30000000 0.70000000 0.85000000\n-0.30000000 0.70000000 0.90000000\n-0.30000000 0.70000000 0.95000000\n-0.30000000 0.75000000 -1.90000000\n-0.30000000 0.75000000 0.15000000\n-0.30000000 0.75000000 0.20000000\n-0.30000000 0.75000000 0.25000000\n-0.30000000 0.75000000 0.30000000\n-0.30000000 0.75000000 0.35000000\n-0.30000000 0.75000000 0.40000000\n-0.30000000 0.75000000 0.45000000\n-0.30000000 0.75000000 0.50000000\n-0.30000000 0.75000000 0.55000000\n-0.30000000 0.80000000 -1.85000000\n-0.30000000 0.80000000 0.05000000\n-0.30000000 0.80000000 0.10000000\n-0.30000000 0.85000000 -1.85000000\n-0.30000000 0.85000000 0.00000000\n-0.30000000 0.90000000 -1.80000000\n-0.30000000 0.90000000 -0.05000000\n-0.30000000 0.95000000 -1.75000000\n-0.30000000 0.95000000 -0.15000000\n-0.30000000 0.95000000 -0.10000000\n-0.30000000 1.00000000 -1.70000000\n-0.30000000 1.00000000 -1.65000000\n-0.30000000 1.00000000 -0.25000000\n-0.30000000 1.00000000 -0.20000000\n-0.30000000 1.05000000 -1.60000000\n-0.30000000 1.05000000 -1.55000000\n-0.30000000 1.05000000 -1.50000000\n-0.30000000 1.05000000 -0.40000000\n-0.30000000 1.05000000 -0.35000000\n-0.30000000 1.05000000 -0.30000000\n-0.30000000 1.10000000 -1.45000000\n-0.30000000 1.10000000 -1.40000000\n-0.30000000 1.10000000 -1.35000000\n-0.30000000 1.10000000 -1.30000000\n-0.30000000 1.10000000 -0.60000000\n-0.30000000 1.10000000 -0.55000000\n-0.30000000 1.10000000 -0.50000000\n-0.30000000 1.10000000 -0.45000000\n-0.30000000 1.15000000 -1.25000000\n-0.30000000 1.15000000 -1.20000000\n-0.30000000 1.15000000 -1.15000000\n-0.30000000 1.15000000 -1.10000000\n-0.30000000 1.15000000 -1.05000000\n-0.30000000 1.15000000 -1.00000000\n-0.30000000 1.15000000 -0.95000000\n-0.30000000 1.15000000 -0.90000000\n-0.30000000 1.15000000 -0.85000000\n-0.30000000 1.15000000 -0.80000000\n-0.30000000 1.15000000 -0.75000000\n-0.30000000 1.15000000 -0.70000000\n-0.30000000 1.15000000 -0.65000000\n-0.25000000 0.10000000 -0.60000000\n-0.25000000 0.10000000 -0.55000000\n-0.25000000 0.10000000 -0.50000000\n-0.25000000 0.10000000 -0.45000000\n-0.25000000 0.10000000 -0.40000000\n-0.25000000 0.10000000 -0.35000000\n-0.25000000 0.10000000 -0.30000000\n-0.25000000 0.10000000 -0.25000000\n-0.25000000 0.10000000 -0.20000000\n-0.25000000 0.10000000 -0.15000000\n-0.25000000 0.10000000 -0.10000000\n-0.25000000 0.10000000 -0.05000000\n-0.25000000 0.10000000 0.00000000\n-0.25000000 0.10000000 0.05000000\n-0.25000000 0.10000000 0.10000000\n-0.25000000 0.10000000 0.15000000\n-0.25000000 0.10000000 0.20000000\n-0.25000000 0.10000000 0.25000000\n-0.25000000 0.10000000 0.30000000\n-0.25000000 0.10000000 0.35000000\n-0.25000000 0.10000000 0.40000000\n-0.25000000 0.10000000 0.45000000\n-0.25000000 0.10000000 0.50000000\n-0.25000000 0.10000000 0.55000000\n-0.25000000 0.10000000 0.60000000\n-0.25000000 0.10000000 0.65000000\n-0.25000000 0.10000000 0.70000000\n-0.25000000 0.10000000 0.75000000\n-0.25000000 0.10000000 1.60000000\n-0.25000000 0.10000000 1.65000000\n-0.25000000 0.10000000 1.70000000\n-0.25000000 0.10000000 1.75000000\n-0.25000000 0.10000000 1.80000000\n-0.25000000 0.10000000 1.85000000\n-0.25000000 0.10000000 1.90000000\n-0.25000000 0.10000000 1.95000000\n-0.25000000 0.15000000 -1.15000000\n-0.25000000 0.15000000 -1.10000000\n-0.25000000 0.15000000 -1.05000000\n-0.25000000 0.15000000 -1.00000000\n-0.25000000 0.15000000 -0.95000000\n-0.25000000 0.15000000 -0.90000000\n-0.25000000 0.15000000 -0.85000000\n-0.25000000 0.15000000 -0.80000000\n-0.25000000 0.15000000 -0.75000000\n-0.25000000 0.15000000 -0.70000000\n-0.25000000 0.15000000 -0.65000000\n-0.25000000 0.15000000 0.80000000\n-0.25000000 0.15000000 0.85000000\n-0.25000000 0.15000000 0.90000000\n-0.25000000 0.15000000 0.95000000\n-0.25000000 0.15000000 1.00000000\n-0.25000000 0.15000000 1.05000000\n-0.25000000 0.15000000 1.10000000\n-0.25000000 0.15000000 1.15000000\n-0.25000000 0.15000000 1.20000000\n-0.25000000 0.15000000 1.25000000\n-0.25000000 0.15000000 1.50000000\n-0.25000000 0.15000000 1.55000000\n-0.25000000 0.15000000 2.00000000\n-0.25000000 0.20000000 -1.35000000\n-0.25000000 0.20000000 -1.30000000\n-0.25000000 0.20000000 -1.25000000\n-0.25000000 0.20000000 -1.20000000\n-0.25000000 0.20000000 1.30000000\n-0.25000000 0.20000000 1.35000000\n-0.25000000 0.20000000 1.40000000\n-0.25000000 0.20000000 1.45000000\n-0.25000000 0.20000000 2.05000000\n-0.25000000 0.25000000 -1.50000000\n-0.25000000 0.25000000 -1.45000000\n-0.25000000 0.25000000 -1.40000000\n-0.25000000 0.25000000 2.10000000\n-0.25000000 0.30000000 -1.60000000\n-0.25000000 0.30000000 -1.55000000\n-0.25000000 0.30000000 2.10000000\n-0.25000000 0.35000000 -1.70000000\n-0.25000000 0.35000000 -1.65000000\n-0.25000000 0.35000000 2.10000000\n-0.25000000 0.40000000 -1.80000000\n-0.25000000 0.40000000 -1.75000000\n-0.25000000 0.40000000 2.10000000\n-0.25000000 0.45000000 -1.80000000\n-0.25000000 0.45000000 2.10000000\n-0.25000000 0.50000000 -1.85000000\n-0.25000000 0.50000000 2.10000000\n-0.25000000 0.55000000 -1.85000000\n-0.25000000 0.55000000 2.05000000\n-0.25000000 0.60000000 -1.90000000\n-0.25000000 0.60000000 1.40000000\n-0.25000000 0.60000000 1.45000000\n-0.25000000 0.60000000 1.50000000\n-0.25000000 0.60000000 1.55000000\n-0.25000000 0.60000000 1.60000000\n-0.25000000 0.60000000 1.90000000\n-0.25000000 0.60000000 1.95000000\n-0.25000000 0.60000000 2.00000000\n-0.25000000 0.65000000 -1.90000000\n-0.25000000 0.65000000 1.15000000\n-0.25000000 0.65000000 1.20000000\n-0.25000000 0.65000000 1.25000000\n-0.25000000 0.65000000 1.30000000\n-0.25000000 0.65000000 1.35000000\n-0.25000000 0.65000000 1.65000000\n-0.25000000 0.65000000 1.70000000\n-0.25000000 0.65000000 1.75000000\n-0.25000000 0.65000000 1.80000000\n-0.25000000 0.65000000 1.85000000\n-0.25000000 0.70000000 -1.90000000\n-0.25000000 0.70000000 0.85000000\n-0.25000000 0.70000000 0.90000000\n-0.25000000 0.70000000 0.95000000\n-0.25000000 0.70000000 1.00000000\n-0.25000000 0.70000000 1.05000000\n-0.25000000 0.70000000 1.10000000\n-0.25000000 0.75000000 -1.90000000\n-0.25000000 0.75000000 0.35000000\n-0.25000000 0.75000000 0.40000000\n-0.25000000 0.75000000 0.45000000\n-0.25000000 0.75000000 0.50000000\n-0.25000000 0.75000000 0.55000000\n-0.25000000 0.75000000 0.60000000\n-0.25000000 0.75000000 0.65000000\n-0.25000000 0.75000000 0.70000000\n-0.25000000 0.75000000 0.75000000\n-0.25000000 0.75000000 0.80000000\n-0.25000000 0.80000000 -1.90000000\n-0.25000000 0.80000000 0.05000000\n-0.25000000 0.80000000 0.10000000\n-0.25000000 0.80000000 0.15000000\n-0.25000000 0.80000000 0.20000000\n-0.25000000 0.80000000 0.25000000\n-0.25000000 0.80000000 0.30000000\n-0.25000000 0.85000000 -1.85000000\n-0.25000000 0.85000000 0.00000000\n-0.25000000 0.90000000 -1.80000000\n-0.25000000 0.90000000 -0.05000000\n-0.25000000 0.95000000 -1.80000000\n-0.25000000 0.95000000 -1.75000000\n-0.25000000 0.95000000 -0.15000000\n-0.25000000 0.95000000 -0.10000000\n-0.25000000 1.00000000 -1.70000000\n-0.25000000 1.00000000 -1.65000000\n-0.25000000 1.00000000 -0.25000000\n-0.25000000 1.00000000 -0.20000000\n-0.25000000 1.05000000 -1.60000000\n-0.25000000 1.05000000 -1.55000000\n-0.25000000 1.05000000 -0.35000000\n-0.25000000 1.05000000 -0.30000000\n-0.25000000 1.10000000 -1.50000000\n-0.25000000 1.10000000 -1.45000000\n-0.25000000 1.10000000 -1.40000000\n-0.25000000 1.10000000 -1.35000000\n-0.25000000 1.10000000 -0.60000000\n-0.25000000 1.10000000 -0.55000000\n-0.25000000 1.10000000 -0.50000000\n-0.25000000 1.10000000 -0.45000000\n-0.25000000 1.10000000 -0.40000000\n-0.25000000 1.15000000 -1.30000000\n-0.25000000 1.15000000 -1.25000000\n-0.25000000 1.15000000 -1.20000000\n-0.25000000 1.15000000 -1.15000000\n-0.25000000 1.15000000 -1.10000000\n-0.25000000 1.15000000 -1.05000000\n-0.25000000 1.15000000 -1.00000000\n-0.25000000 1.15000000 -0.95000000\n-0.25000000 1.15000000 -0.90000000\n-0.25000000 1.15000000 -0.85000000\n-0.25000000 1.15000000 -0.80000000\n-0.25000000 1.15000000 -0.75000000\n-0.25000000 1.15000000 -0.70000000\n-0.25000000 1.15000000 -0.65000000\n-0.20000000 0.10000000 -0.65000000\n-0.20000000 0.10000000 -0.60000000\n-0.20000000 0.10000000 -0.55000000\n-0.20000000 0.10000000 -0.50000000\n-0.20000000 0.10000000 -0.45000000\n-0.20000000 0.10000000 -0.40000000\n-0.20000000 0.10000000 -0.35000000\n-0.20000000 0.10000000 -0.30000000\n-0.20000000 0.10000000 -0.25000000\n-0.20000000 0.10000000 -0.20000000\n-0.20000000 0.10000000 -0.15000000\n-0.20000000 0.10000000 -0.10000000\n-0.20000000 0.10000000 -0.05000000\n-0.20000000 0.10000000 0.00000000\n-0.20000000 0.10000000 0.05000000\n-0.20000000 0.10000000 0.10000000\n-0.20000000 0.10000000 0.15000000\n-0.20000000 0.10000000 0.20000000\n-0.20000000 0.10000000 0.25000000\n-0.20000000 0.10000000 0.30000000\n-0.20000000 0.10000000 0.35000000\n-0.20000000 0.10000000 0.40000000\n-0.20000000 0.10000000 0.45000000\n-0.20000000 0.10000000 0.50000000\n-0.20000000 0.10000000 0.55000000\n-0.20000000 0.10000000 0.60000000\n-0.20000000 0.10000000 0.65000000\n-0.20000000 0.10000000 0.70000000\n-0.20000000 0.10000000 0.75000000\n-0.20000000 0.10000000 0.80000000\n-0.20000000 0.10000000 1.55000000\n-0.20000000 0.10000000 1.60000000\n-0.20000000 0.10000000 1.65000000\n-0.20000000 0.10000000 1.70000000\n-0.20000000 0.10000000 1.75000000\n-0.20000000 0.10000000 1.80000000\n-0.20000000 0.10000000 1.85000000\n-0.20000000 0.10000000 1.90000000\n-0.20000000 0.10000000 1.95000000\n-0.20000000 0.15000000 -1.15000000\n-0.20000000 0.15000000 -1.10000000\n-0.20000000 0.15000000 -1.05000000\n-0.20000000 0.15000000 -1.00000000\n-0.20000000 0.15000000 -0.95000000\n-0.20000000 0.15000000 -0.90000000\n-0.20000000 0.15000000 -0.85000000\n-0.20000000 0.15000000 -0.80000000\n-0.20000000 0.15000000 -0.75000000\n-0.20000000 0.15000000 -0.70000000\n-0.20000000 0.15000000 0.85000000\n-0.20000000 0.15000000 0.90000000\n-0.20000000 0.15000000 0.95000000\n-0.20000000 0.15000000 1.00000000\n-0.20000000 0.15000000 1.05000000\n-0.20000000 0.15000000 1.10000000\n-0.20000000 0.15000000 1.15000000\n-0.20000000 0.15000000 1.20000000\n-0.20000000 0.15000000 1.25000000\n-0.20000000 0.15000000 1.30000000\n-0.20000000 0.15000000 1.35000000\n-0.20000000 0.15000000 1.40000000\n-0.20000000 0.15000000 1.45000000\n-0.20000000 0.15000000 1.50000000\n-0.20000000 0.15000000 2.00000000\n-0.20000000 0.20000000 -1.40000000\n-0.20000000 0.20000000 -1.35000000\n-0.20000000 0.20000000 -1.30000000\n-0.20000000 0.20000000 -1.25000000\n-0.20000000 0.20000000 -1.20000000\n-0.20000000 0.20000000 2.05000000\n-0.20000000 0.20000000 2.10000000\n-0.20000000 0.25000000 -1.50000000\n-0.20000000 0.25000000 -1.45000000\n-0.20000000 0.25000000 2.10000000\n-0.20000000 0.30000000 -1.60000000\n-0.20000000 0.30000000 -1.55000000\n-0.20000000 0.30000000 2.10000000\n-0.20000000 0.35000000 -1.70000000\n-0.20000000 0.35000000 -1.65000000\n-0.20000000 0.35000000 2.15000000\n-0.20000000 0.40000000 -1.80000000\n-0.20000000 0.40000000 -1.75000000\n-0.20000000 0.40000000 2.15000000\n-0.20000000 0.45000000 -1.85000000\n-0.20000000 0.45000000 2.10000000\n-0.20000000 0.50000000 -1.85000000\n-0.20000000 0.50000000 2.10000000\n-0.20000000 0.55000000 -1.90000000\n-0.20000000 0.55000000 2.05000000\n-0.20000000 0.60000000 -1.90000000\n-0.20000000 0.60000000 1.55000000\n-0.20000000 0.60000000 1.60000000\n-0.20000000 0.60000000 1.90000000\n-0.20000000 0.60000000 1.95000000\n-0.20000000 0.60000000 2.00000000\n-0.20000000 0.65000000 -1.90000000\n-0.20000000 0.65000000 1.30000000\n-0.20000000 0.65000000 1.35000000\n-0.20000000 0.65000000 1.40000000\n-0.20000000 0.65000000 1.45000000\n-0.20000000 0.65000000 1.50000000\n-0.20000000 0.65000000 1.65000000\n-0.20000000 0.65000000 1.70000000\n-0.20000000 0.65000000 1.75000000\n-0.20000000 0.65000000 1.80000000\n-0.20000000 0.65000000 1.85000000\n-0.20000000 0.70000000 -1.90000000\n-0.20000000 0.70000000 1.05000000\n-0.20000000 0.70000000 1.10000000\n-0.20000000 0.70000000 1.15000000\n-0.20000000 0.70000000 1.20000000\n-0.20000000 0.70000000 1.25000000\n-0.20000000 0.75000000 -1.90000000\n-0.20000000 0.75000000 0.60000000\n-0.20000000 0.75000000 0.65000000\n-0.20000000 0.75000000 0.70000000\n-0.20000000 0.75000000 0.75000000\n-0.20000000 0.75000000 0.80000000\n-0.20000000 0.75000000 0.85000000\n-0.20000000 0.75000000 0.90000000\n-0.20000000 0.75000000 0.95000000\n-0.20000000 0.75000000 1.00000000\n-0.20000000 0.80000000 -1.90000000\n-0.20000000 0.80000000 0.10000000\n-0.20000000 0.80000000 0.15000000\n-0.20000000 0.80000000 0.20000000\n-0.20000000 0.80000000 0.25000000\n-0.20000000 0.80000000 0.30000000\n-0.20000000 0.80000000 0.35000000\n-0.20000000 0.80000000 0.40000000\n-0.20000000 0.80000000 0.45000000\n-0.20000000 0.80000000 0.50000000\n-0.20000000 0.80000000 0.55000000\n-0.20000000 0.85000000 -1.90000000\n-0.20000000 0.85000000 0.05000000\n-0.20000000 0.90000000 -1.85000000\n-0.20000000 0.90000000 -0.05000000\n-0.20000000 0.90000000 0.00000000\n-0.20000000 0.95000000 -1.80000000\n-0.20000000 0.95000000 -1.75000000\n-0.20000000 0.95000000 -0.10000000\n-0.20000000 1.00000000 -1.70000000\n-0.20000000 1.00000000 -0.20000000\n-0.20000000 1.00000000 -0.15000000\n-0.20000000 1.05000000 -1.65000000\n-0.20000000 1.05000000 -1.60000000\n-0.20000000 1.05000000 -1.55000000\n-0.20000000 1.05000000 -0.35000000\n-0.20000000 1.05000000 -0.30000000\n-0.20000000 1.05000000 -0.25000000\n-0.20000000 1.10000000 -1.50000000\n-0.20000000 1.10000000 -1.45000000\n-0.20000000 1.10000000 -1.40000000\n-0.20000000 1.10000000 -1.35000000\n-0.20000000 1.10000000 -0.55000000\n-0.20000000 1.10000000 -0.50000000\n-0.20000000 1.10000000 -0.45000000\n-0.20000000 1.10000000 -0.40000000\n-0.20000000 1.15000000 -1.30000000\n-0.20000000 1.15000000 -1.25000000\n-0.20000000 1.15000000 -1.20000000\n-0.20000000 1.15000000 -1.15000000\n-0.20000000 1.15000000 -1.10000000\n-0.20000000 1.15000000 -1.05000000\n-0.20000000 1.15000000 -1.00000000\n-0.20000000 1.15000000 -0.95000000\n-0.20000000 1.15000000 -0.90000000\n-0.20000000 1.15000000 -0.85000000\n-0.20000000 1.15000000 -0.80000000\n-0.20000000 1.15000000 -0.75000000\n-0.20000000 1.15000000 -0.70000000\n-0.20000000 1.15000000 -0.65000000\n-0.20000000 1.15000000 -0.60000000\n-0.15000000 0.10000000 -0.70000000\n-0.15000000 0.10000000 -0.65000000\n-0.15000000 0.10000000 -0.60000000\n-0.15000000 0.10000000 -0.55000000\n-0.15000000 0.10000000 -0.50000000\n-0.15000000 0.10000000 -0.45000000\n-0.15000000 0.10000000 -0.40000000\n-0.15000000 0.10000000 -0.35000000\n-0.15000000 0.10000000 -0.30000000\n-0.15000000 0.10000000 -0.25000000\n-0.15000000 0.10000000 -0.20000000\n-0.15000000 0.10000000 -0.15000000\n-0.15000000 0.10000000 -0.10000000\n-0.15000000 0.10000000 -0.05000000\n-0.15000000 0.10000000 0.00000000\n-0.15000000 0.10000000 0.05000000\n-0.15000000 0.10000000 0.10000000\n-0.15000000 0.10000000 0.15000000\n-0.15000000 0.10000000 0.20000000\n-0.15000000 0.10000000 0.25000000\n-0.15000000 0.10000000 0.30000000\n-0.15000000 0.10000000 0.35000000\n-0.15000000 0.10000000 0.40000000\n-0.15000000 0.10000000 0.45000000\n-0.15000000 0.10000000 0.50000000\n-0.15000000 0.10000000 0.55000000\n-0.15000000 0.10000000 0.60000000\n-0.15000000 0.10000000 0.65000000\n-0.15000000 0.10000000 0.70000000\n-0.15000000 0.10000000 0.75000000\n-0.15000000 0.10000000 0.80000000\n-0.15000000 0.10000000 0.85000000\n-0.15000000 0.10000000 0.90000000\n-0.15000000 0.10000000 0.95000000\n-0.15000000 0.10000000 1.00000000\n-0.15000000 0.10000000 1.05000000\n-0.15000000 0.10000000 1.10000000\n-0.15000000 0.10000000 1.15000000\n-0.15000000 0.10000000 1.20000000\n-0.15000000 0.10000000 1.55000000\n-0.15000000 0.10000000 1.60000000\n-0.15000000 0.10000000 1.65000000\n-0.15000000 0.10000000 1.70000000\n-0.15000000 0.10000000 1.75000000\n-0.15000000 0.10000000 1.80000000\n-0.15000000 0.10000000 1.85000000\n-0.15000000 0.10000000 1.90000000\n-0.15000000 0.10000000 1.95000000\n-0.15000000 0.15000000 -1.15000000\n-0.15000000 0.15000000 -1.10000000\n-0.15000000 0.15000000 -1.05000000\n-0.15000000 0.15000000 -1.00000000\n-0.15000000 0.15000000 -0.95000000\n-0.15000000 0.15000000 -0.90000000\n-0.15000000 0.15000000 -0.85000000\n-0.15000000 0.15000000 -0.80000000\n-0.15000000 0.15000000 -0.75000000\n-0.15000000 0.15000000 1.25000000\n-0.15000000 0.15000000 1.30000000\n-0.15000000 0.15000000 1.35000000\n-0.15000000 0.15000000 1.40000000\n-0.15000000 0.15000000 1.45000000\n-0.15000000 0.15000000 1.50000000\n-0.15000000 0.15000000 2.00000000\n-0.15000000 0.15000000 2.05000000\n-0.15000000 0.20000000 -1.40000000\n-0.15000000 0.20000000 -1.35000000\n-0.15000000 0.20000000 -1.30000000\n-0.15000000 0.20000000 -1.25000000\n-0.15000000 0.20000000 -1.20000000\n-0.15000000 0.20000000 2.10000000\n-0.15000000 0.25000000 -1.50000000\n-0.15000000 0.25000000 -1.45000000\n-0.15000000 0.25000000 2.10000000\n-0.15000000 0.30000000 -1.65000000\n-0.15000000 0.30000000 -1.60000000\n-0.15000000 0.30000000 -1.55000000\n-0.15000000 0.30000000 2.15000000\n-0.15000000 0.35000000 -1.75000000\n-0.15000000 0.35000000 -1.70000000\n-0.15000000 0.35000000 2.15000000\n-0.15000000 0.40000000 -1.80000000\n-0.15000000 0.40000000 2.15000000\n-0.15000000 0.45000000 -1.85000000\n-0.15000000 0.45000000 2.10000000\n-0.15000000 0.50000000 -1.85000000\n-0.15000000 0.50000000 2.10000000\n-0.15000000 0.55000000 -1.90000000\n-0.15000000 0.55000000 2.05000000\n-0.15000000 0.60000000 -1.90000000\n-0.15000000 0.60000000 1.95000000\n-0.15000000 0.60000000 2.00000000\n-0.15000000 0.65000000 -1.90000000\n-0.15000000 0.65000000 1.40000000\n-0.15000000 0.65000000 1.45000000\n-0.15000000 0.65000000 1.50000000\n-0.15000000 0.65000000 1.55000000\n-0.15000000 0.65000000 1.60000000\n-0.15000000 0.65000000 1.65000000\n-0.15000000 0.65000000 1.70000000\n-0.15000000 0.65000000 1.75000000\n-0.15000000 0.65000000 1.80000000\n-0.15000000 0.65000000 1.85000000\n-0.15000000 0.65000000 1.90000000\n-0.15000000 0.70000000 -1.95000000\n-0.15000000 0.70000000 1.15000000\n-0.15000000 0.70000000 1.20000000\n-0.15000000 0.70000000 1.25000000\n-0.15000000 0.70000000 1.30000000\n-0.15000000 0.70000000 1.35000000\n-0.15000000 0.75000000 -1.90000000\n-0.15000000 0.75000000 0.75000000\n-0.15000000 0.75000000 0.80000000\n-0.15000000 0.75000000 0.85000000\n-0.15000000 0.75000000 0.90000000\n-0.15000000 0.75000000 0.95000000\n-0.15000000 0.75000000 1.00000000\n-0.15000000 0.75000000 1.05000000\n-0.15000000 0.75000000 1.10000000\n-0.15000000 0.80000000 -1.90000000\n-0.15000000 0.80000000 0.10000000\n-0.15000000 0.80000000 0.15000000\n-0.15000000 0.80000000 0.20000000\n-0.15000000 0.80000000 0.25000000\n-0.15000000 0.80000000 0.30000000\n-0.15000000 0.80000000 0.35000000\n-0.15000000 0.80000000 0.40000000\n-0.15000000 0.80000000 0.45000000\n-0.15000000 0.80000000 0.50000000\n-0.15000000 0.80000000 0.55000000\n-0.15000000 0.80000000 0.60000000\n-0.15000000 0.80000000 0.65000000\n-0.15000000 0.80000000 0.70000000\n-0.15000000 0.85000000 -1.90000000\n-0.15000000 0.85000000 0.05000000\n-0.15000000 0.90000000 -1.85000000\n-0.15000000 0.90000000 -0.05000000\n-0.15000000 0.90000000 0.00000000\n-0.15000000 0.95000000 -1.80000000\n-0.15000000 0.95000000 -0.10000000\n-0.15000000 1.00000000 -1.75000000\n-0.15000000 1.00000000 -1.70000000\n-0.15000000 1.00000000 -0.20000000\n-0.15000000 1.00000000 -0.15000000\n-0.15000000 1.05000000 -1.65000000\n-0.15000000 1.05000000 -1.60000000\n-0.15000000 1.05000000 -0.35000000\n-0.15000000 1.05000000 -0.30000000\n-0.15000000 1.05000000 -0.25000000\n-0.15000000 1.10000000 -1.55000000\n-0.15000000 1.10000000 -1.50000000\n-0.15000000 1.10000000 -1.45000000\n-0.15000000 1.10000000 -1.40000000\n-0.15000000 1.10000000 -0.55000000\n-0.15000000 1.10000000 -0.50000000\n-0.15000000 1.10000000 -0.45000000\n-0.15000000 1.10000000 -0.40000000\n-0.15000000 1.15000000 -1.35000000\n-0.15000000 1.15000000 -1.30000000\n-0.15000000 1.15000000 -1.25000000\n-0.15000000 1.15000000 -1.20000000\n-0.15000000 1.15000000 -1.15000000\n-0.15000000 1.15000000 -1.10000000\n-0.15000000 1.15000000 -1.05000000\n-0.15000000 1.15000000 -1.00000000\n-0.15000000 1.15000000 -0.95000000\n-0.15000000 1.15000000 -0.90000000\n-0.15000000 1.15000000 -0.85000000\n-0.15000000 1.15000000 -0.80000000\n-0.15000000 1.15000000 -0.75000000\n-0.15000000 1.15000000 -0.70000000\n-0.15000000 1.15000000 -0.65000000\n-0.15000000 1.15000000 -0.60000000\n-0.10000000 0.10000000 -0.70000000\n-0.10000000 0.10000000 -0.65000000\n-0.10000000 0.10000000 -0.60000000\n-0.10000000 0.10000000 -0.55000000\n-0.10000000 0.10000000 -0.50000000\n-0.10000000 0.10000000 -0.45000000\n-0.10000000 0.10000000 -0.40000000\n-0.10000000 0.10000000 -0.35000000\n-0.10000000 0.10000000 -0.30000000\n-0.10000000 0.10000000 -0.25000000\n-0.10000000 0.10000000 -0.20000000\n-0.10000000 0.10000000 -0.15000000\n-0.10000000 0.10000000 -0.10000000\n-0.10000000 0.10000000 -0.05000000\n-0.10000000 0.10000000 0.00000000\n-0.10000000 0.10000000 0.05000000\n-0.10000000 0.10000000 0.10000000\n-0.10000000 0.10000000 0.15000000\n-0.10000000 0.10000000 0.20000000\n-0.10000000 0.10000000 0.25000000\n-0.10000000 0.10000000 0.30000000\n-0.10000000 0.10000000 0.35000000\n-0.10000000 0.10000000 0.40000000\n-0.10000000 0.10000000 0.45000000\n-0.10000000 0.10000000 0.50000000\n-0.10000000 0.10000000 0.55000000\n-0.10000000 0.10000000 0.60000000\n-0.10000000 0.10000000 0.65000000\n-0.10000000 0.10000000 0.70000000\n-0.10000000 0.10000000 0.75000000\n-0.10000000 0.10000000 0.80000000\n-0.10000000 0.10000000 0.85000000\n-0.10000000 0.10000000 0.90000000\n-0.10000000 0.10000000 0.95000000\n-0.10000000 0.10000000 1.00000000\n-0.10000000 0.10000000 1.05000000\n-0.10000000 0.10000000 1.10000000\n-0.10000000 0.10000000 1.15000000\n-0.10000000 0.10000000 1.20000000\n-0.10000000 0.10000000 1.25000000\n-0.10000000 0.10000000 1.30000000\n-0.10000000 0.10000000 1.35000000\n-0.10000000 0.10000000 1.55000000\n-0.10000000 0.10000000 1.60000000\n-0.10000000 0.10000000 1.65000000\n-0.10000000 0.10000000 1.70000000\n-0.10000000 0.10000000 1.75000000\n-0.10000000 0.10000000 1.80000000\n-0.10000000 0.10000000 1.85000000\n-0.10000000 0.10000000 1.90000000\n-0.10000000 0.10000000 1.95000000\n-0.10000000 0.15000000 -1.20000000\n-0.10000000 0.15000000 -1.15000000\n-0.10000000 0.15000000 -1.10000000\n-0.10000000 0.15000000 -1.05000000\n-0.10000000 0.15000000 -1.00000000\n-0.10000000 0.15000000 -0.95000000\n-0.10000000 0.15000000 -0.90000000\n-0.10000000 0.15000000 -0.85000000\n-0.10000000 0.15000000 -0.80000000\n-0.10000000 0.15000000 -0.75000000\n-0.10000000 0.15000000 1.40000000\n-0.10000000 0.15000000 1.45000000\n-0.10000000 0.15000000 1.50000000\n-0.10000000 0.15000000 2.00000000\n-0.10000000 0.15000000 2.05000000\n-0.10000000 0.20000000 -1.40000000\n-0.10000000 0.20000000 -1.35000000\n-0.10000000 0.20000000 -1.30000000\n-0.10000000 0.20000000 -1.25000000\n-0.10000000 0.20000000 2.10000000\n-0.10000000 0.25000000 -1.55000000\n-0.10000000 0.25000000 -1.50000000\n-0.10000000 0.25000000 -1.45000000\n-0.10000000 0.25000000 2.10000000\n-0.10000000 0.30000000 -1.65000000\n-0.10000000 0.30000000 -1.60000000\n-0.10000000 0.30000000 2.15000000\n-0.10000000 0.35000000 -1.75000000\n-0.10000000 0.35000000 -1.70000000\n-0.10000000 0.35000000 2.15000000\n-0.10000000 0.40000000 -1.80000000\n-0.10000000 0.40000000 2.15000000\n-0.10000000 0.45000000 -1.85000000\n-0.10000000 0.45000000 2.15000000\n-0.10000000 0.50000000 -1.90000000\n-0.10000000 0.50000000 2.10000000\n-0.10000000 0.55000000 -1.90000000\n-0.10000000 0.55000000 2.05000000\n-0.10000000 0.60000000 -1.90000000\n-0.10000000 0.60000000 1.95000000\n-0.10000000 0.60000000 2.00000000\n-0.10000000 0.65000000 -1.95000000\n-0.10000000 0.65000000 1.45000000\n-0.10000000 0.65000000 1.50000000\n-0.10000000 0.65000000 1.55000000\n-0.10000000 0.65000000 1.60000000\n-0.10000000 0.65000000 1.65000000\n-0.10000000 0.65000000 1.70000000\n-0.10000000 0.65000000 1.75000000\n-0.10000000 0.65000000 1.80000000\n-0.10000000 0.65000000 1.85000000\n-0.10000000 0.65000000 1.90000000\n-0.10000000 0.70000000 -1.95000000\n-0.10000000 0.70000000 1.20000000\n-0.10000000 0.70000000 1.25000000\n-0.10000000 0.70000000 1.30000000\n-0.10000000 0.70000000 1.35000000\n-0.10000000 0.70000000 1.40000000\n-0.10000000 0.75000000 -1.95000000\n-0.10000000 0.75000000 0.85000000\n-0.10000000 0.75000000 0.90000000\n-0.10000000 0.75000000 0.95000000\n-0.10000000 0.75000000 1.00000000\n-0.10000000 0.75000000 1.05000000\n-0.10000000 0.75000000 1.10000000\n-0.10000000 0.75000000 1.15000000\n-0.10000000 0.80000000 -1.90000000\n-0.10000000 0.80000000 0.30000000\n-0.10000000 0.80000000 0.35000000\n-0.10000000 0.80000000 0.40000000\n-0.10000000 0.80000000 0.45000000\n-0.10000000 0.80000000 0.50000000\n-0.10000000 0.80000000 0.55000000\n-0.10000000 0.80000000 0.60000000\n-0.10000000 0.80000000 0.65000000\n-0.10000000 0.80000000 0.70000000\n-0.10000000 0.80000000 0.75000000\n-0.10000000 0.80000000 0.80000000\n-0.10000000 0.85000000 -1.90000000\n-0.10000000 0.85000000 0.05000000\n-0.10000000 0.85000000 0.10000000\n-0.10000000 0.85000000 0.15000000\n-0.10000000 0.85000000 0.20000000\n-0.10000000 0.85000000 0.25000000\n-0.10000000 0.90000000 -1.85000000\n-0.10000000 0.90000000 0.00000000\n-0.10000000 0.95000000 -1.80000000\n-0.10000000 0.95000000 -0.10000000\n-0.10000000 0.95000000 -0.05000000\n-0.10000000 1.00000000 -1.75000000\n-0.10000000 1.00000000 -1.70000000\n-0.10000000 1.00000000 -0.20000000\n-0.10000000 1.00000000 -0.15000000\n-0.10000000 1.05000000 -1.65000000\n-0.10000000 1.05000000 -1.60000000\n-0.10000000 1.05000000 -0.35000000\n-0.10000000 1.05000000 -0.30000000\n-0.10000000 1.05000000 -0.25000000\n-0.10000000 1.10000000 -1.55000000\n-0.10000000 1.10000000 -1.50000000\n-0.10000000 1.10000000 -1.45000000\n-0.10000000 1.10000000 -1.40000000\n-0.10000000 1.10000000 -0.50000000\n-0.10000000 1.10000000 -0.45000000\n-0.10000000 1.10000000 -0.40000000\n-0.10000000 1.15000000 -1.35000000\n-0.10000000 1.15000000 -1.30000000\n-0.10000000 1.15000000 -1.25000000\n-0.10000000 1.15000000 -1.20000000\n-0.10000000 1.15000000 -1.15000000\n-0.10000000 1.15000000 -1.10000000\n-0.10000000 1.15000000 -1.05000000\n-0.10000000 1.15000000 -1.00000000\n-0.10000000 1.15000000 -0.95000000\n-0.10000000 1.15000000 -0.90000000\n-0.10000000 1.15000000 -0.85000000\n-0.10000000 1.15000000 -0.80000000\n-0.10000000 1.15000000 -0.75000000\n-0.10000000 1.15000000 -0.70000000\n-0.10000000 1.15000000 -0.65000000\n-0.10000000 1.15000000 -0.60000000\n-0.10000000 1.15000000 -0.55000000\n-0.05000000 0.10000000 -0.70000000\n-0.05000000 0.10000000 -0.65000000\n-0.05000000 0.10000000 -0.60000000\n-0.05000000 0.10000000 -0.55000000\n-0.05000000 0.10000000 -0.50000000\n-0.05000000 0.10000000 -0.45000000\n-0.05000000 0.10000000 -0.40000000\n-0.05000000 0.10000000 -0.35000000\n-0.05000000 0.10000000 -0.30000000\n-0.05000000 0.10000000 -0.25000000\n-0.05000000 0.10000000 -0.20000000\n-0.05000000 0.10000000 -0.15000000\n-0.05000000 0.10000000 -0.10000000\n-0.05000000 0.10000000 -0.05000000\n-0.05000000 0.10000000 0.00000000\n-0.05000000 0.10000000 0.05000000\n-0.05000000 0.10000000 0.10000000\n-0.05000000 0.10000000 0.15000000\n-0.05000000 0.10000000 0.20000000\n-0.05000000 0.10000000 0.25000000\n-0.05000000 0.10000000 0.30000000\n-0.05000000 0.10000000 0.35000000\n-0.05000000 0.10000000 0.40000000\n-0.05000000 0.10000000 0.45000000\n-0.05000000 0.10000000 0.50000000\n-0.05000000 0.10000000 0.55000000\n-0.05000000 0.10000000 0.60000000\n-0.05000000 0.10000000 0.65000000\n-0.05000000 0.10000000 0.70000000\n-0.05000000 0.10000000 0.75000000\n-0.05000000 0.10000000 0.80000000\n-0.05000000 0.10000000 0.85000000\n-0.05000000 0.10000000 0.90000000\n-0.05000000 0.10000000 0.95000000\n-0.05000000 0.10000000 1.00000000\n-0.05000000 0.10000000 1.05000000\n-0.05000000 0.10000000 1.10000000\n-0.05000000 0.10000000 1.15000000\n-0.05000000 0.10000000 1.20000000\n-0.05000000 0.10000000 1.25000000\n-0.05000000 0.10000000 1.30000000\n-0.05000000 0.10000000 1.35000000\n-0.05000000 0.10000000 1.40000000\n-0.05000000 0.10000000 1.45000000\n-0.05000000 0.10000000 1.55000000\n-0.05000000 0.10000000 1.60000000\n-0.05000000 0.10000000 1.65000000\n-0.05000000 0.10000000 1.70000000\n-0.05000000 0.10000000 1.75000000\n-0.05000000 0.10000000 1.80000000\n-0.05000000 0.10000000 1.85000000\n-0.05000000 0.10000000 1.90000000\n-0.05000000 0.10000000 1.95000000\n-0.05000000 0.15000000 -1.20000000\n-0.05000000 0.15000000 -1.15000000\n-0.05000000 0.15000000 -1.10000000\n-0.05000000 0.15000000 -1.05000000\n-0.05000000 0.15000000 -1.00000000\n-0.05000000 0.15000000 -0.95000000\n-0.05000000 0.15000000 -0.90000000\n-0.05000000 0.15000000 -0.85000000\n-0.05000000 0.15000000 -0.80000000\n-0.05000000 0.15000000 -0.75000000\n-0.05000000 0.15000000 1.50000000\n-0.05000000 0.15000000 2.00000000\n-0.05000000 0.15000000 2.05000000\n-0.05000000 0.20000000 -1.40000000\n-0.05000000 0.20000000 -1.35000000\n-0.05000000 0.20000000 -1.30000000\n-0.05000000 0.20000000 -1.25000000\n-0.05000000 0.20000000 2.10000000\n-0.05000000 0.25000000 -1.55000000\n-0.05000000 0.25000000 -1.50000000\n-0.05000000 0.25000000 -1.45000000\n-0.05000000 0.25000000 2.10000000\n-0.05000000 0.30000000 -1.65000000\n-0.05000000 0.30000000 -1.60000000\n-0.05000000 0.30000000 2.15000000\n-0.05000000 0.35000000 -1.75000000\n-0.05000000 0.35000000 -1.70000000\n-0.05000000 0.35000000 2.15000000\n-0.05000000 0.40000000 -1.85000000\n-0.05000000 0.40000000 -1.80000000\n-0.05000000 0.40000000 2.15000000\n-0.05000000 0.45000000 -1.85000000\n-0.05000000 0.45000000 2.15000000\n-0.05000000 0.50000000 -1.90000000\n-0.05000000 0.50000000 2.10000000\n-0.05000000 0.55000000 -1.90000000\n-0.05000000 0.55000000 2.05000000\n-0.05000000 0.60000000 -1.90000000\n-0.05000000 0.60000000 1.95000000\n-0.05000000 0.60000000 2.00000000\n-0.05000000 0.65000000 -1.95000000\n-0.05000000 0.65000000 1.50000000\n-0.05000000 0.65000000 1.55000000\n-0.05000000 0.65000000 1.60000000\n-0.05000000 0.65000000 1.65000000\n-0.05000000 0.65000000 1.70000000\n-0.05000000 0.65000000 1.75000000\n-0.05000000 0.65000000 1.80000000\n-0.05000000 0.65000000 1.85000000\n-0.05000000 0.65000000 1.90000000\n-0.05000000 0.70000000 -1.95000000\n-0.05000000 0.70000000 1.25000000\n-0.05000000 0.70000000 1.30000000\n-0.05000000 0.70000000 1.35000000\n-0.05000000 0.70000000 1.40000000\n-0.05000000 0.70000000 1.45000000\n-0.05000000 0.75000000 -1.95000000\n-0.05000000 0.75000000 0.90000000\n-0.05000000 0.75000000 0.95000000\n-0.05000000 0.75000000 1.00000000\n-0.05000000 0.75000000 1.05000000\n-0.05000000 0.75000000 1.10000000\n-0.05000000 0.75000000 1.15000000\n-0.05000000 0.75000000 1.20000000\n-0.05000000 0.80000000 -1.90000000\n-0.05000000 0.80000000 0.40000000\n-0.05000000 0.80000000 0.45000000\n-0.05000000 0.80000000 0.50000000\n-0.05000000 0.80000000 0.55000000\n-0.05000000 0.80000000 0.60000000\n-0.05000000 0.80000000 0.65000000\n-0.05000000 0.80000000 0.70000000\n-0.05000000 0.80000000 0.75000000\n-0.05000000 0.80000000 0.80000000\n-0.05000000 0.80000000 0.85000000\n-0.05000000 0.85000000 -1.90000000\n-0.05000000 0.85000000 0.05000000\n-0.05000000 0.85000000 0.10000000\n-0.05000000 0.85000000 0.15000000\n-0.05000000 0.85000000 0.20000000\n-0.05000000 0.85000000 0.25000000\n-0.05000000 0.85000000 0.30000000\n-0.05000000 0.85000000 0.35000000\n-0.05000000 0.90000000 -1.85000000\n-0.05000000 0.90000000 0.00000000\n-0.05000000 0.95000000 -1.80000000\n-0.05000000 0.95000000 -0.10000000\n-0.05000000 0.95000000 -0.05000000\n-0.05000000 1.00000000 -1.75000000\n-0.05000000 1.00000000 -1.70000000\n-0.05000000 1.00000000 -0.20000000\n-0.05000000 1.00000000 -0.15000000\n-0.05000000 1.05000000 -1.65000000\n-0.05000000 1.05000000 -1.60000000\n-0.05000000 1.05000000 -0.30000000\n-0.05000000 1.05000000 -0.25000000\n-0.05000000 1.10000000 -1.55000000\n-0.05000000 1.10000000 -1.50000000\n-0.05000000 1.10000000 -1.45000000\n-0.05000000 1.10000000 -1.40000000\n-0.05000000 1.10000000 -0.50000000\n-0.05000000 1.10000000 -0.45000000\n-0.05000000 1.10000000 -0.40000000\n-0.05000000 1.10000000 -0.35000000\n-0.05000000 1.15000000 -1.35000000\n-0.05000000 1.15000000 -1.30000000\n-0.05000000 1.15000000 -1.25000000\n-0.05000000 1.15000000 -1.20000000\n-0.05000000 1.15000000 -1.15000000\n-0.05000000 1.15000000 -1.10000000\n-0.05000000 1.15000000 -1.05000000\n-0.05000000 1.15000000 -1.00000000\n-0.05000000 1.15000000 -0.95000000\n-0.05000000 1.15000000 -0.90000000\n-0.05000000 1.15000000 -0.85000000\n-0.05000000 1.15000000 -0.80000000\n-0.05000000 1.15000000 -0.75000000\n-0.05000000 1.15000000 -0.70000000\n-0.05000000 1.15000000 -0.65000000\n-0.05000000 1.15000000 -0.60000000\n-0.05000000 1.15000000 -0.55000000\n0.00000000 0.10000000 -0.70000000\n0.00000000 0.10000000 -0.65000000\n0.00000000 0.10000000 -0.60000000\n0.00000000 0.10000000 -0.55000000\n0.00000000 0.10000000 -0.50000000\n0.00000000 0.10000000 -0.45000000\n0.00000000 0.10000000 -0.40000000\n0.00000000 0.10000000 -0.35000000\n0.00000000 0.10000000 -0.30000000\n0.00000000 0.10000000 -0.25000000\n0.00000000 0.10000000 -0.20000000\n0.00000000 0.10000000 -0.15000000\n0.00000000 0.10000000 -0.10000000\n0.00000000 0.10000000 -0.05000000\n0.00000000 0.10000000 0.00000000\n0.00000000 0.10000000 0.05000000\n0.00000000 0.10000000 0.10000000\n0.00000000 0.10000000 0.15000000\n0.00000000 0.10000000 0.20000000\n0.00000000 0.10000000 0.25000000\n0.00000000 0.10000000 0.30000000\n0.00000000 0.10000000 0.35000000\n0.00000000 0.10000000 0.40000000\n0.00000000 0.10000000 0.45000000\n0.00000000 0.10000000 0.50000000\n0.00000000 0.10000000 0.55000000\n0.00000000 0.10000000 0.60000000\n0.00000000 0.10000000 0.65000000\n0.00000000 0.10000000 0.70000000\n0.00000000 0.10000000 0.75000000\n0.00000000 0.10000000 0.80000000\n0.00000000 0.10000000 0.85000000\n0.00000000 0.10000000 0.90000000\n0.00000000 0.10000000 0.95000000\n0.00000000 0.10000000 1.00000000\n0.00000000 0.10000000 1.05000000\n0.00000000 0.10000000 1.10000000\n0.00000000 0.10000000 1.15000000\n0.00000000 0.10000000 1.20000000\n0.00000000 0.10000000 1.25000000\n0.00000000 0.10000000 1.30000000\n0.00000000 0.10000000 1.35000000\n0.00000000 0.10000000 1.40000000\n0.00000000 0.10000000 1.45000000\n0.00000000 0.10000000 1.55000000\n0.00000000 0.10000000 1.60000000\n0.00000000 0.10000000 1.65000000\n0.00000000 0.10000000 1.70000000\n0.00000000 0.10000000 1.75000000\n0.00000000 0.10000000 1.80000000\n0.00000000 0.10000000 1.85000000\n0.00000000 0.10000000 1.90000000\n0.00000000 0.10000000 1.95000000\n0.00000000 0.15000000 -1.20000000\n0.00000000 0.15000000 -1.15000000\n0.00000000 0.15000000 -1.10000000\n0.00000000 0.15000000 -1.05000000\n0.00000000 0.15000000 -1.00000000\n0.00000000 0.15000000 -0.95000000\n0.00000000 0.15000000 -0.90000000\n0.00000000 0.15000000 -0.85000000\n0.00000000 0.15000000 -0.80000000\n0.00000000 0.15000000 -0.75000000\n0.00000000 0.15000000 1.50000000\n0.00000000 0.15000000 2.00000000\n0.00000000 0.15000000 2.05000000\n0.00000000 0.20000000 -1.40000000\n0.00000000 0.20000000 -1.35000000\n0.00000000 0.20000000 -1.30000000\n0.00000000 0.20000000 -1.25000000\n0.00000000 0.20000000 2.10000000\n0.00000000 0.25000000 -1.55000000\n0.00000000 0.25000000 -1.50000000\n0.00000000 0.25000000 -1.45000000\n0.00000000 0.25000000 2.10000000\n0.00000000 0.30000000 -1.65000000\n0.00000000 0.30000000 -1.60000000\n0.00000000 0.30000000 2.15000000\n0.00000000 0.35000000 -1.75000000\n0.00000000 0.35000000 -1.70000000\n0.00000000 0.35000000 2.15000000\n0.00000000 0.40000000 -1.85000000\n0.00000000 0.40000000 -1.80000000\n0.00000000 0.40000000 2.15000000\n0.00000000 0.45000000 -1.85000000\n0.00000000 0.45000000 2.15000000\n0.00000000 0.50000000 -1.90000000\n0.00000000 0.50000000 2.10000000\n0.00000000 0.55000000 -1.90000000\n0.00000000 0.55000000 2.05000000\n0.00000000 0.60000000 -1.95000000\n0.00000000 0.60000000 1.95000000\n0.00000000 0.60000000 2.00000000\n0.00000000 0.65000000 -1.95000000\n0.00000000 0.65000000 1.50000000\n0.00000000 0.65000000 1.55000000\n0.00000000 0.65000000 1.60000000\n0.00000000 0.65000000 1.65000000\n0.00000000 0.65000000 1.70000000\n0.00000000 0.65000000 1.75000000\n0.00000000 0.65000000 1.80000000\n0.00000000 0.65000000 1.85000000\n0.00000000 0.65000000 1.90000000\n0.00000000 0.70000000 -1.95000000\n0.00000000 0.70000000 1.25000000\n0.00000000 0.70000000 1.30000000\n0.00000000 0.70000000 1.35000000\n0.00000000 0.70000000 1.40000000\n0.00000000 0.70000000 1.45000000\n0.00000000 0.75000000 -1.95000000\n0.00000000 0.75000000 0.90000000\n0.00000000 0.75000000 0.95000000\n0.00000000 0.75000000 1.00000000\n0.00000000 0.75000000 1.05000000\n0.00000000 0.75000000 1.10000000\n0.00000000 0.75000000 1.15000000\n0.00000000 0.75000000 1.20000000\n0.00000000 0.80000000 -1.90000000\n0.00000000 0.80000000 0.40000000\n0.00000000 0.80000000 0.45000000\n0.00000000 0.80000000 0.50000000\n0.00000000 0.80000000 0.55000000\n0.00000000 0.80000000 0.60000000\n0.00000000 0.80000000 0.65000000\n0.00000000 0.80000000 0.70000000\n0.00000000 0.80000000 0.75000000\n0.00000000 0.80000000 0.80000000\n0.00000000 0.80000000 0.85000000\n0.00000000 0.85000000 -1.90000000\n0.00000000 0.85000000 0.05000000\n0.00000000 0.85000000 0.10000000\n0.00000000 0.85000000 0.15000000\n0.00000000 0.85000000 0.20000000\n0.00000000 0.85000000 0.25000000\n0.00000000 0.85000000 0.30000000\n0.00000000 0.85000000 0.35000000\n0.00000000 0.90000000 -1.85000000\n0.00000000 0.90000000 0.00000000\n0.00000000 0.95000000 -1.80000000\n0.00000000 0.95000000 -0.10000000\n0.00000000 0.95000000 -0.05000000\n0.00000000 1.00000000 -1.75000000\n0.00000000 1.00000000 -1.70000000\n0.00000000 1.00000000 -0.20000000\n0.00000000 1.00000000 -0.15000000\n0.00000000 1.05000000 -1.65000000\n0.00000000 1.05000000 -1.60000000\n0.00000000 1.05000000 -0.30000000\n0.00000000 1.05000000 -0.25000000\n0.00000000 1.10000000 -1.55000000\n0.00000000 1.10000000 -1.50000000\n0.00000000 1.10000000 -1.45000000\n0.00000000 1.10000000 -1.40000000\n0.00000000 1.10000000 -0.50000000\n0.00000000 1.10000000 -0.45000000\n0.00000000 1.10000000 -0.40000000\n0.00000000 1.10000000 -0.35000000\n0.00000000 1.15000000 -1.35000000\n0.00000000 1.15000000 -1.30000000\n0.00000000 1.15000000 -1.25000000\n0.00000000 1.15000000 -1.20000000\n0.00000000 1.15000000 -1.15000000\n0.00000000 1.15000000 -1.10000000\n0.00000000 1.15000000 -1.05000000\n0.00000000 1.15000000 -1.00000000\n0.00000000 1.15000000 -0.95000000\n0.00000000 1.15000000 -0.90000000\n0.00000000 1.15000000 -0.85000000\n0.00000000 1.15000000 -0.80000000\n0.00000000 1.15000000 -0.75000000\n0.00000000 1.15000000 -0.70000000\n0.00000000 1.15000000 -0.65000000\n0.00000000 1.15000000 -0.60000000\n0.00000000 1.15000000 -0.55000000\n0.05000000 0.10000000 -0.70000000\n0.05000000 0.10000000 -0.65000000\n0.05000000 0.10000000 -0.60000000\n0.05000000 0.10000000 -0.55000000\n0.05000000 0.10000000 -0.50000000\n0.05000000 0.10000000 -0.45000000\n0.05000000 0.10000000 -0.40000000\n0.05000000 0.10000000 -0.35000000\n0.05000000 0.10000000 -0.30000000\n0.05000000 0.10000000 -0.25000000\n0.05000000 0.10000000 -0.20000000\n0.05000000 0.10000000 -0.15000000\n0.05000000 0.10000000 -0.10000000\n0.05000000 0.10000000 -0.05000000\n0.05000000 0.10000000 0.00000000\n0.05000000 0.10000000 0.05000000\n0.05000000 0.10000000 0.10000000\n0.05000000 0.10000000 0.15000000\n0.05000000 0.10000000 0.20000000\n0.05000000 0.10000000 0.25000000\n0.05000000 0.10000000 0.30000000\n0.05000000 0.10000000 0.35000000\n0.05000000 0.10000000 0.40000000\n0.05000000 0.10000000 0.45000000\n0.05000000 0.10000000 0.50000000\n0.05000000 0.10000000 0.55000000\n0.05000000 0.10000000 0.60000000\n0.05000000 0.10000000 0.65000000\n0.05000000 0.10000000 0.70000000\n0.05000000 0.10000000 0.75000000\n0.05000000 0.10000000 0.80000000\n0.05000000 0.10000000 0.85000000\n0.05000000 0.10000000 0.90000000\n0.05000000 0.10000000 0.95000000\n0.05000000 0.10000000 1.00000000\n0.05000000 0.10000000 1.05000000\n0.05000000 0.10000000 1.10000000\n0.05000000 0.10000000 1.15000000\n0.05000000 0.10000000 1.20000000\n0.05000000 0.10000000 1.25000000\n0.05000000 0.10000000 1.30000000\n0.05000000 0.10000000 1.35000000\n0.05000000 0.10000000 1.40000000\n0.05000000 0.10000000 1.45000000\n0.05000000 0.10000000 1.55000000\n0.05000000 0.10000000 1.60000000\n0.05000000 0.10000000 1.65000000\n0.05000000 0.10000000 1.70000000\n0.05000000 0.10000000 1.75000000\n0.05000000 0.10000000 1.80000000\n0.05000000 0.10000000 1.85000000\n0.05000000 0.10000000 1.90000000\n0.05000000 0.10000000 1.95000000\n0.05000000 0.15000000 -1.20000000\n0.05000000 0.15000000 -1.15000000\n0.05000000 0.15000000 -1.10000000\n0.05000000 0.15000000 -1.05000000\n0.05000000 0.15000000 -1.00000000\n0.05000000 0.15000000 -0.95000000\n0.05000000 0.15000000 -0.90000000\n0.05000000 0.15000000 -0.85000000\n0.05000000 0.15000000 -0.80000000\n0.05000000 0.15000000 -0.75000000\n0.05000000 0.15000000 1.50000000\n0.05000000 0.15000000 2.00000000\n0.05000000 0.15000000 2.05000000\n0.05000000 0.20000000 -1.40000000\n0.05000000 0.20000000 -1.35000000\n0.05000000 0.20000000 -1.30000000\n0.05000000 0.20000000 -1.25000000\n0.05000000 0.20000000 2.10000000\n0.05000000 0.25000000 -1.55000000\n0.05000000 0.25000000 -1.50000000\n0.05000000 0.25000000 -1.45000000\n0.05000000 0.25000000 2.10000000\n0.05000000 0.30000000 -1.65000000\n0.05000000 0.30000000 -1.60000000\n0.05000000 0.30000000 2.15000000\n0.05000000 0.35000000 -1.75000000\n0.05000000 0.35000000 -1.70000000\n0.05000000 0.35000000 2.15000000\n0.05000000 0.40000000 -1.85000000\n0.05000000 0.40000000 -1.80000000\n0.05000000 0.40000000 2.15000000\n0.05000000 0.45000000 -1.85000000\n0.05000000 0.45000000 2.15000000\n0.05000000 0.50000000 -1.90000000\n0.05000000 0.50000000 2.10000000\n0.05000000 0.55000000 -1.90000000\n0.05000000 0.55000000 2.05000000\n0.05000000 0.60000000 -1.90000000\n0.05000000 0.60000000 1.95000000\n0.05000000 0.60000000 2.00000000\n0.05000000 0.65000000 -1.95000000\n0.05000000 0.65000000 1.50000000\n0.05000000 0.65000000 1.55000000\n0.05000000 0.65000000 1.60000000\n0.05000000 0.65000000 1.65000000\n0.05000000 0.65000000 1.70000000\n0.05000000 0.65000000 1.75000000\n0.05000000 0.65000000 1.80000000\n0.05000000 0.65000000 1.85000000\n0.05000000 0.65000000 1.90000000\n0.05000000 0.70000000 -1.95000000\n0.05000000 0.70000000 1.25000000\n0.05000000 0.70000000 1.30000000\n0.05000000 0.70000000 1.35000000\n0.05000000 0.70000000 1.40000000\n0.05000000 0.70000000 1.45000000\n0.05000000 0.75000000 -1.95000000\n0.05000000 0.75000000 0.90000000\n0.05000000 0.75000000 0.95000000\n0.05000000 0.75000000 1.00000000\n0.05000000 0.75000000 1.05000000\n0.05000000 0.75000000 1.10000000\n0.05000000 0.75000000 1.15000000\n0.05000000 0.75000000 1.20000000\n0.05000000 0.80000000 -1.90000000\n0.05000000 0.80000000 0.40000000\n0.05000000 0.80000000 0.45000000\n0.05000000 0.80000000 0.50000000\n0.05000000 0.80000000 0.55000000\n0.05000000 0.80000000 0.60000000\n0.05000000 0.80000000 0.65000000\n0.05000000 0.80000000 0.70000000\n0.05000000 0.80000000 0.75000000\n0.05000000 0.80000000 0.80000000\n0.05000000 0.80000000 0.85000000\n0.05000000 0.85000000 -1.90000000\n0.05000000 0.85000000 0.05000000\n0.05000000 0.85000000 0.10000000\n0.05000000 0.85000000 0.15000000\n0.05000000 0.85000000 0.20000000\n0.05000000 0.85000000 0.25000000\n0.05000000 0.85000000 0.30000000\n0.05000000 0.85000000 0.35000000\n0.05000000 0.90000000 -1.85000000\n0.05000000 0.90000000 0.00000000\n0.05000000 0.95000000 -1.80000000\n0.05000000 0.95000000 -0.10000000\n0.05000000 0.95000000 -0.05000000\n0.05000000 1.00000000 -1.75000000\n0.05000000 1.00000000 -1.70000000\n0.05000000 1.00000000 -0.20000000\n0.05000000 1.00000000 -0.15000000\n0.05000000 1.05000000 -1.65000000\n0.05000000 1.05000000 -1.60000000\n0.05000000 1.05000000 -0.30000000\n0.05000000 1.05000000 -0.25000000\n0.05000000 1.10000000 -1.55000000\n0.05000000 1.10000000 -1.50000000\n0.05000000 1.10000000 -1.45000000\n0.05000000 1.10000000 -1.40000000\n0.05000000 1.10000000 -0.50000000\n0.05000000 1.10000000 -0.45000000\n0.05000000 1.10000000 -0.40000000\n0.05000000 1.10000000 -0.35000000\n0.05000000 1.15000000 -1.35000000\n0.05000000 1.15000000 -1.30000000\n0.05000000 1.15000000 -1.25000000\n0.05000000 1.15000000 -1.20000000\n0.05000000 1.15000000 -1.15000000\n0.05000000 1.15000000 -1.10000000\n0.05000000 1.15000000 -1.05000000\n0.05000000 1.15000000 -1.00000000\n0.05000000 1.15000000 -0.95000000\n0.05000000 1.15000000 -0.90000000\n0.05000000 1.15000000 -0.85000000\n0.05000000 1.15000000 -0.80000000\n0.05000000 1.15000000 -0.75000000\n0.05000000 1.15000000 -0.70000000\n0.05000000 1.15000000 -0.65000000\n0.05000000 1.15000000 -0.60000000\n0.05000000 1.15000000 -0.55000000\n0.10000000 0.10000000 -0.70000000\n0.10000000 0.10000000 -0.65000000\n0.10000000 0.10000000 -0.60000000\n0.10000000 0.10000000 -0.55000000\n0.10000000 0.10000000 -0.50000000\n0.10000000 0.10000000 -0.45000000\n0.10000000 0.10000000 -0.40000000\n0.10000000 0.10000000 -0.35000000\n0.10000000 0.10000000 -0.30000000\n0.10000000 0.10000000 -0.25000000\n0.10000000 0.10000000 -0.20000000\n0.10000000 0.10000000 -0.15000000\n0.10000000 0.10000000 -0.10000000\n0.10000000 0.10000000 -0.05000000\n0.10000000 0.10000000 0.00000000\n0.10000000 0.10000000 0.05000000\n0.10000000 0.10000000 0.10000000\n0.10000000 0.10000000 0.15000000\n0.10000000 0.10000000 0.20000000\n0.10000000 0.10000000 0.25000000\n0.10000000 0.10000000 0.30000000\n0.10000000 0.10000000 0.35000000\n0.10000000 0.10000000 0.40000000\n0.10000000 0.10000000 0.45000000\n0.10000000 0.10000000 0.50000000\n0.10000000 0.10000000 0.55000000\n0.10000000 0.10000000 0.60000000\n0.10000000 0.10000000 0.65000000\n0.10000000 0.10000000 0.70000000\n0.10000000 0.10000000 0.75000000\n0.10000000 0.10000000 0.80000000\n0.10000000 0.10000000 0.85000000\n0.10000000 0.10000000 0.90000000\n0.10000000 0.10000000 0.95000000\n0.10000000 0.10000000 1.00000000\n0.10000000 0.10000000 1.05000000\n0.10000000 0.10000000 1.10000000\n0.10000000 0.10000000 1.15000000\n0.10000000 0.10000000 1.20000000\n0.10000000 0.10000000 1.25000000\n0.10000000 0.10000000 1.30000000\n0.10000000 0.10000000 1.35000000\n0.10000000 0.10000000 1.55000000\n0.10000000 0.10000000 1.60000000\n0.10000000 0.10000000 1.65000000\n0.10000000 0.10000000 1.70000000\n0.10000000 0.10000000 1.75000000\n0.10000000 0.10000000 1.80000000\n0.10000000 0.10000000 1.85000000\n0.10000000 0.10000000 1.90000000\n0.10000000 0.10000000 1.95000000\n0.10000000 0.15000000 -1.20000000\n0.10000000 0.15000000 -1.15000000\n0.10000000 0.15000000 -1.10000000\n0.10000000 0.15000000 -1.05000000\n0.10000000 0.15000000 -1.00000000\n0.10000000 0.15000000 -0.95000000\n0.10000000 0.15000000 -0.90000000\n0.10000000 0.15000000 -0.85000000\n0.10000000 0.15000000 -0.80000000\n0.10000000 0.15000000 -0.75000000\n0.10000000 0.15000000 1.40000000\n0.10000000 0.15000000 1.45000000\n0.10000000 0.15000000 1.50000000\n0.10000000 0.15000000 2.00000000\n0.10000000 0.15000000 2.05000000\n0.10000000 0.20000000 -1.40000000\n0.10000000 0.20000000 -1.35000000\n0.10000000 0.20000000 -1.30000000\n0.10000000 0.20000000 -1.25000000\n0.10000000 0.20000000 2.10000000\n0.10000000 0.25000000 -1.55000000\n0.10000000 0.25000000 -1.50000000\n0.10000000 0.25000000 -1.45000000\n0.10000000 0.25000000 2.10000000\n0.10000000 0.30000000 -1.65000000\n0.10000000 0.30000000 -1.60000000\n0.10000000 0.30000000 2.15000000\n0.10000000 0.35000000 -1.75000000\n0.10000000 0.35000000 -1.70000000\n0.10000000 0.35000000 2.15000000\n0.10000000 0.40000000 -1.80000000\n0.10000000 0.40000000 2.15000000\n0.10000000 0.45000000 -1.85000000\n0.10000000 0.45000000 2.15000000\n0.10000000 0.50000000 -1.90000000\n0.10000000 0.50000000 2.10000000\n0.10000000 0.55000000 -1.90000000\n0.10000000 0.55000000 2.05000000\n0.10000000 0.60000000 -1.90000000\n0.10000000 0.60000000 1.95000000\n0.10000000 0.60000000 2.00000000\n0.10000000 0.65000000 -1.95000000\n0.10000000 0.65000000 1.45000000\n0.10000000 0.65000000 1.50000000\n0.10000000 0.65000000 1.55000000\n0.10000000 0.65000000 1.60000000\n0.10000000 0.65000000 1.65000000\n0.10000000 0.65000000 1.70000000\n0.10000000 0.65000000 1.75000000\n0.10000000 0.65000000 1.80000000\n0.10000000 0.65000000 1.85000000\n0.10000000 0.65000000 1.90000000\n0.10000000 0.70000000 -1.95000000\n0.10000000 0.70000000 1.20000000\n0.10000000 0.70000000 1.25000000\n0.10000000 0.70000000 1.30000000\n0.10000000 0.70000000 1.35000000\n0.10000000 0.70000000 1.40000000\n0.10000000 0.75000000 -1.95000000\n0.10000000 0.75000000 0.85000000\n0.10000000 0.75000000 0.90000000\n0.10000000 0.75000000 0.95000000\n0.10000000 0.75000000 1.00000000\n0.10000000 0.75000000 1.05000000\n0.10000000 0.75000000 1.10000000\n0.10000000 0.75000000 1.15000000\n0.10000000 0.80000000 -1.90000000\n0.10000000 0.80000000 0.30000000\n0.10000000 0.80000000 0.35000000\n0.10000000 0.80000000 0.40000000\n0.10000000 0.80000000 0.45000000\n0.10000000 0.80000000 0.50000000\n0.10000000 0.80000000 0.55000000\n0.10000000 0.80000000 0.60000000\n0.10000000 0.80000000 0.65000000\n0.10000000 0.80000000 0.70000000\n0.10000000 0.80000000 0.75000000\n0.10000000 0.80000000 0.80000000\n0.10000000 0.85000000 -1.90000000\n0.10000000 0.85000000 0.05000000\n0.10000000 0.85000000 0.10000000\n0.10000000 0.85000000 0.15000000\n0.10000000 0.85000000 0.20000000\n0.10000000 0.85000000 0.25000000\n0.10000000 0.90000000 -1.85000000\n0.10000000 0.90000000 0.00000000\n0.10000000 0.95000000 -1.80000000\n0.10000000 0.95000000 -0.10000000\n0.10000000 0.95000000 -0.05000000\n0.10000000 1.00000000 -1.75000000\n0.10000000 1.00000000 -1.70000000\n0.10000000 1.00000000 -0.20000000\n0.10000000 1.00000000 -0.15000000\n0.10000000 1.05000000 -1.65000000\n0.10000000 1.05000000 -1.60000000\n0.10000000 1.05000000 -0.35000000\n0.10000000 1.05000000 -0.30000000\n0.10000000 1.05000000 -0.25000000\n0.10000000 1.10000000 -1.55000000\n0.10000000 1.10000000 -1.50000000\n0.10000000 1.10000000 -1.45000000\n0.10000000 1.10000000 -1.40000000\n0.10000000 1.10000000 -0.50000000\n0.10000000 1.10000000 -0.45000000\n0.10000000 1.10000000 -0.40000000\n0.10000000 1.15000000 -1.35000000\n0.10000000 1.15000000 -1.30000000\n0.10000000 1.15000000 -1.25000000\n0.10000000 1.15000000 -1.20000000\n0.10000000 1.15000000 -1.15000000\n0.10000000 1.15000000 -1.10000000\n0.10000000 1.15000000 -1.05000000\n0.10000000 1.15000000 -1.00000000\n0.10000000 1.15000000 -0.95000000\n0.10000000 1.15000000 -0.90000000\n0.10000000 1.15000000 -0.85000000\n0.10000000 1.15000000 -0.80000000\n0.10000000 1.15000000 -0.75000000\n0.10000000 1.15000000 -0.70000000\n0.10000000 1.15000000 -0.65000000\n0.10000000 1.15000000 -0.60000000\n0.10000000 1.15000000 -0.55000000\n0.15000000 0.10000000 -0.70000000\n0.15000000 0.10000000 -0.65000000\n0.15000000 0.10000000 -0.60000000\n0.15000000 0.10000000 -0.55000000\n0.15000000 0.10000000 -0.50000000\n0.15000000 0.10000000 -0.45000000\n0.15000000 0.10000000 -0.40000000\n0.15000000 0.10000000 -0.35000000\n0.15000000 0.10000000 -0.30000000\n0.15000000 0.10000000 -0.25000000\n0.15000000 0.10000000 -0.20000000\n0.15000000 0.10000000 -0.15000000\n0.15000000 0.10000000 -0.10000000\n0.15000000 0.10000000 -0.05000000\n0.15000000 0.10000000 0.00000000\n0.15000000 0.10000000 0.05000000\n0.15000000 0.10000000 0.10000000\n0.15000000 0.10000000 0.15000000\n0.15000000 0.10000000 0.20000000\n0.15000000 0.10000000 0.25000000\n0.15000000 0.10000000 0.30000000\n0.15000000 0.10000000 0.35000000\n0.15000000 0.10000000 0.40000000\n0.15000000 0.10000000 0.45000000\n0.15000000 0.10000000 0.50000000\n0.15000000 0.10000000 0.55000000\n0.15000000 0.10000000 0.60000000\n0.15000000 0.10000000 0.65000000\n0.15000000 0.10000000 0.70000000\n0.15000000 0.10000000 0.75000000\n0.15000000 0.10000000 0.80000000\n0.15000000 0.10000000 0.85000000\n0.15000000 0.10000000 0.90000000\n0.15000000 0.10000000 0.95000000\n0.15000000 0.10000000 1.00000000\n0.15000000 0.10000000 1.05000000\n0.15000000 0.10000000 1.10000000\n0.15000000 0.10000000 1.15000000\n0.15000000 0.10000000 1.20000000\n0.15000000 0.10000000 1.55000000\n0.15000000 0.10000000 1.60000000\n0.15000000 0.10000000 1.65000000\n0.15000000 0.10000000 1.70000000\n0.15000000 0.10000000 1.75000000\n0.15000000 0.10000000 1.80000000\n0.15000000 0.10000000 1.85000000\n0.15000000 0.10000000 1.90000000\n0.15000000 0.10000000 1.95000000\n0.15000000 0.15000000 -1.15000000\n0.15000000 0.15000000 -1.10000000\n0.15000000 0.15000000 -1.05000000\n0.15000000 0.15000000 -1.00000000\n0.15000000 0.15000000 -0.95000000\n0.15000000 0.15000000 -0.90000000\n0.15000000 0.15000000 -0.85000000\n0.15000000 0.15000000 -0.80000000\n0.15000000 0.15000000 -0.75000000\n0.15000000 0.15000000 1.25000000\n0.15000000 0.15000000 1.30000000\n0.15000000 0.15000000 1.35000000\n0.15000000 0.15000000 1.40000000\n0.15000000 0.15000000 1.45000000\n0.15000000 0.15000000 1.50000000\n0.15000000 0.15000000 2.00000000\n0.15000000 0.15000000 2.05000000\n0.15000000 0.20000000 -1.40000000\n0.15000000 0.20000000 -1.35000000\n0.15000000 0.20000000 -1.30000000\n0.15000000 0.20000000 -1.25000000\n0.15000000 0.20000000 -1.20000000\n0.15000000 0.20000000 2.10000000\n0.15000000 0.25000000 -1.50000000\n0.15000000 0.25000000 -1.45000000\n0.15000000 0.25000000 2.10000000\n0.15000000 0.30000000 -1.65000000\n0.15000000 0.30000000 -1.60000000\n0.15000000 0.30000000 -1.55000000\n0.15000000 0.30000000 2.15000000\n0.15000000 0.35000000 -1.75000000\n0.15000000 0.35000000 -1.70000000\n0.15000000 0.35000000 2.15000000\n0.15000000 0.40000000 -1.80000000\n0.15000000 0.40000000 2.15000000\n0.15000000 0.45000000 -1.85000000\n0.15000000 0.45000000 2.10000000\n0.15000000 0.50000000 -1.85000000\n0.15000000 0.50000000 2.10000000\n0.15000000 0.55000000 -1.90000000\n0.15000000 0.55000000 2.05000000\n0.15000000 0.60000000 -1.90000000\n0.15000000 0.60000000 1.95000000\n0.15000000 0.60000000 2.00000000\n0.15000000 0.65000000 -1.90000000\n0.15000000 0.65000000 1.40000000\n0.15000000 0.65000000 1.45000000\n0.15000000 0.65000000 1.50000000\n0.15000000 0.65000000 1.55000000\n0.15000000 0.65000000 1.60000000\n0.15000000 0.65000000 1.65000000\n0.15000000 0.65000000 1.70000000\n0.15000000 0.65000000 1.75000000\n0.15000000 0.65000000 1.80000000\n0.15000000 0.65000000 1.85000000\n0.15000000 0.65000000 1.90000000\n0.15000000 0.70000000 -1.95000000\n0.15000000 0.70000000 1.15000000\n0.15000000 0.70000000 1.20000000\n0.15000000 0.70000000 1.25000000\n0.15000000 0.70000000 1.30000000\n0.15000000 0.70000000 1.35000000\n0.15000000 0.75000000 -1.90000000\n0.15000000 0.75000000 0.75000000\n0.15000000 0.75000000 0.80000000\n0.15000000 0.75000000 0.85000000\n0.15000000 0.75000000 0.90000000\n0.15000000 0.75000000 0.95000000\n0.15000000 0.75000000 1.00000000\n0.15000000 0.75000000 1.05000000\n0.15000000 0.75000000 1.10000000\n0.15000000 0.80000000 -1.90000000\n0.15000000 0.80000000 0.10000000\n0.15000000 0.80000000 0.15000000\n0.15000000 0.80000000 0.20000000\n0.15000000 0.80000000 0.25000000\n0.15000000 0.80000000 0.30000000\n0.15000000 0.80000000 0.35000000\n0.15000000 0.80000000 0.40000000\n0.15000000 0.80000000 0.45000000\n0.15000000 0.80000000 0.50000000\n0.15000000 0.80000000 0.55000000\n0.15000000 0.80000000 0.60000000\n0.15000000 0.80000000 0.65000000\n0.15000000 0.80000000 0.70000000\n0.15000000 0.85000000 -1.90000000\n0.15000000 0.85000000 0.05000000\n0.15000000 0.90000000 -1.85000000\n0.15000000 0.90000000 -0.05000000\n0.15000000 0.90000000 0.00000000\n0.15000000 0.95000000 -1.80000000\n0.15000000 0.95000000 -0.10000000\n0.15000000 1.00000000 -1.75000000\n0.15000000 1.00000000 -1.70000000\n0.15000000 1.00000000 -0.20000000\n0.15000000 1.00000000 -0.15000000\n0.15000000 1.05000000 -1.65000000\n0.15000000 1.05000000 -1.60000000\n0.15000000 1.05000000 -0.35000000\n0.15000000 1.05000000 -0.30000000\n0.15000000 1.05000000 -0.25000000\n0.15000000 1.10000000 -1.55000000\n0.15000000 1.10000000 -1.50000000\n0.15000000 1.10000000 -1.45000000\n0.15000000 1.10000000 -1.40000000\n0.15000000 1.10000000 -0.55000000\n0.15000000 1.10000000 -0.50000000\n0.15000000 1.10000000 -0.45000000\n0.15000000 1.10000000 -0.40000000\n0.15000000 1.15000000 -1.35000000\n0.15000000 1.15000000 -1.30000000\n0.15000000 1.15000000 -1.25000000\n0.15000000 1.15000000 -1.20000000\n0.15000000 1.15000000 -1.15000000\n0.15000000 1.15000000 -1.10000000\n0.15000000 1.15000000 -1.05000000\n0.15000000 1.15000000 -1.00000000\n0.15000000 1.15000000 -0.95000000\n0.15000000 1.15000000 -0.90000000\n0.15000000 1.15000000 -0.85000000\n0.15000000 1.15000000 -0.80000000\n0.15000000 1.15000000 -0.75000000\n0.15000000 1.15000000 -0.70000000\n0.15000000 1.15000000 -0.65000000\n0.15000000 1.15000000 -0.60000000\n0.20000000 0.10000000 -0.65000000\n0.20000000 0.10000000 -0.60000000\n0.20000000 0.10000000 -0.55000000\n0.20000000 0.10000000 -0.50000000\n0.20000000 0.10000000 -0.45000000\n0.20000000 0.10000000 -0.40000000\n0.20000000 0.10000000 -0.35000000\n0.20000000 0.10000000 -0.30000000\n0.20000000 0.10000000 -0.25000000\n0.20000000 0.10000000 -0.20000000\n0.20000000 0.10000000 -0.15000000\n0.20000000 0.10000000 -0.10000000\n0.20000000 0.10000000 -0.05000000\n0.20000000 0.10000000 0.00000000\n0.20000000 0.10000000 0.05000000\n0.20000000 0.10000000 0.10000000\n0.20000000 0.10000000 0.15000000\n0.20000000 0.10000000 0.20000000\n0.20000000 0.10000000 0.25000000\n0.20000000 0.10000000 0.30000000\n0.20000000 0.10000000 0.35000000\n0.20000000 0.10000000 0.40000000\n0.20000000 0.10000000 0.45000000\n0.20000000 0.10000000 0.50000000\n0.20000000 0.10000000 0.55000000\n0.20000000 0.10000000 0.60000000\n0.20000000 0.10000000 0.65000000\n0.20000000 0.10000000 0.70000000\n0.20000000 0.10000000 0.75000000\n0.20000000 0.10000000 0.80000000\n0.20000000 0.10000000 1.55000000\n0.20000000 0.10000000 1.60000000\n0.20000000 0.10000000 1.65000000\n0.20000000 0.10000000 1.70000000\n0.20000000 0.10000000 1.75000000\n0.20000000 0.10000000 1.80000000\n0.20000000 0.10000000 1.85000000\n0.20000000 0.10000000 1.90000000\n0.20000000 0.10000000 1.95000000\n0.20000000 0.15000000 -1.15000000\n0.20000000 0.15000000 -1.10000000\n0.20000000 0.15000000 -1.05000000\n0.20000000 0.15000000 -1.00000000\n0.20000000 0.15000000 -0.95000000\n0.20000000 0.15000000 -0.90000000\n0.20000000 0.15000000 -0.85000000\n0.20000000 0.15000000 -0.80000000\n0.20000000 0.15000000 -0.75000000\n0.20000000 0.15000000 -0.70000000\n0.20000000 0.15000000 0.85000000\n0.20000000 0.15000000 0.90000000\n0.20000000 0.15000000 0.95000000\n0.20000000 0.15000000 1.00000000\n0.20000000 0.15000000 1.05000000\n0.20000000 0.15000000 1.10000000\n0.20000000 0.15000000 1.15000000\n0.20000000 0.15000000 1.20000000\n0.20000000 0.15000000 1.25000000\n0.20000000 0.15000000 1.30000000\n0.20000000 0.15000000 1.35000000\n0.20000000 0.15000000 1.40000000\n0.20000000 0.15000000 1.45000000\n0.20000000 0.15000000 1.50000000\n0.20000000 0.15000000 2.00000000\n0.20000000 0.15000000 2.05000000\n0.20000000 0.20000000 -1.40000000\n0.20000000 0.20000000 -1.35000000\n0.20000000 0.20000000 -1.30000000\n0.20000000 0.20000000 -1.25000000\n0.20000000 0.20000000 -1.20000000\n0.20000000 0.20000000 2.10000000\n0.20000000 0.25000000 -1.50000000\n0.20000000 0.25000000 -1.45000000\n0.20000000 0.25000000 2.10000000\n0.20000000 0.30000000 -1.60000000\n0.20000000 0.30000000 -1.55000000\n0.20000000 0.30000000 2.15000000\n0.20000000 0.35000000 -1.70000000\n0.20000000 0.35000000 -1.65000000\n0.20000000 0.35000000 2.15000000\n0.20000000 0.40000000 -1.80000000\n0.20000000 0.40000000 -1.75000000\n0.20000000 0.40000000 2.15000000\n0.20000000 0.45000000 -1.85000000\n0.20000000 0.45000000 2.10000000\n0.20000000 0.50000000 -1.85000000\n0.20000000 0.50000000 2.10000000\n0.20000000 0.55000000 -1.90000000\n0.20000000 0.55000000 2.05000000\n0.20000000 0.60000000 -1.90000000\n0.20000000 0.60000000 1.55000000\n0.20000000 0.60000000 1.60000000\n0.20000000 0.60000000 1.95000000\n0.20000000 0.60000000 2.00000000\n0.20000000 0.65000000 -1.90000000\n0.20000000 0.65000000 1.30000000\n0.20000000 0.65000000 1.35000000\n0.20000000 0.65000000 1.40000000\n0.20000000 0.65000000 1.45000000\n0.20000000 0.65000000 1.50000000\n0.20000000 0.65000000 1.65000000\n0.20000000 0.65000000 1.70000000\n0.20000000 0.65000000 1.75000000\n0.20000000 0.65000000 1.80000000\n0.20000000 0.65000000 1.85000000\n0.20000000 0.65000000 1.90000000\n0.20000000 0.70000000 -1.90000000\n0.20000000 0.70000000 1.05000000\n0.20000000 0.70000000 1.10000000\n0.20000000 0.70000000 1.15000000\n0.20000000 0.70000000 1.20000000\n0.20000000 0.70000000 1.25000000\n0.20000000 0.75000000 -1.90000000\n0.20000000 0.75000000 0.60000000\n0.20000000 0.75000000 0.65000000\n0.20000000 0.75000000 0.70000000\n0.20000000 0.75000000 0.75000000\n0.20000000 0.75000000 0.80000000\n0.20000000 0.75000000 0.85000000\n0.20000000 0.75000000 0.90000000\n0.20000000 0.75000000 0.95000000\n0.20000000 0.75000000 1.00000000\n0.20000000 0.80000000 -1.90000000\n0.20000000 0.80000000 0.10000000\n0.20000000 0.80000000 0.15000000\n0.20000000 0.80000000 0.20000000\n0.20000000 0.80000000 0.25000000\n0.20000000 0.80000000 0.30000000\n0.20000000 0.80000000 0.35000000\n0.20000000 0.80000000 0.40000000\n0.20000000 0.80000000 0.45000000\n0.20000000 0.80000000 0.50000000\n0.20000000 0.80000000 0.55000000\n0.20000000 0.85000000 -1.90000000\n0.20000000 0.85000000 0.05000000\n0.20000000 0.90000000 -1.85000000\n0.20000000 0.90000000 -0.05000000\n0.20000000 0.90000000 0.00000000\n0.20000000 0.95000000 -1.80000000\n0.20000000 0.95000000 -1.75000000\n0.20000000 0.95000000 -0.10000000\n0.20000000 1.00000000 -1.70000000\n0.20000000 1.00000000 -0.20000000\n0.20000000 1.00000000 -0.15000000\n0.20000000 1.05000000 -1.65000000\n0.20000000 1.05000000 -1.60000000\n0.20000000 1.05000000 -1.55000000\n0.20000000 1.05000000 -0.35000000\n0.20000000 1.05000000 -0.30000000\n0.20000000 1.05000000 -0.25000000\n0.20000000 1.10000000 -1.50000000\n0.20000000 1.10000000 -1.45000000\n0.20000000 1.10000000 -1.40000000\n0.20000000 1.10000000 -1.35000000\n0.20000000 1.10000000 -0.55000000\n0.20000000 1.10000000 -0.50000000\n0.20000000 1.10000000 -0.45000000\n0.20000000 1.10000000 -0.40000000\n0.20000000 1.15000000 -1.30000000\n0.20000000 1.15000000 -1.25000000\n0.20000000 1.15000000 -1.20000000\n0.20000000 1.15000000 -1.15000000\n0.20000000 1.15000000 -1.10000000\n0.20000000 1.15000000 -1.05000000\n0.20000000 1.15000000 -1.00000000\n0.20000000 1.15000000 -0.95000000\n0.20000000 1.15000000 -0.90000000\n0.20000000 1.15000000 -0.85000000\n0.20000000 1.15000000 -0.80000000\n0.20000000 1.15000000 -0.75000000\n0.20000000 1.15000000 -0.70000000\n0.20000000 1.15000000 -0.65000000\n0.20000000 1.15000000 -0.60000000\n0.25000000 0.10000000 -0.60000000\n0.25000000 0.10000000 -0.55000000\n0.25000000 0.10000000 -0.50000000\n0.25000000 0.10000000 -0.45000000\n0.25000000 0.10000000 -0.40000000\n0.25000000 0.10000000 -0.35000000\n0.25000000 0.10000000 -0.30000000\n0.25000000 0.10000000 -0.25000000\n0.25000000 0.10000000 -0.20000000\n0.25000000 0.10000000 -0.15000000\n0.25000000 0.10000000 -0.10000000\n0.25000000 0.10000000 -0.05000000\n0.25000000 0.10000000 0.00000000\n0.25000000 0.10000000 0.05000000\n0.25000000 0.10000000 0.10000000\n0.25000000 0.10000000 0.15000000\n0.25000000 0.10000000 0.20000000\n0.25000000 0.10000000 0.25000000\n0.25000000 0.10000000 0.30000000\n0.25000000 0.10000000 0.35000000\n0.25000000 0.10000000 0.40000000\n0.25000000 0.10000000 0.45000000\n0.25000000 0.10000000 0.50000000\n0.25000000 0.10000000 0.55000000\n0.25000000 0.10000000 0.60000000\n0.25000000 0.10000000 0.65000000\n0.25000000 0.10000000 0.70000000\n0.25000000 0.10000000 0.75000000\n0.25000000 0.10000000 1.55000000\n0.25000000 0.10000000 1.60000000\n0.25000000 0.10000000 1.65000000\n0.25000000 0.10000000 1.70000000\n0.25000000 0.10000000 1.75000000\n0.25000000 0.10000000 1.80000000\n0.25000000 0.10000000 1.85000000\n0.25000000 0.10000000 1.90000000\n0.25000000 0.10000000 1.95000000\n0.25000000 0.15000000 -1.15000000\n0.25000000 0.15000000 -1.10000000\n0.25000000 0.15000000 -1.05000000\n0.25000000 0.15000000 -1.00000000\n0.25000000 0.15000000 -0.95000000\n0.25000000 0.15000000 -0.90000000\n0.25000000 0.15000000 -0.85000000\n0.25000000 0.15000000 -0.80000000\n0.25000000 0.15000000 -0.75000000\n0.25000000 0.15000000 -0.70000000\n0.25000000 0.15000000 -0.65000000\n0.25000000 0.15000000 0.80000000\n0.25000000 0.15000000 0.85000000\n0.25000000 0.15000000 0.90000000\n0.25000000 0.15000000 0.95000000\n0.25000000 0.15000000 1.00000000\n0.25000000 0.15000000 1.05000000\n0.25000000 0.15000000 1.10000000\n0.25000000 0.15000000 1.15000000\n0.25000000 0.15000000 1.20000000\n0.25000000 0.15000000 1.25000000\n0.25000000 0.15000000 1.50000000\n0.25000000 0.15000000 2.00000000\n0.25000000 0.20000000 -1.35000000\n0.25000000 0.20000000 -1.30000000\n0.25000000 0.20000000 -1.25000000\n0.25000000 0.20000000 -1.20000000\n0.25000000 0.20000000 1.30000000\n0.25000000 0.20000000 1.35000000\n0.25000000 0.20000000 1.40000000\n0.25000000 0.20000000 1.45000000\n0.25000000 0.20000000 2.05000000\n0.25000000 0.25000000 -1.50000000\n0.25000000 0.25000000 -1.45000000\n0.25000000 0.25000000 -1.40000000\n0.25000000 0.25000000 2.10000000\n0.25000000 0.30000000 -1.60000000\n0.25000000 0.30000000 -1.55000000\n0.25000000 0.30000000 2.10000000\n0.25000000 0.35000000 -1.70000000\n0.25000000 0.35000000 -1.65000000\n0.25000000 0.35000000 2.15000000\n0.25000000 0.40000000 -1.80000000\n0.25000000 0.40000000 -1.75000000\n0.25000000 0.40000000 2.15000000\n0.25000000 0.45000000 -1.80000000\n0.25000000 0.45000000 2.10000000\n0.25000000 0.50000000 -1.85000000\n0.25000000 0.50000000 2.10000000\n0.25000000 0.55000000 -1.85000000\n0.25000000 0.55000000 2.05000000\n0.25000000 0.60000000 -1.90000000\n0.25000000 0.60000000 1.40000000\n0.25000000 0.60000000 1.45000000\n0.25000000 0.60000000 1.50000000\n0.25000000 0.60000000 1.55000000\n0.25000000 0.60000000 1.60000000\n0.25000000 0.60000000 1.90000000\n0.25000000 0.60000000 1.95000000\n0.25000000 0.60000000 2.00000000\n0.25000000 0.65000000 -1.90000000\n0.25000000 0.65000000 1.15000000\n0.25000000 0.65000000 1.20000000\n0.25000000 0.65000000 1.25000000\n0.25000000 0.65000000 1.30000000\n0.25000000 0.65000000 1.35000000\n0.25000000 0.65000000 1.65000000\n0.25000000 0.65000000 1.70000000\n0.25000000 0.65000000 1.75000000\n0.25000000 0.65000000 1.80000000\n0.25000000 0.65000000 1.85000000\n0.25000000 0.70000000 -1.90000000\n0.25000000 0.70000000 0.85000000\n0.25000000 0.70000000 0.90000000\n0.25000000 0.70000000 0.95000000\n0.25000000 0.70000000 1.00000000\n0.25000000 0.70000000 1.05000000\n0.25000000 0.70000000 1.10000000\n0.25000000 0.75000000 -1.90000000\n0.25000000 0.75000000 0.35000000\n0.25000000 0.75000000 0.40000000\n0.25000000 0.75000000 0.45000000\n0.25000000 0.75000000 0.50000000\n0.25000000 0.75000000 0.55000000\n0.25000000 0.75000000 0.60000000\n0.25000000 0.75000000 0.65000000\n0.25000000 0.75000000 0.70000000\n0.25000000 0.75000000 0.75000000\n0.25000000 0.75000000 0.80000000\n0.25000000 0.80000000 -1.90000000\n0.25000000 0.80000000 0.05000000\n0.25000000 0.80000000 0.10000000\n0.25000000 0.80000000 0.15000000\n0.25000000 0.80000000 0.20000000\n0.25000000 0.80000000 0.25000000\n0.25000000 0.80000000 0.30000000\n0.25000000 0.85000000 -1.85000000\n0.25000000 0.85000000 0.00000000\n0.25000000 0.90000000 -1.80000000\n0.25000000 0.90000000 -0.05000000\n0.25000000 0.95000000 -1.80000000\n0.25000000 0.95000000 -1.75000000\n0.25000000 0.95000000 -0.15000000\n0.25000000 0.95000000 -0.10000000\n0.25000000 1.00000000 -1.70000000\n0.25000000 1.00000000 -1.65000000\n0.25000000 1.00000000 -0.25000000\n0.25000000 1.00000000 -0.20000000\n0.25000000 1.05000000 -1.60000000\n0.25000000 1.05000000 -1.55000000\n0.25000000 1.05000000 -0.35000000\n0.25000000 1.05000000 -0.30000000\n0.25000000 1.10000000 -1.50000000\n0.25000000 1.10000000 -1.45000000\n0.25000000 1.10000000 -1.40000000\n0.25000000 1.10000000 -1.35000000\n0.25000000 1.10000000 -0.60000000\n0.25000000 1.10000000 -0.55000000\n0.25000000 1.10000000 -0.50000000\n0.25000000 1.10000000 -0.45000000\n0.25000000 1.10000000 -0.40000000\n0.25000000 1.15000000 -1.30000000\n0.25000000 1.15000000 -1.25000000\n0.25000000 1.15000000 -1.20000000\n0.25000000 1.15000000 -1.15000000\n0.25000000 1.15000000 -1.10000000\n0.25000000 1.15000000 -1.05000000\n0.25000000 1.15000000 -1.00000000\n0.25000000 1.15000000 -0.95000000\n0.25000000 1.15000000 -0.90000000\n0.25000000 1.15000000 -0.85000000\n0.25000000 1.15000000 -0.80000000\n0.25000000 1.15000000 -0.75000000\n0.25000000 1.15000000 -0.70000000\n0.25000000 1.15000000 -0.65000000\n0.30000000 0.10000000 -0.55000000\n0.30000000 0.10000000 -0.50000000\n0.30000000 0.10000000 -0.45000000\n0.30000000 0.10000000 -0.40000000\n0.30000000 0.10000000 -0.35000000\n0.30000000 0.10000000 -0.30000000\n0.30000000 0.10000000 -0.25000000\n0.30000000 0.10000000 -0.20000000\n0.30000000 0.10000000 -0.15000000\n0.30000000 0.10000000 -0.10000000\n0.30000000 0.10000000 -0.05000000\n0.30000000 0.10000000 0.00000000\n0.30000000 0.10000000 0.05000000\n0.30000000 0.10000000 0.10000000\n0.30000000 0.10000000 0.15000000\n0.30000000 0.10000000 0.20000000\n0.30000000 0.10000000 0.25000000\n0.30000000 0.10000000 0.30000000\n0.30000000 0.10000000 0.35000000\n0.30000000 0.10000000 0.40000000\n0.30000000 0.10000000 0.45000000\n0.30000000 0.10000000 0.50000000\n0.30000000 0.10000000 0.55000000\n0.30000000 0.10000000 0.60000000\n0.30000000 0.10000000 0.65000000\n0.30000000 0.10000000 0.70000000\n0.30000000 0.10000000 1.60000000\n0.30000000 0.10000000 1.65000000\n0.30000000 0.10000000 1.70000000\n0.30000000 0.10000000 1.75000000\n0.30000000 0.10000000 1.80000000\n0.30000000 0.10000000 1.85000000\n0.30000000 0.10000000 1.90000000\n0.30000000 0.10000000 1.95000000\n0.30000000 0.15000000 -1.10000000\n0.30000000 0.15000000 -1.05000000\n0.30000000 0.15000000 -1.00000000\n0.30000000 0.15000000 -0.95000000\n0.30000000 0.15000000 -0.90000000\n0.30000000 0.15000000 -0.85000000\n0.30000000 0.15000000 -0.80000000\n0.30000000 0.15000000 -0.75000000\n0.30000000 0.15000000 -0.70000000\n0.30000000 0.15000000 -0.65000000\n0.30000000 0.15000000 -0.60000000\n0.30000000 0.15000000 0.75000000\n0.30000000 0.15000000 0.80000000\n0.30000000 0.15000000 0.85000000\n0.30000000 0.15000000 0.90000000\n0.30000000 0.15000000 0.95000000\n0.30000000 0.15000000 1.00000000\n0.30000000 0.15000000 1.50000000\n0.30000000 0.15000000 1.55000000\n0.30000000 0.15000000 2.00000000\n0.30000000 0.20000000 -1.35000000\n0.30000000 0.20000000 -1.30000000\n0.30000000 0.20000000 -1.25000000\n0.30000000 0.20000000 -1.20000000\n0.30000000 0.20000000 -1.15000000\n0.30000000 0.20000000 1.05000000\n0.30000000 0.20000000 1.10000000\n0.30000000 0.20000000 1.15000000\n0.30000000 0.20000000 1.20000000\n0.30000000 0.20000000 1.25000000\n0.30000000 0.20000000 1.30000000\n0.30000000 0.20000000 1.35000000\n0.30000000 0.20000000 1.45000000\n0.30000000 0.20000000 2.05000000\n0.30000000 0.25000000 -1.45000000\n0.30000000 0.25000000 -1.40000000\n0.30000000 0.25000000 1.35000000\n0.30000000 0.25000000 1.40000000\n0.30000000 0.25000000 2.10000000\n0.30000000 0.30000000 -1.60000000\n0.30000000 0.30000000 -1.55000000\n0.30000000 0.30000000 -1.50000000\n0.30000000 0.30000000 2.10000000\n0.30000000 0.35000000 -1.70000000\n0.30000000 0.35000000 -1.65000000\n0.30000000 0.35000000 2.10000000\n0.30000000 0.40000000 -1.75000000\n0.30000000 0.40000000 2.10000000\n0.30000000 0.45000000 -1.80000000\n0.30000000 0.45000000 2.10000000\n0.30000000 0.50000000 -1.85000000\n0.30000000 0.50000000 2.10000000\n0.30000000 0.55000000 -1.85000000\n0.30000000 0.55000000 1.40000000\n0.30000000 0.55000000 1.45000000\n0.30000000 0.55000000 1.50000000\n0.30000000 0.55000000 2.05000000\n0.30000000 0.60000000 -1.90000000\n0.30000000 0.60000000 1.20000000\n0.30000000 0.60000000 1.25000000\n0.30000000 0.60000000 1.30000000\n0.30000000 0.60000000 1.35000000\n0.30000000 0.60000000 1.40000000\n0.30000000 0.60000000 1.55000000\n0.30000000 0.60000000 1.60000000\n0.30000000 0.60000000 1.90000000\n0.30000000 0.60000000 1.95000000\n0.30000000 0.60000000 2.00000000\n0.30000000 0.65000000 -1.90000000\n0.30000000 0.65000000 1.00000000\n0.30000000 0.65000000 1.05000000\n0.30000000 0.65000000 1.10000000\n0.30000000 0.65000000 1.15000000\n0.30000000 0.65000000 1.20000000\n0.30000000 0.65000000 1.65000000\n0.30000000 0.65000000 1.70000000\n0.30000000 0.65000000 1.75000000\n0.30000000 0.65000000 1.80000000\n0.30000000 0.65000000 1.85000000\n0.30000000 0.70000000 -1.90000000\n0.30000000 0.70000000 0.60000000\n0.30000000 0.70000000 0.65000000\n0.30000000 0.70000000 0.70000000\n0.30000000 0.70000000 0.75000000\n0.30000000 0.70000000 0.80000000\n0.30000000 0.70000000 0.85000000\n0.30000000 0.70000000 0.90000000\n0.30000000 0.70000000 0.95000000\n0.30000000 0.75000000 -1.90000000\n0.30000000 0.75000000 0.15000000\n0.30000000 0.75000000 0.20000000\n0.30000000 0.75000000 0.25000000\n0.30000000 0.75000000 0.30000000\n0.30000000 0.75000000 0.35000000\n0.30000000 0.75000000 0.40000000\n0.30000000 0.75000000 0.45000000\n0.30000000 0.75000000 0.50000000\n0.30000000 0.75000000 0.55000000\n0.30000000 0.80000000 -1.85000000\n0.30000000 0.80000000 0.05000000\n0.30000000 0.80000000 0.10000000\n0.30000000 0.85000000 -1.85000000\n0.30000000 0.85000000 0.00000000\n0.30000000 0.90000000 -1.80000000\n0.30000000 0.90000000 -0.05000000\n0.30000000 0.95000000 -1.75000000\n0.30000000 0.95000000 -0.15000000\n0.30000000 0.95000000 -0.10000000\n0.30000000 1.00000000 -1.70000000\n0.30000000 1.00000000 -1.65000000\n0.30000000 1.00000000 -0.25000000\n0.30000000 1.00000000 -0.20000000\n0.30000000 1.05000000 -1.60000000\n0.30000000 1.05000000 -1.55000000\n0.30000000 1.05000000 -1.50000000\n0.30000000 1.05000000 -0.40000000\n0.30000000 1.05000000 -0.35000000\n0.30000000 1.05000000 -0.30000000\n0.30000000 1.10000000 -1.45000000\n0.30000000 1.10000000 -1.40000000\n0.30000000 1.10000000 -1.35000000\n0.30000000 1.10000000 -1.30000000\n0.30000000 1.10000000 -0.60000000\n0.30000000 1.10000000 -0.55000000\n0.30000000 1.10000000 -0.50000000\n0.30000000 1.10000000 -0.45000000\n0.30000000 1.15000000 -1.25000000\n0.30000000 1.15000000 -1.20000000\n0.30000000 1.15000000 -1.15000000\n0.30000000 1.15000000 -1.10000000\n0.30000000 1.15000000 -1.05000000\n0.30000000 1.15000000 -1.00000000\n0.30000000 1.15000000 -0.95000000\n0.30000000 1.15000000 -0.90000000\n0.30000000 1.15000000 -0.85000000\n0.30000000 1.15000000 -0.80000000\n0.30000000 1.15000000 -0.75000000\n0.30000000 1.15000000 -0.70000000\n0.30000000 1.15000000 -0.65000000\n0.35000000 0.10000000 -0.50000000\n0.35000000 0.10000000 -0.45000000\n0.35000000 0.10000000 -0.40000000\n0.35000000 0.10000000 -0.35000000\n0.35000000 0.10000000 -0.30000000\n0.35000000 0.10000000 -0.25000000\n0.35000000 0.10000000 -0.20000000\n0.35000000 0.10000000 -0.15000000\n0.35000000 0.10000000 -0.10000000\n0.35000000 0.10000000 -0.05000000\n0.35000000 0.10000000 0.00000000\n0.35000000 0.10000000 0.05000000\n0.35000000 0.10000000 0.10000000\n0.35000000 0.10000000 0.15000000\n0.35000000 0.10000000 0.20000000\n0.35000000 0.10000000 0.25000000\n0.35000000 0.10000000 0.30000000\n0.35000000 0.10000000 0.35000000\n0.35000000 0.10000000 0.40000000\n0.35000000 0.10000000 0.45000000\n0.35000000 0.10000000 0.50000000\n0.35000000 0.10000000 0.55000000\n0.35000000 0.10000000 0.60000000\n0.35000000 0.10000000 0.65000000\n0.35000000 0.10000000 1.60000000\n0.35000000 0.10000000 1.65000000\n0.35000000 0.10000000 1.70000000\n0.35000000 0.10000000 1.75000000\n0.35000000 0.10000000 1.80000000\n0.35000000 0.10000000 1.85000000\n0.35000000 0.10000000 1.90000000\n0.35000000 0.15000000 -1.05000000\n0.35000000 0.15000000 -1.00000000\n0.35000000 0.15000000 -0.95000000\n0.35000000 0.15000000 -0.90000000\n0.35000000 0.15000000 -0.85000000\n0.35000000 0.15000000 -0.80000000\n0.35000000 0.15000000 -0.75000000\n0.35000000 0.15000000 -0.70000000\n0.35000000 0.15000000 -0.65000000\n0.35000000 0.15000000 -0.60000000\n0.35000000 0.15000000 -0.55000000\n0.35000000 0.15000000 0.70000000\n0.35000000 0.15000000 0.75000000\n0.35000000 0.15000000 0.80000000\n0.35000000 0.15000000 0.85000000\n0.35000000 0.15000000 0.90000000\n0.35000000 0.15000000 0.95000000\n0.35000000 0.15000000 1.00000000\n0.35000000 0.15000000 1.50000000\n0.35000000 0.15000000 1.55000000\n0.35000000 0.15000000 1.95000000\n0.35000000 0.15000000 2.00000000\n0.35000000 0.20000000 -1.30000000\n0.35000000 0.20000000 -1.25000000\n0.35000000 0.20000000 -1.20000000\n0.35000000 0.20000000 -1.15000000\n0.35000000 0.20000000 -1.10000000\n0.35000000 0.20000000 1.05000000\n0.35000000 0.20000000 1.10000000\n0.35000000 0.20000000 1.15000000\n0.35000000 0.20000000 1.45000000\n0.35000000 0.20000000 2.05000000\n0.35000000 0.25000000 -1.45000000\n0.35000000 0.25000000 -1.40000000\n0.35000000 0.25000000 -1.35000000\n0.35000000 0.25000000 1.20000000\n0.35000000 0.25000000 1.25000000\n0.35000000 0.25000000 1.30000000\n0.35000000 0.25000000 1.40000000\n0.35000000 0.25000000 2.10000000\n0.35000000 0.30000000 -1.55000000\n0.35000000 0.30000000 -1.50000000\n0.35000000 0.30000000 1.35000000\n0.35000000 0.30000000 2.10000000\n0.35000000 0.35000000 -1.65000000\n0.35000000 0.35000000 -1.60000000\n0.35000000 0.35000000 2.10000000\n0.35000000 0.40000000 -1.75000000\n0.35000000 0.40000000 -1.70000000\n0.35000000 0.40000000 2.10000000\n0.35000000 0.45000000 -1.80000000\n0.35000000 0.45000000 1.35000000\n0.35000000 0.45000000 2.10000000\n0.35000000 0.50000000 -1.80000000\n0.35000000 0.50000000 1.35000000\n0.35000000 0.50000000 1.40000000\n0.35000000 0.50000000 2.10000000\n0.35000000 0.55000000 -1.85000000\n0.35000000 0.55000000 1.20000000\n0.35000000 0.55000000 1.25000000\n0.35000000 0.55000000 1.30000000\n0.35000000 0.55000000 1.35000000\n0.35000000 0.55000000 1.45000000\n0.35000000 0.55000000 1.50000000\n0.35000000 0.55000000 2.00000000\n0.35000000 0.55000000 2.05000000\n0.35000000 0.60000000 -1.85000000\n0.35000000 0.60000000 1.00000000\n0.35000000 0.60000000 1.05000000\n0.35000000 0.60000000 1.10000000\n0.35000000 0.60000000 1.15000000\n0.35000000 0.60000000 1.55000000\n0.35000000 0.60000000 1.60000000\n0.35000000 0.60000000 1.65000000\n0.35000000 0.60000000 1.85000000\n0.35000000 0.60000000 1.90000000\n0.35000000 0.60000000 1.95000000\n0.35000000 0.65000000 -1.90000000\n0.35000000 0.65000000 0.80000000\n0.35000000 0.65000000 0.85000000\n0.35000000 0.65000000 0.90000000\n0.35000000 0.65000000 0.95000000\n0.35000000 0.65000000 1.70000000\n0.35000000 0.65000000 1.75000000\n0.35000000 0.65000000 1.80000000\n0.35000000 0.70000000 -1.90000000\n0.35000000 0.70000000 0.50000000\n0.35000000 0.70000000 0.55000000\n0.35000000 0.70000000 0.60000000\n0.35000000 0.70000000 0.65000000\n0.35000000 0.70000000 0.70000000\n0.35000000 0.70000000 0.75000000\n0.35000000 0.75000000 -1.85000000\n0.35000000 0.75000000 0.10000000\n0.35000000 0.75000000 0.15000000\n0.35000000 0.75000000 0.20000000\n0.35000000 0.75000000 0.25000000\n0.35000000 0.75000000 0.30000000\n0.35000000 0.75000000 0.35000000\n0.35000000 0.75000000 0.40000000\n0.35000000 0.75000000 0.45000000\n0.35000000 0.80000000 -1.85000000\n0.35000000 0.80000000 0.05000000\n0.35000000 0.85000000 -1.85000000\n0.35000000 0.85000000 0.00000000\n0.35000000 0.90000000 -1.80000000\n0.35000000 0.90000000 -0.10000000\n0.35000000 0.90000000 -0.05000000\n0.35000000 0.95000000 -1.75000000\n0.35000000 0.95000000 -1.70000000\n0.35000000 0.95000000 -0.15000000\n0.35000000 1.00000000 -1.65000000\n0.35000000 1.00000000 -1.60000000\n0.35000000 1.00000000 -0.30000000\n0.35000000 1.00000000 -0.25000000\n0.35000000 1.00000000 -0.20000000\n0.35000000 1.05000000 -1.55000000\n0.35000000 1.05000000 -1.50000000\n0.35000000 1.05000000 -0.45000000\n0.35000000 1.05000000 -0.40000000\n0.35000000 1.05000000 -0.35000000\n0.35000000 1.10000000 -1.45000000\n0.35000000 1.10000000 -1.40000000\n0.35000000 1.10000000 -1.35000000\n0.35000000 1.10000000 -1.30000000\n0.35000000 1.10000000 -1.25000000\n0.35000000 1.10000000 -0.70000000\n0.35000000 1.10000000 -0.65000000\n0.35000000 1.10000000 -0.60000000\n0.35000000 1.10000000 -0.55000000\n0.35000000 1.10000000 -0.50000000\n0.35000000 1.15000000 -1.20000000\n0.35000000 1.15000000 -1.15000000\n0.35000000 1.15000000 -1.10000000\n0.35000000 1.15000000 -1.05000000\n0.35000000 1.15000000 -1.00000000\n0.35000000 1.15000000 -0.95000000\n0.35000000 1.15000000 -0.90000000\n0.35000000 1.15000000 -0.85000000\n0.35000000 1.15000000 -0.80000000\n0.35000000 1.15000000 -0.75000000\n0.40000000 0.10000000 -0.40000000\n0.40000000 0.10000000 -0.35000000\n0.40000000 0.10000000 -0.30000000\n0.40000000 0.10000000 -0.25000000\n0.40000000 0.10000000 -0.20000000\n0.40000000 0.10000000 -0.15000000\n0.40000000 0.10000000 -0.10000000\n0.40000000 0.10000000 -0.05000000\n0.40000000 0.10000000 0.00000000\n0.40000000 0.10000000 0.05000000\n0.40000000 0.10000000 0.10000000\n0.40000000 0.10000000 0.15000000\n0.40000000 0.10000000 0.20000000\n0.40000000 0.10000000 0.25000000\n0.40000000 0.10000000 0.30000000\n0.40000000 0.10000000 0.35000000\n0.40000000 0.10000000 0.40000000\n0.40000000 0.10000000 0.45000000\n0.40000000 0.10000000 0.50000000\n0.40000000 0.10000000 0.55000000\n0.40000000 0.10000000 1.60000000\n0.40000000 0.10000000 1.65000000\n0.40000000 0.10000000 1.70000000\n0.40000000 0.10000000 1.75000000\n0.40000000 0.10000000 1.80000000\n0.40000000 0.10000000 1.85000000\n0.40000000 0.10000000 1.90000000\n0.40000000 0.15000000 -0.90000000\n0.40000000 0.15000000 -0.85000000\n0.40000000 0.15000000 -0.80000000\n0.40000000 0.15000000 -0.75000000\n0.40000000 0.15000000 -0.70000000\n0.40000000 0.15000000 -0.65000000\n0.40000000 0.15000000 -0.60000000\n0.40000000 0.15000000 -0.55000000\n0.40000000 0.15000000 -0.50000000\n0.40000000 0.15000000 -0.45000000\n0.40000000 0.15000000 0.60000000\n0.40000000 0.15000000 0.65000000\n0.40000000 0.15000000 0.70000000\n0.40000000 0.15000000 0.75000000\n0.40000000 0.15000000 0.80000000\n0.40000000 0.15000000 0.85000000\n0.40000000 0.15000000 0.90000000\n0.40000000 0.15000000 0.95000000\n0.40000000 0.15000000 1.50000000\n0.40000000 0.15000000 1.55000000\n0.40000000 0.15000000 1.95000000\n0.40000000 0.15000000 2.00000000\n0.40000000 0.20000000 -1.25000000\n0.40000000 0.20000000 -1.20000000\n0.40000000 0.20000000 -1.15000000\n0.40000000 0.20000000 -1.10000000\n0.40000000 0.20000000 -1.05000000\n0.40000000 0.20000000 -1.00000000\n0.40000000 0.20000000 -0.95000000\n0.40000000 0.20000000 1.00000000\n0.40000000 0.20000000 1.05000000\n0.40000000 0.20000000 1.10000000\n0.40000000 0.20000000 1.45000000\n0.40000000 0.20000000 2.05000000\n0.40000000 0.25000000 -1.40000000\n0.40000000 0.25000000 -1.35000000\n0.40000000 0.25000000 -1.30000000\n0.40000000 0.25000000 1.15000000\n0.40000000 0.25000000 1.20000000\n0.40000000 0.25000000 1.25000000\n0.40000000 0.25000000 1.45000000\n0.40000000 0.25000000 2.10000000\n0.40000000 0.30000000 -1.55000000\n0.40000000 0.30000000 -1.50000000\n0.40000000 0.30000000 -1.45000000\n0.40000000 0.30000000 1.30000000\n0.40000000 0.30000000 1.40000000\n0.40000000 0.30000000 2.10000000\n0.40000000 0.35000000 -1.60000000\n0.40000000 0.35000000 1.35000000\n0.40000000 0.35000000 2.10000000\n0.40000000 0.40000000 -1.70000000\n0.40000000 0.40000000 -1.65000000\n0.40000000 0.40000000 1.35000000\n0.40000000 0.40000000 2.10000000\n0.40000000 0.45000000 -1.75000000\n0.40000000 0.45000000 1.30000000\n0.40000000 0.45000000 1.40000000\n0.40000000 0.45000000 2.10000000\n0.40000000 0.50000000 -1.80000000\n0.40000000 0.50000000 1.25000000\n0.40000000 0.50000000 1.30000000\n0.40000000 0.50000000 1.45000000\n0.40000000 0.50000000 2.05000000\n0.40000000 0.55000000 -1.85000000\n0.40000000 0.55000000 1.10000000\n0.40000000 0.55000000 1.15000000\n0.40000000 0.55000000 1.20000000\n0.40000000 0.55000000 1.50000000\n0.40000000 0.55000000 2.00000000\n0.40000000 0.55000000 2.05000000\n0.40000000 0.60000000 -1.85000000\n0.40000000 0.60000000 0.95000000\n0.40000000 0.60000000 1.00000000\n0.40000000 0.60000000 1.05000000\n0.40000000 0.60000000 1.55000000\n0.40000000 0.60000000 1.60000000\n0.40000000 0.60000000 1.65000000\n0.40000000 0.60000000 1.70000000\n0.40000000 0.60000000 1.75000000\n0.40000000 0.60000000 1.80000000\n0.40000000 0.60000000 1.85000000\n0.40000000 0.60000000 1.90000000\n0.40000000 0.60000000 1.95000000\n0.40000000 0.65000000 -1.85000000\n0.40000000 0.65000000 0.75000000\n0.40000000 0.65000000 0.80000000\n0.40000000 0.65000000 0.85000000\n0.40000000 0.65000000 0.90000000\n0.40000000 0.70000000 -1.85000000\n0.40000000 0.70000000 0.45000000\n0.40000000 0.70000000 0.50000000\n0.40000000 0.70000000 0.55000000\n0.40000000 0.70000000 0.60000000\n0.40000000 0.70000000 0.65000000\n0.40000000 0.70000000 0.70000000\n0.40000000 0.75000000 -1.85000000\n0.40000000 0.75000000 0.05000000\n0.40000000 0.75000000 0.10000000\n0.40000000 0.75000000 0.15000000\n0.40000000 0.75000000 0.20000000\n0.40000000 0.75000000 0.25000000\n0.40000000 0.75000000 0.30000000\n0.40000000 0.75000000 0.35000000\n0.40000000 0.75000000 0.40000000\n0.40000000 0.80000000 -1.85000000\n0.40000000 0.80000000 0.00000000\n0.40000000 0.85000000 -1.80000000\n0.40000000 0.85000000 -0.05000000\n0.40000000 0.90000000 -1.75000000\n0.40000000 0.90000000 -0.10000000\n0.40000000 0.95000000 -1.70000000\n0.40000000 0.95000000 -0.20000000\n0.40000000 0.95000000 -0.15000000\n0.40000000 1.00000000 -1.65000000\n0.40000000 1.00000000 -1.60000000\n0.40000000 1.00000000 -0.30000000\n0.40000000 1.00000000 -0.25000000\n0.40000000 1.05000000 -1.55000000\n0.40000000 1.05000000 -1.50000000\n0.40000000 1.05000000 -1.45000000\n0.40000000 1.05000000 -0.45000000\n0.40000000 1.05000000 -0.40000000\n0.40000000 1.05000000 -0.35000000\n0.40000000 1.10000000 -1.40000000\n0.40000000 1.10000000 -1.35000000\n0.40000000 1.10000000 -1.30000000\n0.40000000 1.10000000 -1.25000000\n0.40000000 1.10000000 -1.20000000\n0.40000000 1.10000000 -0.80000000\n0.40000000 1.10000000 -0.75000000\n0.40000000 1.10000000 -0.70000000\n0.40000000 1.10000000 -0.65000000\n0.40000000 1.10000000 -0.60000000\n0.40000000 1.10000000 -0.55000000\n0.40000000 1.10000000 -0.50000000\n0.40000000 1.15000000 -1.15000000\n0.40000000 1.15000000 -1.10000000\n0.40000000 1.15000000 -1.05000000\n0.40000000 1.15000000 -1.00000000\n0.40000000 1.15000000 -0.95000000\n0.40000000 1.15000000 -0.90000000\n0.40000000 1.15000000 -0.85000000\n0.45000000 0.10000000 -0.20000000\n0.45000000 0.10000000 -0.15000000\n0.45000000 0.10000000 -0.10000000\n0.45000000 0.10000000 -0.05000000\n0.45000000 0.10000000 0.00000000\n0.45000000 0.10000000 0.05000000\n0.45000000 0.10000000 0.10000000\n0.45000000 0.10000000 0.15000000\n0.45000000 0.10000000 0.20000000\n0.45000000 0.10000000 0.25000000\n0.45000000 0.10000000 0.30000000\n0.45000000 0.10000000 0.35000000\n0.45000000 0.10000000 0.40000000\n0.45000000 0.10000000 1.65000000\n0.45000000 0.10000000 1.70000000\n0.45000000 0.10000000 1.75000000\n0.45000000 0.10000000 1.80000000\n0.45000000 0.10000000 1.85000000\n0.45000000 0.15000000 -0.80000000\n0.45000000 0.15000000 -0.75000000\n0.45000000 0.15000000 -0.70000000\n0.45000000 0.15000000 -0.65000000\n0.45000000 0.15000000 -0.60000000\n0.45000000 0.15000000 -0.55000000\n0.45000000 0.15000000 -0.50000000\n0.45000000 0.15000000 -0.45000000\n0.45000000 0.15000000 -0.40000000\n0.45000000 0.15000000 -0.35000000\n0.45000000 0.15000000 -0.30000000\n0.45000000 0.15000000 -0.25000000\n0.45000000 0.15000000 0.45000000\n0.45000000 0.15000000 0.50000000\n0.45000000 0.15000000 0.55000000\n0.45000000 0.15000000 0.60000000\n0.45000000 0.15000000 0.65000000\n0.45000000 0.15000000 0.70000000\n0.45000000 0.15000000 0.75000000\n0.45000000 0.15000000 0.80000000\n0.45000000 0.15000000 0.85000000\n0.45000000 0.15000000 1.55000000\n0.45000000 0.15000000 1.60000000\n0.45000000 0.15000000 1.90000000\n0.45000000 0.15000000 1.95000000\n0.45000000 0.15000000 2.00000000\n0.45000000 0.20000000 -1.20000000\n0.45000000 0.20000000 -1.15000000\n0.45000000 0.20000000 -1.10000000\n0.45000000 0.20000000 -1.05000000\n0.45000000 0.20000000 -1.00000000\n0.45000000 0.20000000 -0.95000000\n0.45000000 0.20000000 -0.90000000\n0.45000000 0.20000000 -0.85000000\n0.45000000 0.20000000 0.90000000\n0.45000000 0.20000000 0.95000000\n0.45000000 0.20000000 1.00000000\n0.45000000 0.20000000 1.05000000\n0.45000000 0.20000000 1.10000000\n0.45000000 0.20000000 1.45000000\n0.45000000 0.20000000 1.50000000\n0.45000000 0.20000000 2.05000000\n0.45000000 0.25000000 -1.40000000\n0.45000000 0.25000000 -1.35000000\n0.45000000 0.25000000 -1.30000000\n0.45000000 0.25000000 -1.25000000\n0.45000000 0.25000000 1.15000000\n0.45000000 0.25000000 1.20000000\n0.45000000 0.25000000 1.45000000\n0.45000000 0.25000000 2.05000000\n0.45000000 0.30000000 -1.50000000\n0.45000000 0.30000000 -1.45000000\n0.45000000 0.30000000 1.25000000\n0.45000000 0.30000000 1.40000000\n0.45000000 0.30000000 2.10000000\n0.45000000 0.35000000 -1.60000000\n0.45000000 0.35000000 -1.55000000\n0.45000000 0.35000000 1.30000000\n0.45000000 0.35000000 1.40000000\n0.45000000 0.35000000 2.10000000\n0.45000000 0.40000000 -1.65000000\n0.45000000 0.40000000 1.30000000\n0.45000000 0.40000000 1.40000000\n0.45000000 0.40000000 2.10000000\n0.45000000 0.45000000 -1.75000000\n0.45000000 0.45000000 -1.70000000\n0.45000000 0.45000000 1.30000000\n0.45000000 0.45000000 1.40000000\n0.45000000 0.45000000 2.10000000\n0.45000000 0.50000000 -1.80000000\n0.45000000 0.50000000 1.20000000\n0.45000000 0.50000000 1.25000000\n0.45000000 0.50000000 1.45000000\n0.45000000 0.50000000 2.05000000\n0.45000000 0.55000000 -1.80000000\n0.45000000 0.55000000 1.10000000\n0.45000000 0.55000000 1.15000000\n0.45000000 0.55000000 1.50000000\n0.45000000 0.55000000 2.00000000\n0.45000000 0.60000000 -1.80000000\n0.45000000 0.60000000 0.90000000\n0.45000000 0.60000000 0.95000000\n0.45000000 0.60000000 1.00000000\n0.45000000 0.60000000 1.05000000\n0.45000000 0.60000000 1.55000000\n0.45000000 0.60000000 1.60000000\n0.45000000 0.60000000 1.65000000\n0.45000000 0.60000000 1.70000000\n0.45000000 0.60000000 1.75000000\n0.45000000 0.60000000 1.80000000\n0.45000000 0.60000000 1.85000000\n0.45000000 0.60000000 1.90000000\n0.45000000 0.60000000 1.95000000\n0.45000000 0.65000000 -1.85000000\n0.45000000 0.65000000 0.70000000\n0.45000000 0.65000000 0.75000000\n0.45000000 0.65000000 0.80000000\n0.45000000 0.65000000 0.85000000\n0.45000000 0.70000000 -1.85000000\n0.45000000 0.70000000 0.40000000\n0.45000000 0.70000000 0.45000000\n0.45000000 0.70000000 0.50000000\n0.45000000 0.70000000 0.55000000\n0.45000000 0.70000000 0.60000000\n0.45000000 0.70000000 0.65000000\n0.45000000 0.75000000 -1.85000000\n0.45000000 0.75000000 0.05000000\n0.45000000 0.75000000 0.10000000\n0.45000000 0.75000000 0.15000000\n0.45000000 0.75000000 0.20000000\n0.45000000 0.75000000 0.25000000\n0.45000000 0.75000000 0.30000000\n0.45000000 0.75000000 0.35000000\n0.45000000 0.80000000 -1.80000000\n0.45000000 0.80000000 0.00000000\n0.45000000 0.85000000 -1.80000000\n0.45000000 0.85000000 -0.05000000\n0.45000000 0.90000000 -1.75000000\n0.45000000 0.90000000 -0.15000000\n0.45000000 0.90000000 -0.10000000\n0.45000000 0.95000000 -1.70000000\n0.45000000 0.95000000 -0.20000000\n0.45000000 1.00000000 -1.65000000\n0.45000000 1.00000000 -1.60000000\n0.45000000 1.00000000 -1.55000000\n0.45000000 1.00000000 -0.35000000\n0.45000000 1.00000000 -0.30000000\n0.45000000 1.00000000 -0.25000000\n0.45000000 1.05000000 -1.50000000\n0.45000000 1.05000000 -1.45000000\n0.45000000 1.05000000 -1.40000000\n0.45000000 1.05000000 -0.50000000\n0.45000000 1.05000000 -0.45000000\n0.45000000 1.05000000 -0.40000000\n0.45000000 1.10000000 -1.35000000\n0.45000000 1.10000000 -1.30000000\n0.45000000 1.10000000 -1.25000000\n0.45000000 1.10000000 -1.20000000\n0.45000000 1.10000000 -1.15000000\n0.45000000 1.10000000 -1.10000000\n0.45000000 1.10000000 -1.05000000\n0.45000000 1.10000000 -1.00000000\n0.45000000 1.10000000 -0.95000000\n0.45000000 1.10000000 -0.90000000\n0.45000000 1.10000000 -0.85000000\n0.45000000 1.10000000 -0.80000000\n0.45000000 1.10000000 -0.75000000\n0.45000000 1.10000000 -0.70000000\n0.45000000 1.10000000 -0.65000000\n0.45000000 1.10000000 -0.60000000\n0.45000000 1.10000000 -0.55000000\n0.50000000 0.10000000 1.70000000\n0.50000000 0.10000000 1.75000000\n0.50000000 0.10000000 1.80000000\n0.50000000 0.15000000 -0.70000000\n0.50000000 0.15000000 -0.65000000\n0.50000000 0.15000000 -0.60000000\n0.50000000 0.15000000 -0.55000000\n0.50000000 0.15000000 -0.50000000\n0.50000000 0.15000000 -0.45000000\n0.50000000 0.15000000 -0.40000000\n0.50000000 0.15000000 -0.35000000\n0.50000000 0.15000000 -0.30000000\n0.50000000 0.15000000 -0.25000000\n0.50000000 0.15000000 -0.20000000\n0.50000000 0.15000000 -0.15000000\n0.50000000 0.15000000 -0.10000000\n0.50000000 0.15000000 -0.05000000\n0.50000000 0.15000000 0.00000000\n0.50000000 0.15000000 0.05000000\n0.50000000 0.15000000 0.10000000\n0.50000000 0.15000000 0.15000000\n0.50000000 0.15000000 0.20000000\n0.50000000 0.15000000 0.25000000\n0.50000000 0.15000000 0.30000000\n0.50000000 0.15000000 0.35000000\n0.50000000 0.15000000 0.40000000\n0.50000000 0.15000000 0.45000000\n0.50000000 0.15000000 0.50000000\n0.50000000 0.15000000 0.55000000\n0.50000000 0.15000000 0.60000000\n0.50000000 0.15000000 0.65000000\n0.50000000 0.15000000 0.70000000\n0.50000000 0.15000000 0.75000000\n0.50000000 0.15000000 0.80000000\n0.50000000 0.15000000 1.55000000\n0.50000000 0.15000000 1.60000000\n0.50000000 0.15000000 1.65000000\n0.50000000 0.15000000 1.85000000\n0.50000000 0.15000000 1.90000000\n0.50000000 0.15000000 1.95000000\n0.50000000 0.20000000 -1.15000000\n0.50000000 0.20000000 -1.10000000\n0.50000000 0.20000000 -1.05000000\n0.50000000 0.20000000 -1.00000000\n0.50000000 0.20000000 -0.95000000\n0.50000000 0.20000000 -0.90000000\n0.50000000 0.20000000 -0.85000000\n0.50000000 0.20000000 -0.80000000\n0.50000000 0.20000000 -0.75000000\n0.50000000 0.20000000 0.85000000\n0.50000000 0.20000000 0.90000000\n0.50000000 0.20000000 0.95000000\n0.50000000 0.20000000 1.00000000\n0.50000000 0.20000000 1.50000000\n0.50000000 0.20000000 2.00000000\n0.50000000 0.25000000 -1.35000000\n0.50000000 0.25000000 -1.30000000\n0.50000000 0.25000000 -1.25000000\n0.50000000 0.25000000 -1.20000000\n0.50000000 0.25000000 1.05000000\n0.50000000 0.25000000 1.10000000\n0.50000000 0.25000000 1.15000000\n0.50000000 0.25000000 1.45000000\n0.50000000 0.25000000 2.05000000\n0.50000000 0.30000000 -1.50000000\n0.50000000 0.30000000 -1.45000000\n0.50000000 0.30000000 -1.40000000\n0.50000000 0.30000000 1.20000000\n0.50000000 0.30000000 1.45000000\n0.50000000 0.30000000 2.10000000\n0.50000000 0.35000000 -1.55000000\n0.50000000 0.35000000 1.25000000\n0.50000000 0.35000000 1.40000000\n0.50000000 0.35000000 2.10000000\n0.50000000 0.40000000 -1.65000000\n0.50000000 0.40000000 -1.60000000\n0.50000000 0.40000000 1.25000000\n0.50000000 0.40000000 1.40000000\n0.50000000 0.40000000 2.10000000\n0.50000000 0.45000000 -1.70000000\n0.50000000 0.45000000 1.25000000\n0.50000000 0.45000000 1.45000000\n0.50000000 0.45000000 2.05000000\n0.50000000 0.50000000 -1.75000000\n0.50000000 0.50000000 1.15000000\n0.50000000 0.50000000 1.20000000\n0.50000000 0.50000000 1.45000000\n0.50000000 0.50000000 2.05000000\n0.50000000 0.55000000 -1.80000000\n0.50000000 0.55000000 1.05000000\n0.50000000 0.55000000 1.10000000\n0.50000000 0.55000000 1.50000000\n0.50000000 0.55000000 1.55000000\n0.50000000 0.55000000 1.95000000\n0.50000000 0.55000000 2.00000000\n0.50000000 0.60000000 -1.80000000\n0.50000000 0.60000000 0.85000000\n0.50000000 0.60000000 0.90000000\n0.50000000 0.60000000 0.95000000\n0.50000000 0.60000000 1.00000000\n0.50000000 0.60000000 1.60000000\n0.50000000 0.60000000 1.65000000\n0.50000000 0.60000000 1.70000000\n0.50000000 0.60000000 1.75000000\n0.50000000 0.60000000 1.80000000\n0.50000000 0.60000000 1.85000000\n0.50000000 0.60000000 1.90000000\n0.50000000 0.65000000 -1.80000000\n0.50000000 0.65000000 0.65000000\n0.50000000 0.65000000 0.70000000\n0.50000000 0.65000000 0.75000000\n0.50000000 0.65000000 0.80000000\n0.50000000 0.70000000 -1.80000000\n0.50000000 0.70000000 0.30000000\n0.50000000 0.70000000 0.35000000\n0.50000000 0.70000000 0.40000000\n0.50000000 0.70000000 0.45000000\n0.50000000 0.70000000 0.50000000\n0.50000000 0.70000000 0.55000000\n0.50000000 0.70000000 0.60000000\n0.50000000 0.75000000 -1.80000000\n0.50000000 0.75000000 0.00000000\n0.50000000 0.75000000 0.05000000\n0.50000000 0.75000000 0.10000000\n0.50000000 0.75000000 0.15000000\n0.50000000 0.75000000 0.20000000\n0.50000000 0.75000000 0.25000000\n0.50000000 0.80000000 -1.80000000\n0.50000000 0.80000000 -0.05000000\n0.50000000 0.85000000 -1.75000000\n0.50000000 0.85000000 -0.10000000\n0.50000000 0.90000000 -1.70000000\n0.50000000 0.90000000 -0.15000000\n0.50000000 0.95000000 -1.65000000\n0.50000000 0.95000000 -0.25000000\n0.50000000 0.95000000 -0.20000000\n0.50000000 1.00000000 -1.60000000\n0.50000000 1.00000000 -1.55000000\n0.50000000 1.00000000 -1.50000000\n0.50000000 1.00000000 -0.40000000\n0.50000000 1.00000000 -0.35000000\n0.50000000 1.00000000 -0.30000000\n0.50000000 1.05000000 -1.45000000\n0.50000000 1.05000000 -1.40000000\n0.50000000 1.05000000 -1.35000000\n0.50000000 1.05000000 -0.55000000\n0.50000000 1.05000000 -0.50000000\n0.50000000 1.05000000 -0.45000000\n0.50000000 1.10000000 -1.30000000\n0.50000000 1.10000000 -1.25000000\n0.50000000 1.10000000 -1.20000000\n0.50000000 1.10000000 -1.15000000\n0.50000000 1.10000000 -1.10000000\n0.50000000 1.10000000 -1.05000000\n0.50000000 1.10000000 -1.00000000\n0.50000000 1.10000000 -0.95000000\n0.50000000 1.10000000 -0.90000000\n0.50000000 1.10000000 -0.85000000\n0.50000000 1.10000000 -0.80000000\n0.50000000 1.10000000 -0.75000000\n0.50000000 1.10000000 -0.70000000\n0.50000000 1.10000000 -0.65000000\n0.50000000 1.10000000 -0.60000000\n0.55000000 0.15000000 -0.60000000\n0.55000000 0.15000000 -0.55000000\n0.55000000 0.15000000 -0.50000000\n0.55000000 0.15000000 -0.45000000\n0.55000000 0.15000000 -0.40000000\n0.55000000 0.15000000 -0.35000000\n0.55000000 0.15000000 -0.30000000\n0.55000000 0.15000000 -0.25000000\n0.55000000 0.15000000 -0.20000000\n0.55000000 0.15000000 -0.15000000\n0.55000000 0.15000000 -0.10000000\n0.55000000 0.15000000 -0.05000000\n0.55000000 0.15000000 0.00000000\n0.55000000 0.15000000 0.05000000\n0.55000000 0.15000000 0.10000000\n0.55000000 0.15000000 0.15000000\n0.55000000 0.15000000 0.20000000\n0.55000000 0.15000000 0.25000000\n0.55000000 0.15000000 0.30000000\n0.55000000 0.15000000 0.35000000\n0.55000000 0.15000000 0.40000000\n0.55000000 0.15000000 0.45000000\n0.55000000 0.15000000 0.50000000\n0.55000000 0.15000000 0.55000000\n0.55000000 0.15000000 0.60000000\n0.55000000 0.15000000 0.65000000\n0.55000000 0.15000000 1.55000000\n0.55000000 0.15000000 1.60000000\n0.55000000 0.15000000 1.65000000\n0.55000000 0.15000000 1.70000000\n0.55000000 0.15000000 1.75000000\n0.55000000 0.15000000 1.80000000\n0.55000000 0.15000000 1.85000000\n0.55000000 0.15000000 1.90000000\n0.55000000 0.15000000 1.95000000\n0.55000000 0.20000000 -1.05000000\n0.55000000 0.20000000 -1.00000000\n0.55000000 0.20000000 -0.95000000\n0.55000000 0.20000000 -0.90000000\n0.55000000 0.20000000 -0.85000000\n0.55000000 0.20000000 -0.80000000\n0.55000000 0.20000000 -0.75000000\n0.55000000 0.20000000 -0.70000000\n0.55000000 0.20000000 -0.65000000\n0.55000000 0.20000000 0.70000000\n0.55000000 0.20000000 0.75000000\n0.55000000 0.20000000 0.80000000\n0.55000000 0.20000000 0.85000000\n0.55000000 0.20000000 0.90000000\n0.55000000 0.20000000 0.95000000\n0.55000000 0.20000000 1.50000000\n0.55000000 0.20000000 2.00000000\n0.55000000 0.25000000 -1.30000000\n0.55000000 0.25000000 -1.25000000\n0.55000000 0.25000000 -1.20000000\n0.55000000 0.25000000 -1.15000000\n0.55000000 0.25000000 -1.10000000\n0.55000000 0.25000000 1.00000000\n0.55000000 0.25000000 1.05000000\n0.55000000 0.25000000 1.10000000\n0.55000000 0.25000000 1.45000000\n0.55000000 0.25000000 2.05000000\n0.55000000 0.30000000 -1.45000000\n0.55000000 0.30000000 -1.40000000\n0.55000000 0.30000000 -1.35000000\n0.55000000 0.30000000 1.15000000\n0.55000000 0.30000000 1.45000000\n0.55000000 0.30000000 2.05000000\n0.55000000 0.35000000 -1.55000000\n0.55000000 0.35000000 -1.50000000\n0.55000000 0.35000000 1.20000000\n0.55000000 0.35000000 1.45000000\n0.55000000 0.35000000 2.05000000\n0.55000000 0.40000000 -1.60000000\n0.55000000 0.40000000 1.20000000\n0.55000000 0.40000000 1.45000000\n0.55000000 0.40000000 2.05000000\n0.55000000 0.45000000 -1.65000000\n0.55000000 0.45000000 1.15000000\n0.55000000 0.45000000 1.20000000\n0.55000000 0.45000000 1.45000000\n0.55000000 0.45000000 2.05000000\n0.55000000 0.50000000 -1.70000000\n0.55000000 0.50000000 1.10000000\n0.55000000 0.50000000 1.15000000\n0.55000000 0.50000000 1.50000000\n0.55000000 0.50000000 2.05000000\n0.55000000 0.55000000 -1.75000000\n0.55000000 0.55000000 0.95000000\n0.55000000 0.55000000 1.00000000\n0.55000000 0.55000000 1.05000000\n0.55000000 0.55000000 1.55000000\n0.55000000 0.55000000 1.60000000\n0.55000000 0.55000000 1.95000000\n0.55000000 0.55000000 2.00000000\n0.55000000 0.60000000 -1.75000000\n0.55000000 0.60000000 0.80000000\n0.55000000 0.60000000 0.85000000\n0.55000000 0.60000000 0.90000000\n0.55000000 0.60000000 1.65000000\n0.55000000 0.60000000 1.70000000\n0.55000000 0.60000000 1.75000000\n0.55000000 0.60000000 1.80000000\n0.55000000 0.60000000 1.85000000\n0.55000000 0.60000000 1.90000000\n0.55000000 0.65000000 -1.80000000\n0.55000000 0.65000000 0.55000000\n0.55000000 0.65000000 0.60000000\n0.55000000 0.65000000 0.65000000\n0.55000000 0.65000000 0.70000000\n0.55000000 0.65000000 0.75000000\n0.55000000 0.70000000 -1.80000000\n0.55000000 0.70000000 0.20000000\n0.55000000 0.70000000 0.25000000\n0.55000000 0.70000000 0.30000000\n0.55000000 0.70000000 0.35000000\n0.55000000 0.70000000 0.40000000\n0.55000000 0.70000000 0.45000000\n0.55000000 0.70000000 0.50000000\n0.55000000 0.75000000 -1.80000000\n0.55000000 0.75000000 0.00000000\n0.55000000 0.75000000 0.05000000\n0.55000000 0.75000000 0.10000000\n0.55000000 0.75000000 0.15000000\n0.55000000 0.80000000 -1.75000000\n0.55000000 0.80000000 -0.05000000\n0.55000000 0.85000000 -1.75000000\n0.55000000 0.85000000 -0.10000000\n0.55000000 0.90000000 -1.70000000\n0.55000000 0.90000000 -1.65000000\n0.55000000 0.90000000 -0.20000000\n0.55000000 0.90000000 -0.15000000\n0.55000000 0.95000000 -1.60000000\n0.55000000 0.95000000 -0.30000000\n0.55000000 0.95000000 -0.25000000\n0.55000000 1.00000000 -1.55000000\n0.55000000 1.00000000 -1.50000000\n0.55000000 1.00000000 -1.45000000\n0.55000000 1.00000000 -0.45000000\n0.55000000 1.00000000 -0.40000000\n0.55000000 1.00000000 -0.35000000\n0.55000000 1.05000000 -1.40000000\n0.55000000 1.05000000 -1.35000000\n0.55000000 1.05000000 -1.30000000\n0.55000000 1.05000000 -1.25000000\n0.55000000 1.05000000 -0.65000000\n0.55000000 1.05000000 -0.60000000\n0.55000000 1.05000000 -0.55000000\n0.55000000 1.05000000 -0.50000000\n0.55000000 1.10000000 -1.20000000\n0.55000000 1.10000000 -1.15000000\n0.55000000 1.10000000 -1.10000000\n0.55000000 1.10000000 -1.05000000\n0.55000000 1.10000000 -1.00000000\n0.55000000 1.10000000 -0.95000000\n0.55000000 1.10000000 -0.90000000\n0.55000000 1.10000000 -0.85000000\n0.55000000 1.10000000 -0.80000000\n0.55000000 1.10000000 -0.75000000\n0.55000000 1.10000000 -0.70000000\n0.60000000 0.15000000 -0.45000000\n0.60000000 0.15000000 -0.40000000\n0.60000000 0.15000000 -0.35000000\n0.60000000 0.15000000 -0.30000000\n0.60000000 0.15000000 -0.25000000\n0.60000000 0.15000000 -0.20000000\n0.60000000 0.15000000 -0.15000000\n0.60000000 0.15000000 -0.10000000\n0.60000000 0.15000000 -0.05000000\n0.60000000 0.15000000 0.00000000\n0.60000000 0.15000000 0.05000000\n0.60000000 0.15000000 0.10000000\n0.60000000 0.15000000 0.15000000\n0.60000000 0.15000000 0.20000000\n0.60000000 0.15000000 0.25000000\n0.60000000 0.15000000 0.30000000\n0.60000000 0.15000000 0.35000000\n0.60000000 0.15000000 0.40000000\n0.60000000 0.15000000 0.45000000\n0.60000000 0.15000000 0.50000000\n0.60000000 0.15000000 0.55000000\n0.60000000 0.15000000 1.60000000\n0.60000000 0.15000000 1.65000000\n0.60000000 0.15000000 1.70000000\n0.60000000 0.15000000 1.75000000\n0.60000000 0.15000000 1.80000000\n0.60000000 0.15000000 1.85000000\n0.60000000 0.15000000 1.90000000\n0.60000000 0.20000000 -0.85000000\n0.60000000 0.20000000 -0.80000000\n0.60000000 0.20000000 -0.75000000\n0.60000000 0.20000000 -0.70000000\n0.60000000 0.20000000 -0.65000000\n0.60000000 0.20000000 -0.60000000\n0.60000000 0.20000000 -0.55000000\n0.60000000 0.20000000 -0.50000000\n0.60000000 0.20000000 0.60000000\n0.60000000 0.20000000 0.65000000\n0.60000000 0.20000000 0.70000000\n0.60000000 0.20000000 0.75000000\n0.60000000 0.20000000 0.80000000\n0.60000000 0.20000000 0.85000000\n0.60000000 0.20000000 1.50000000\n0.60000000 0.20000000 1.55000000\n0.60000000 0.20000000 1.95000000\n0.60000000 0.20000000 2.00000000\n0.60000000 0.25000000 -1.20000000\n0.60000000 0.25000000 -1.15000000\n0.60000000 0.25000000 -1.10000000\n0.60000000 0.25000000 -1.05000000\n0.60000000 0.25000000 -1.00000000\n0.60000000 0.25000000 -0.95000000\n0.60000000 0.25000000 -0.90000000\n0.60000000 0.25000000 0.90000000\n0.60000000 0.25000000 0.95000000\n0.60000000 0.25000000 1.00000000\n0.60000000 0.25000000 1.50000000\n0.60000000 0.25000000 2.05000000\n0.60000000 0.30000000 -1.40000000\n0.60000000 0.30000000 -1.35000000\n0.60000000 0.30000000 -1.30000000\n0.60000000 0.30000000 -1.25000000\n0.60000000 0.30000000 1.05000000\n0.60000000 0.30000000 1.10000000\n0.60000000 0.30000000 1.45000000\n0.60000000 0.30000000 2.05000000\n0.60000000 0.35000000 -1.50000000\n0.60000000 0.35000000 -1.45000000\n0.60000000 0.35000000 1.10000000\n0.60000000 0.35000000 1.15000000\n0.60000000 0.35000000 1.45000000\n0.60000000 0.35000000 2.05000000\n0.60000000 0.40000000 -1.60000000\n0.60000000 0.40000000 -1.55000000\n0.60000000 0.40000000 1.10000000\n0.60000000 0.40000000 1.15000000\n0.60000000 0.40000000 1.45000000\n0.60000000 0.40000000 2.05000000\n0.60000000 0.45000000 -1.65000000\n0.60000000 0.45000000 1.10000000\n0.60000000 0.45000000 1.45000000\n0.60000000 0.45000000 2.05000000\n0.60000000 0.50000000 -1.70000000\n0.60000000 0.50000000 1.05000000\n0.60000000 0.50000000 1.10000000\n0.60000000 0.50000000 1.50000000\n0.60000000 0.50000000 2.00000000\n0.60000000 0.55000000 -1.70000000\n0.60000000 0.55000000 0.90000000\n0.60000000 0.55000000 0.95000000\n0.60000000 0.55000000 1.00000000\n0.60000000 0.55000000 1.55000000\n0.60000000 0.55000000 1.60000000\n0.60000000 0.55000000 1.65000000\n0.60000000 0.55000000 1.90000000\n0.60000000 0.55000000 1.95000000\n0.60000000 0.60000000 -1.75000000\n0.60000000 0.60000000 0.75000000\n0.60000000 0.60000000 0.80000000\n0.60000000 0.60000000 0.85000000\n0.60000000 0.60000000 1.70000000\n0.60000000 0.60000000 1.75000000\n0.60000000 0.60000000 1.80000000\n0.60000000 0.60000000 1.85000000\n0.60000000 0.65000000 -1.75000000\n0.60000000 0.65000000 0.50000000\n0.60000000 0.65000000 0.55000000\n0.60000000 0.65000000 0.60000000\n0.60000000 0.65000000 0.65000000\n0.60000000 0.65000000 0.70000000\n0.60000000 0.70000000 -1.75000000\n0.60000000 0.70000000 0.05000000\n0.60000000 0.70000000 0.10000000\n0.60000000 0.70000000 0.15000000\n0.60000000 0.70000000 0.20000000\n0.60000000 0.70000000 0.25000000\n0.60000000 0.70000000 0.30000000\n0.60000000 0.70000000 0.35000000\n0.60000000 0.70000000 0.40000000\n0.60000000 0.70000000 0.45000000\n0.60000000 0.75000000 -1.75000000\n0.60000000 0.75000000 -0.05000000\n0.60000000 0.75000000 0.00000000\n0.60000000 0.80000000 -1.75000000\n0.60000000 0.80000000 -0.10000000\n0.60000000 0.85000000 -1.70000000\n0.60000000 0.85000000 -0.15000000\n0.60000000 0.90000000 -1.65000000\n0.60000000 0.90000000 -0.25000000\n0.60000000 0.90000000 -0.20000000\n0.60000000 0.95000000 -1.60000000\n0.60000000 0.95000000 -1.55000000\n0.60000000 0.95000000 -0.35000000\n0.60000000 0.95000000 -0.30000000\n0.60000000 1.00000000 -1.50000000\n0.60000000 1.00000000 -1.45000000\n0.60000000 1.00000000 -1.40000000\n0.60000000 1.00000000 -0.50000000\n0.60000000 1.00000000 -0.45000000\n0.60000000 1.00000000 -0.40000000\n0.60000000 1.05000000 -1.35000000\n0.60000000 1.05000000 -1.30000000\n0.60000000 1.05000000 -1.25000000\n0.60000000 1.05000000 -1.20000000\n0.60000000 1.05000000 -1.15000000\n0.60000000 1.05000000 -1.10000000\n0.60000000 1.05000000 -0.85000000\n0.60000000 1.05000000 -0.80000000\n0.60000000 1.05000000 -0.75000000\n0.60000000 1.05000000 -0.70000000\n0.60000000 1.05000000 -0.65000000\n0.60000000 1.05000000 -0.60000000\n0.60000000 1.05000000 -0.55000000\n0.60000000 1.10000000 -1.05000000\n0.60000000 1.10000000 -1.00000000\n0.60000000 1.10000000 -0.95000000\n0.60000000 1.10000000 -0.90000000\n0.65000000 0.15000000 -0.25000000\n0.65000000 0.15000000 -0.20000000\n0.65000000 0.15000000 -0.15000000\n0.65000000 0.15000000 -0.10000000\n0.65000000 0.15000000 -0.05000000\n0.65000000 0.15000000 0.00000000\n0.65000000 0.15000000 0.05000000\n0.65000000 0.15000000 0.10000000\n0.65000000 0.15000000 0.15000000\n0.65000000 0.15000000 0.20000000\n0.65000000 0.15000000 0.25000000\n0.65000000 0.15000000 0.30000000\n0.65000000 0.15000000 0.35000000\n0.65000000 0.15000000 1.65000000\n0.65000000 0.15000000 1.70000000\n0.65000000 0.15000000 1.75000000\n0.65000000 0.15000000 1.80000000\n0.65000000 0.15000000 1.85000000\n0.65000000 0.20000000 -0.75000000\n0.65000000 0.20000000 -0.70000000\n0.65000000 0.20000000 -0.65000000\n0.65000000 0.20000000 -0.60000000\n0.65000000 0.20000000 -0.55000000\n0.65000000 0.20000000 -0.50000000\n0.65000000 0.20000000 -0.45000000\n0.65000000 0.20000000 -0.40000000\n0.65000000 0.20000000 -0.35000000\n0.65000000 0.20000000 -0.30000000\n0.65000000 0.20000000 0.40000000\n0.65000000 0.20000000 0.45000000\n0.65000000 0.20000000 0.50000000\n0.65000000 0.20000000 0.55000000\n0.65000000 0.20000000 0.60000000\n0.65000000 0.20000000 0.65000000\n0.65000000 0.20000000 0.70000000\n0.65000000 0.20000000 0.75000000\n0.65000000 0.20000000 1.55000000\n0.65000000 0.20000000 1.60000000\n0.65000000 0.20000000 1.90000000\n0.65000000 0.20000000 1.95000000\n0.65000000 0.25000000 -1.10000000\n0.65000000 0.25000000 -1.05000000\n0.65000000 0.25000000 -1.00000000\n0.65000000 0.25000000 -0.95000000\n0.65000000 0.25000000 -0.90000000\n0.65000000 0.25000000 -0.85000000\n0.65000000 0.25000000 -0.80000000\n0.65000000 0.25000000 0.80000000\n0.65000000 0.25000000 0.85000000\n0.65000000 0.25000000 0.90000000\n0.65000000 0.25000000 1.50000000\n0.65000000 0.25000000 2.00000000\n0.65000000 0.30000000 -1.35000000\n0.65000000 0.30000000 -1.30000000\n0.65000000 0.30000000 -1.25000000\n0.65000000 0.30000000 -1.20000000\n0.65000000 0.30000000 -1.15000000\n0.65000000 0.30000000 0.95000000\n0.65000000 0.30000000 1.00000000\n0.65000000 0.30000000 1.05000000\n0.65000000 0.30000000 1.50000000\n0.65000000 0.30000000 2.05000000\n0.65000000 0.35000000 -1.45000000\n0.65000000 0.35000000 -1.40000000\n0.65000000 0.35000000 1.05000000\n0.65000000 0.35000000 1.45000000\n0.65000000 0.35000000 2.05000000\n0.65000000 0.40000000 -1.55000000\n0.65000000 0.40000000 -1.50000000\n0.65000000 0.40000000 1.05000000\n0.65000000 0.40000000 1.45000000\n0.65000000 0.40000000 2.05000000\n0.65000000 0.45000000 -1.60000000\n0.65000000 0.45000000 1.05000000\n0.65000000 0.45000000 1.50000000\n0.65000000 0.45000000 2.00000000\n0.65000000 0.50000000 -1.65000000\n0.65000000 0.50000000 0.95000000\n0.65000000 0.50000000 1.00000000\n0.65000000 0.50000000 1.55000000\n0.65000000 0.50000000 1.95000000\n0.65000000 0.50000000 2.00000000\n0.65000000 0.55000000 -1.70000000\n0.65000000 0.55000000 0.85000000\n0.65000000 0.55000000 0.90000000\n0.65000000 0.55000000 1.60000000\n0.65000000 0.55000000 1.65000000\n0.65000000 0.55000000 1.70000000\n0.65000000 0.55000000 1.75000000\n0.65000000 0.55000000 1.80000000\n0.65000000 0.55000000 1.85000000\n0.65000000 0.55000000 1.90000000\n0.65000000 0.60000000 -1.70000000\n0.65000000 0.60000000 0.65000000\n0.65000000 0.60000000 0.70000000\n0.65000000 0.60000000 0.75000000\n0.65000000 0.60000000 0.80000000\n0.65000000 0.65000000 -1.70000000\n0.65000000 0.65000000 0.40000000\n0.65000000 0.65000000 0.45000000\n0.65000000 0.65000000 0.50000000\n0.65000000 0.65000000 0.55000000\n0.65000000 0.65000000 0.60000000\n0.65000000 0.70000000 -1.70000000\n0.65000000 0.70000000 -0.05000000\n0.65000000 0.70000000 0.00000000\n0.65000000 0.70000000 0.05000000\n0.65000000 0.70000000 0.10000000\n0.65000000 0.70000000 0.15000000\n0.65000000 0.70000000 0.20000000\n0.65000000 0.70000000 0.25000000\n0.65000000 0.70000000 0.30000000\n0.65000000 0.70000000 0.35000000\n0.65000000 0.75000000 -1.70000000\n0.65000000 0.75000000 -0.10000000\n0.65000000 0.80000000 -1.70000000\n0.65000000 0.80000000 -0.15000000\n0.65000000 0.85000000 -1.65000000\n0.65000000 0.85000000 -0.20000000\n0.65000000 0.90000000 -1.60000000\n0.65000000 0.90000000 -0.30000000\n0.65000000 0.90000000 -0.25000000\n0.65000000 0.95000000 -1.55000000\n0.65000000 0.95000000 -1.50000000\n0.65000000 0.95000000 -1.45000000\n0.65000000 0.95000000 -0.40000000\n0.65000000 0.95000000 -0.35000000\n0.65000000 1.00000000 -1.40000000\n0.65000000 1.00000000 -1.35000000\n0.65000000 1.00000000 -1.30000000\n0.65000000 1.00000000 -0.60000000\n0.65000000 1.00000000 -0.55000000\n0.65000000 1.00000000 -0.50000000\n0.65000000 1.00000000 -0.45000000\n0.65000000 1.05000000 -1.25000000\n0.65000000 1.05000000 -1.20000000\n0.65000000 1.05000000 -1.15000000\n0.65000000 1.05000000 -1.10000000\n0.65000000 1.05000000 -1.05000000\n0.65000000 1.05000000 -1.00000000\n0.65000000 1.05000000 -0.95000000\n0.65000000 1.05000000 -0.90000000\n0.65000000 1.05000000 -0.85000000\n0.65000000 1.05000000 -0.80000000\n0.65000000 1.05000000 -0.75000000\n0.65000000 1.05000000 -0.70000000\n0.65000000 1.05000000 -0.65000000\n0.70000000 0.10000000 1.75000000\n0.70000000 0.10000000 1.80000000\n0.70000000 0.15000000 1.65000000\n0.70000000 0.15000000 1.70000000\n0.70000000 0.15000000 1.85000000\n0.70000000 0.15000000 1.90000000\n0.70000000 0.20000000 -1.30000000\n0.70000000 0.20000000 -1.25000000\n0.70000000 0.20000000 -1.20000000\n0.70000000 0.20000000 -1.15000000\n0.70000000 0.20000000 -1.10000000\n0.70000000 0.20000000 -0.60000000\n0.70000000 0.20000000 -0.55000000\n0.70000000 0.20000000 -0.50000000\n0.70000000 0.20000000 -0.45000000\n0.70000000 0.20000000 -0.40000000\n0.70000000 0.20000000 -0.35000000\n0.70000000 0.20000000 -0.30000000\n0.70000000 0.20000000 -0.25000000\n0.70000000 0.20000000 -0.20000000\n0.70000000 0.20000000 -0.15000000\n0.70000000 0.20000000 -0.10000000\n0.70000000 0.20000000 -0.05000000\n0.70000000 0.20000000 0.00000000\n0.70000000 0.20000000 0.05000000\n0.70000000 0.20000000 0.10000000\n0.70000000 0.20000000 0.15000000\n0.70000000 0.20000000 0.20000000\n0.70000000 0.20000000 0.25000000\n0.70000000 0.20000000 0.30000000\n0.70000000 0.20000000 0.35000000\n0.70000000 0.20000000 0.40000000\n0.70000000 0.20000000 0.45000000\n0.70000000 0.20000000 0.50000000\n0.70000000 0.20000000 0.55000000\n0.70000000 0.20000000 0.60000000\n0.70000000 0.20000000 1.60000000\n0.70000000 0.20000000 1.95000000\n0.70000000 0.25000000 -1.35000000\n0.70000000 0.25000000 -1.30000000\n0.70000000 0.25000000 -1.25000000\n0.70000000 0.25000000 -1.20000000\n0.70000000 0.25000000 -1.15000000\n0.70000000 0.25000000 -1.05000000\n0.70000000 0.25000000 -1.00000000\n0.70000000 0.25000000 -0.95000000\n0.70000000 0.25000000 -0.90000000\n0.70000000 0.25000000 -0.85000000\n0.70000000 0.25000000 -0.80000000\n0.70000000 0.25000000 -0.75000000\n0.70000000 0.25000000 -0.70000000\n0.70000000 0.25000000 -0.65000000\n0.70000000 0.25000000 0.65000000\n0.70000000 0.25000000 0.70000000\n0.70000000 0.25000000 0.75000000\n0.70000000 0.25000000 0.80000000\n0.70000000 0.25000000 0.85000000\n0.70000000 0.25000000 1.55000000\n0.70000000 0.25000000 2.00000000\n0.70000000 0.30000000 -1.35000000\n0.70000000 0.30000000 0.90000000\n0.70000000 0.30000000 0.95000000\n0.70000000 0.30000000 1.50000000\n0.70000000 0.30000000 2.00000000\n0.70000000 0.35000000 -1.35000000\n0.70000000 0.35000000 0.95000000\n0.70000000 0.35000000 1.00000000\n0.70000000 0.35000000 1.50000000\n0.70000000 0.35000000 2.00000000\n0.70000000 0.40000000 -1.50000000\n0.70000000 0.40000000 -1.45000000\n0.70000000 0.40000000 -1.40000000\n0.70000000 0.40000000 0.95000000\n0.70000000 0.40000000 1.00000000\n0.70000000 0.40000000 1.50000000\n0.70000000 0.40000000 2.00000000\n0.70000000 0.45000000 -1.55000000\n0.70000000 0.45000000 0.95000000\n0.70000000 0.45000000 1.00000000\n0.70000000 0.45000000 1.50000000\n0.70000000 0.45000000 2.00000000\n0.70000000 0.50000000 -1.60000000\n0.70000000 0.50000000 0.90000000\n0.70000000 0.50000000 1.55000000\n0.70000000 0.50000000 1.60000000\n0.70000000 0.50000000 1.95000000\n0.70000000 0.55000000 -1.65000000\n0.70000000 0.55000000 0.75000000\n0.70000000 0.55000000 0.80000000\n0.70000000 0.55000000 0.85000000\n0.70000000 0.55000000 1.65000000\n0.70000000 0.55000000 1.70000000\n0.70000000 0.55000000 1.85000000\n0.70000000 0.55000000 1.90000000\n0.70000000 0.60000000 -1.65000000\n0.70000000 0.60000000 0.55000000\n0.70000000 0.60000000 0.60000000\n0.70000000 0.60000000 0.65000000\n0.70000000 0.60000000 0.70000000\n0.70000000 0.60000000 1.75000000\n0.70000000 0.60000000 1.80000000\n0.70000000 0.65000000 -1.65000000\n0.70000000 0.65000000 0.25000000\n0.70000000 0.65000000 0.30000000\n0.70000000 0.65000000 0.35000000\n0.70000000 0.65000000 0.40000000\n0.70000000 0.65000000 0.45000000\n0.70000000 0.65000000 0.50000000\n0.70000000 0.70000000 -1.65000000\n0.70000000 0.70000000 -0.10000000\n0.70000000 0.70000000 -0.05000000\n0.70000000 0.70000000 0.00000000\n0.70000000 0.70000000 0.05000000\n0.70000000 0.70000000 0.10000000\n0.70000000 0.70000000 0.15000000\n0.70000000 0.70000000 0.20000000\n0.70000000 0.75000000 -1.65000000\n0.70000000 0.75000000 -0.15000000\n0.70000000 0.80000000 -1.65000000\n0.70000000 0.80000000 -0.20000000\n0.70000000 0.85000000 -1.60000000\n0.70000000 0.85000000 -0.25000000\n0.70000000 0.90000000 -1.55000000\n0.70000000 0.90000000 -1.50000000\n0.70000000 0.90000000 -0.35000000\n0.70000000 0.90000000 -0.30000000\n0.70000000 0.95000000 -1.45000000\n0.70000000 0.95000000 -1.40000000\n0.70000000 0.95000000 -0.50000000\n0.70000000 0.95000000 -0.45000000\n0.70000000 0.95000000 -0.40000000\n0.70000000 1.00000000 -1.35000000\n0.70000000 1.00000000 -1.30000000\n0.70000000 1.00000000 -1.25000000\n0.70000000 1.00000000 -1.20000000\n0.70000000 1.00000000 -0.75000000\n0.70000000 1.00000000 -0.70000000\n0.70000000 1.00000000 -0.65000000\n0.70000000 1.00000000 -0.60000000\n0.70000000 1.00000000 -0.55000000\n0.70000000 1.05000000 -1.15000000\n0.70000000 1.05000000 -1.10000000\n0.70000000 1.05000000 -1.05000000\n0.70000000 1.05000000 -1.00000000\n0.70000000 1.05000000 -0.95000000\n0.70000000 1.05000000 -0.90000000\n0.70000000 1.05000000 -0.85000000\n0.70000000 1.05000000 -0.80000000\n0.75000000 0.05000000 -1.30000000\n0.75000000 0.05000000 -1.25000000\n0.75000000 0.05000000 -1.20000000\n0.75000000 0.05000000 -1.15000000\n0.75000000 0.05000000 1.65000000\n0.75000000 0.05000000 1.70000000\n0.75000000 0.05000000 1.75000000\n0.75000000 0.05000000 1.80000000\n0.75000000 0.05000000 1.85000000\n0.75000000 0.05000000 1.90000000\n0.75000000 0.10000000 -1.35000000\n0.75000000 0.10000000 -1.30000000\n0.75000000 0.10000000 -1.25000000\n0.75000000 0.10000000 -1.20000000\n0.75000000 0.10000000 -1.15000000\n0.75000000 0.10000000 -1.10000000\n0.75000000 0.10000000 -1.05000000\n0.75000000 0.10000000 1.55000000\n0.75000000 0.10000000 1.60000000\n0.75000000 0.10000000 1.65000000\n0.75000000 0.10000000 1.70000000\n0.75000000 0.10000000 1.85000000\n0.75000000 0.10000000 1.90000000\n0.75000000 0.10000000 1.95000000\n0.75000000 0.10000000 2.00000000\n0.75000000 0.15000000 -1.40000000\n0.75000000 0.15000000 -1.35000000\n0.75000000 0.15000000 -1.30000000\n0.75000000 0.15000000 -1.25000000\n0.75000000 0.15000000 -1.20000000\n0.75000000 0.15000000 -1.15000000\n0.75000000 0.15000000 -1.10000000\n0.75000000 0.15000000 -1.05000000\n0.75000000 0.15000000 -1.00000000\n0.75000000 0.15000000 1.55000000\n0.75000000 0.15000000 1.60000000\n0.75000000 0.15000000 1.95000000\n0.75000000 0.15000000 2.00000000\n0.75000000 0.15000000 2.05000000\n0.75000000 0.20000000 -1.45000000\n0.75000000 0.20000000 -1.40000000\n0.75000000 0.20000000 -1.35000000\n0.75000000 0.20000000 -1.05000000\n0.75000000 0.20000000 -1.00000000\n0.75000000 0.20000000 -0.95000000\n0.75000000 0.20000000 -0.45000000\n0.75000000 0.20000000 -0.40000000\n0.75000000 0.20000000 -0.35000000\n0.75000000 0.20000000 -0.30000000\n0.75000000 0.20000000 -0.25000000\n0.75000000 0.20000000 -0.20000000\n0.75000000 0.20000000 -0.15000000\n0.75000000 0.20000000 -0.10000000\n0.75000000 0.20000000 -0.05000000\n0.75000000 0.20000000 0.00000000\n0.75000000 0.20000000 0.05000000\n0.75000000 0.20000000 0.10000000\n0.75000000 0.20000000 0.15000000\n0.75000000 0.20000000 0.20000000\n0.75000000 0.20000000 0.25000000\n0.75000000 0.20000000 0.30000000\n0.75000000 0.20000000 0.35000000\n0.75000000 0.20000000 0.40000000\n0.75000000 0.20000000 0.45000000\n0.75000000 0.20000000 1.50000000\n0.75000000 0.20000000 1.55000000\n0.75000000 0.20000000 2.00000000\n0.75000000 0.20000000 2.05000000\n0.75000000 0.25000000 -1.50000000\n0.75000000 0.25000000 -1.45000000\n0.75000000 0.25000000 -1.40000000\n0.75000000 0.25000000 -0.95000000\n0.75000000 0.25000000 -0.80000000\n0.75000000 0.25000000 -0.75000000\n0.75000000 0.25000000 -0.70000000\n0.75000000 0.25000000 -0.65000000\n0.75000000 0.25000000 -0.60000000\n0.75000000 0.25000000 -0.55000000\n0.75000000 0.25000000 -0.50000000\n0.75000000 0.25000000 0.50000000\n0.75000000 0.25000000 0.55000000\n0.75000000 0.25000000 0.60000000\n0.75000000 0.25000000 0.65000000\n0.75000000 0.25000000 0.70000000\n0.75000000 0.25000000 1.50000000\n0.75000000 0.25000000 2.05000000\n0.75000000 0.25000000 2.10000000\n0.75000000 0.30000000 -1.50000000\n0.75000000 0.30000000 -1.45000000\n0.75000000 0.30000000 -1.40000000\n0.75000000 0.30000000 -0.90000000\n0.75000000 0.30000000 -0.85000000\n0.75000000 0.30000000 0.75000000\n0.75000000 0.30000000 0.80000000\n0.75000000 0.30000000 0.85000000\n0.75000000 0.30000000 1.45000000\n0.75000000 0.30000000 2.05000000\n0.75000000 0.30000000 2.10000000\n0.75000000 0.35000000 -1.50000000\n0.75000000 0.35000000 -1.45000000\n0.75000000 0.35000000 -1.40000000\n0.75000000 0.35000000 0.85000000\n0.75000000 0.35000000 0.90000000\n0.75000000 0.35000000 1.45000000\n0.75000000 0.35000000 2.05000000\n0.75000000 0.35000000 2.10000000\n0.75000000 0.40000000 -1.50000000\n0.75000000 0.40000000 0.85000000\n0.75000000 0.40000000 0.90000000\n0.75000000 0.40000000 1.45000000\n0.75000000 0.40000000 2.05000000\n0.75000000 0.40000000 2.10000000\n0.75000000 0.45000000 -1.50000000\n0.75000000 0.45000000 0.85000000\n0.75000000 0.45000000 0.90000000\n0.75000000 0.45000000 1.50000000\n0.75000000 0.45000000 2.05000000\n0.75000000 0.45000000 2.10000000\n0.75000000 0.50000000 -1.55000000\n0.75000000 0.50000000 0.80000000\n0.75000000 0.50000000 0.85000000\n0.75000000 0.50000000 1.50000000\n0.75000000 0.50000000 2.00000000\n0.75000000 0.50000000 2.05000000\n0.75000000 0.55000000 -1.60000000\n0.75000000 0.55000000 0.65000000\n0.75000000 0.55000000 0.70000000\n0.75000000 0.55000000 0.75000000\n0.75000000 0.55000000 1.50000000\n0.75000000 0.55000000 1.55000000\n0.75000000 0.55000000 1.60000000\n0.75000000 0.55000000 1.95000000\n0.75000000 0.55000000 2.00000000\n0.75000000 0.55000000 2.05000000\n0.75000000 0.60000000 -1.60000000\n0.75000000 0.60000000 0.45000000\n0.75000000 0.60000000 0.50000000\n0.75000000 0.60000000 0.55000000\n0.75000000 0.60000000 0.60000000\n0.75000000 0.60000000 1.55000000\n0.75000000 0.60000000 1.60000000\n0.75000000 0.60000000 1.65000000\n0.75000000 0.60000000 1.70000000\n0.75000000 0.60000000 1.85000000\n0.75000000 0.60000000 1.90000000\n0.75000000 0.60000000 1.95000000\n0.75000000 0.60000000 2.00000000\n0.75000000 0.65000000 -1.60000000\n0.75000000 0.65000000 0.05000000\n0.75000000 0.65000000 0.10000000\n0.75000000 0.65000000 0.15000000\n0.75000000 0.65000000 0.20000000\n0.75000000 0.65000000 0.25000000\n0.75000000 0.65000000 0.30000000\n0.75000000 0.65000000 0.35000000\n0.75000000 0.65000000 0.40000000\n0.75000000 0.65000000 1.65000000\n0.75000000 0.65000000 1.70000000\n0.75000000 0.65000000 1.75000000\n0.75000000 0.65000000 1.80000000\n0.75000000 0.65000000 1.85000000\n0.75000000 0.65000000 1.90000000\n0.75000000 0.65000000 1.95000000\n0.75000000 0.70000000 -1.60000000\n0.75000000 0.70000000 -0.20000000\n0.75000000 0.70000000 -0.15000000\n0.75000000 0.70000000 -0.10000000\n0.75000000 0.70000000 -0.05000000\n0.75000000 0.70000000 0.00000000\n0.75000000 0.75000000 -1.60000000\n0.75000000 0.75000000 -0.20000000\n0.75000000 0.80000000 -1.60000000\n0.75000000 0.80000000 -0.25000000\n0.75000000 0.85000000 -1.55000000\n0.75000000 0.85000000 -0.35000000\n0.75000000 0.85000000 -0.30000000\n0.75000000 0.90000000 -1.50000000\n0.75000000 0.90000000 -1.45000000\n0.75000000 0.90000000 -0.45000000\n0.75000000 0.90000000 -0.40000000\n0.75000000 0.95000000 -1.40000000\n0.75000000 0.95000000 -1.35000000\n0.75000000 0.95000000 -1.30000000\n0.75000000 0.95000000 -0.60000000\n0.75000000 0.95000000 -0.55000000\n0.75000000 0.95000000 -0.50000000\n0.75000000 1.00000000 -1.25000000\n0.75000000 1.00000000 -1.20000000\n0.75000000 1.00000000 -1.15000000\n0.75000000 1.00000000 -1.10000000\n0.75000000 1.00000000 -1.05000000\n0.75000000 1.00000000 -1.00000000\n0.75000000 1.00000000 -0.95000000\n0.75000000 1.00000000 -0.90000000\n0.75000000 1.00000000 -0.85000000\n0.75000000 1.00000000 -0.80000000\n0.75000000 1.00000000 -0.75000000\n0.75000000 1.00000000 -0.70000000\n0.75000000 1.00000000 -0.65000000\n0.80000000 0.00000000 -1.30000000\n0.80000000 0.00000000 -1.25000000\n0.80000000 0.00000000 -1.20000000\n0.80000000 0.00000000 -1.15000000\n0.80000000 0.00000000 1.65000000\n0.80000000 0.00000000 1.70000000\n0.80000000 0.00000000 1.75000000\n0.80000000 0.00000000 1.80000000\n0.80000000 0.00000000 1.85000000\n0.80000000 0.00000000 1.90000000\n0.80000000 0.05000000 -1.40000000\n0.80000000 0.05000000 -1.35000000\n0.80000000 0.05000000 -1.10000000\n0.80000000 0.05000000 -1.05000000\n0.80000000 0.05000000 -1.00000000\n0.80000000 0.05000000 1.55000000\n0.80000000 0.05000000 1.60000000\n0.80000000 0.05000000 1.95000000\n0.80000000 0.05000000 2.00000000\n0.80000000 0.10000000 -1.45000000\n0.80000000 0.10000000 -1.40000000\n0.80000000 0.10000000 -1.00000000\n0.80000000 0.10000000 -0.95000000\n0.80000000 0.10000000 1.50000000\n0.80000000 0.10000000 2.05000000\n0.80000000 0.15000000 -1.50000000\n0.80000000 0.15000000 -1.45000000\n0.80000000 0.15000000 -0.95000000\n0.80000000 0.15000000 -0.90000000\n0.80000000 0.15000000 1.50000000\n0.80000000 0.15000000 2.10000000\n0.80000000 0.20000000 -1.50000000\n0.80000000 0.20000000 -0.90000000\n0.80000000 0.20000000 1.45000000\n0.80000000 0.20000000 2.10000000\n0.80000000 0.25000000 -1.55000000\n0.80000000 0.25000000 -0.90000000\n0.80000000 0.25000000 -0.65000000\n0.80000000 0.25000000 -0.60000000\n0.80000000 0.25000000 -0.55000000\n0.80000000 0.25000000 -0.50000000\n0.80000000 0.25000000 -0.45000000\n0.80000000 0.25000000 -0.40000000\n0.80000000 0.25000000 -0.35000000\n0.80000000 0.25000000 -0.30000000\n0.80000000 0.25000000 -0.25000000\n0.80000000 0.25000000 -0.20000000\n0.80000000 0.25000000 -0.15000000\n0.80000000 0.25000000 -0.10000000\n0.80000000 0.25000000 -0.05000000\n0.80000000 0.25000000 0.00000000\n0.80000000 0.25000000 0.05000000\n0.80000000 0.25000000 0.10000000\n0.80000000 0.25000000 0.15000000\n0.80000000 0.25000000 0.20000000\n0.80000000 0.25000000 0.25000000\n0.80000000 0.25000000 0.30000000\n0.80000000 0.25000000 0.35000000\n0.80000000 0.25000000 0.40000000\n0.80000000 0.25000000 0.45000000\n0.80000000 0.25000000 0.50000000\n0.80000000 0.25000000 0.55000000\n0.80000000 0.25000000 1.45000000\n0.80000000 0.25000000 2.15000000\n0.80000000 0.30000000 -1.55000000\n0.80000000 0.30000000 -0.85000000\n0.80000000 0.30000000 -0.80000000\n0.80000000 0.30000000 -0.75000000\n0.80000000 0.30000000 -0.70000000\n0.80000000 0.30000000 0.60000000\n0.80000000 0.30000000 0.65000000\n0.80000000 0.30000000 0.70000000\n0.80000000 0.30000000 1.45000000\n0.80000000 0.30000000 2.15000000\n0.80000000 0.35000000 -1.55000000\n0.80000000 0.35000000 0.70000000\n0.80000000 0.35000000 0.75000000\n0.80000000 0.35000000 0.80000000\n0.80000000 0.35000000 1.45000000\n0.80000000 0.35000000 2.15000000\n0.80000000 0.40000000 -1.55000000\n0.80000000 0.40000000 0.70000000\n0.80000000 0.40000000 0.75000000\n0.80000000 0.40000000 0.80000000\n0.80000000 0.40000000 1.45000000\n0.80000000 0.40000000 2.15000000\n0.80000000 0.45000000 -1.55000000\n0.80000000 0.45000000 0.70000000\n0.80000000 0.45000000 0.75000000\n0.80000000 0.45000000 0.80000000\n0.80000000 0.45000000 1.45000000\n0.80000000 0.45000000 2.15000000\n0.80000000 0.50000000 -1.50000000\n0.80000000 0.50000000 0.65000000\n0.80000000 0.50000000 0.70000000\n0.80000000 0.50000000 0.75000000\n0.80000000 0.50000000 1.45000000\n0.80000000 0.50000000 2.10000000\n0.80000000 0.55000000 -1.55000000\n0.80000000 0.55000000 0.55000000\n0.80000000 0.55000000 0.60000000\n0.80000000 0.55000000 0.65000000\n0.80000000 0.55000000 1.45000000\n0.80000000 0.55000000 2.10000000\n0.80000000 0.60000000 -1.55000000\n0.80000000 0.60000000 0.25000000\n0.80000000 0.60000000 0.30000000\n0.80000000 0.60000000 0.35000000\n0.80000000 0.60000000 0.40000000\n0.80000000 0.60000000 0.45000000\n0.80000000 0.60000000 0.50000000\n0.80000000 0.60000000 1.50000000\n0.80000000 0.60000000 2.05000000\n0.80000000 0.65000000 -1.55000000\n0.80000000 0.65000000 -0.20000000\n0.80000000 0.65000000 -0.15000000\n0.80000000 0.65000000 -0.10000000\n0.80000000 0.65000000 -0.05000000\n0.80000000 0.65000000 0.00000000\n0.80000000 0.65000000 0.05000000\n0.80000000 0.65000000 0.10000000\n0.80000000 0.65000000 0.15000000\n0.80000000 0.65000000 0.20000000\n0.80000000 0.65000000 1.55000000\n0.80000000 0.65000000 1.60000000\n0.80000000 0.65000000 1.95000000\n0.80000000 0.65000000 2.00000000\n0.80000000 0.70000000 -1.55000000\n0.80000000 0.70000000 -0.25000000\n0.80000000 0.70000000 1.65000000\n0.80000000 0.70000000 1.70000000\n0.80000000 0.70000000 1.75000000\n0.80000000 0.70000000 1.80000000\n0.80000000 0.70000000 1.85000000\n0.80000000 0.70000000 1.90000000\n0.80000000 0.75000000 -1.55000000\n0.80000000 0.75000000 -0.25000000\n0.80000000 0.80000000 -1.55000000\n0.80000000 0.80000000 -1.50000000\n0.80000000 0.80000000 -0.35000000\n0.80000000 0.80000000 -0.30000000\n0.80000000 0.85000000 -1.50000000\n0.80000000 0.85000000 -1.45000000\n0.80000000 0.85000000 -0.40000000\n0.80000000 0.85000000 -0.35000000\n0.80000000 0.90000000 -1.40000000\n0.80000000 0.90000000 -1.35000000\n0.80000000 0.90000000 -0.50000000\n0.80000000 0.90000000 -0.45000000\n0.80000000 0.95000000 -1.30000000\n0.80000000 0.95000000 -1.25000000\n0.80000000 0.95000000 -1.20000000\n0.80000000 0.95000000 -1.15000000\n0.80000000 0.95000000 -1.10000000\n0.80000000 0.95000000 -0.75000000\n0.80000000 0.95000000 -0.70000000\n0.80000000 0.95000000 -0.65000000\n0.80000000 0.95000000 -0.60000000\n0.80000000 0.95000000 -0.55000000\n0.80000000 1.00000000 -1.05000000\n0.80000000 1.00000000 -1.00000000\n0.80000000 1.00000000 -0.95000000\n0.80000000 1.00000000 -0.90000000\n0.80000000 1.00000000 -0.85000000\n0.80000000 1.00000000 -0.80000000\n0.85000000 0.00000000 -1.35000000\n0.85000000 0.00000000 -1.30000000\n0.85000000 0.00000000 -1.25000000\n0.85000000 0.00000000 -1.20000000\n0.85000000 0.00000000 -1.15000000\n0.85000000 0.00000000 -1.10000000\n0.85000000 0.00000000 -1.05000000\n0.85000000 0.00000000 1.65000000\n0.85000000 0.00000000 1.70000000\n0.85000000 0.00000000 1.75000000\n0.85000000 0.00000000 1.80000000\n0.85000000 0.00000000 1.85000000\n0.85000000 0.00000000 1.90000000\n0.85000000 0.00000000 1.95000000\n0.85000000 0.05000000 -1.45000000\n0.85000000 0.05000000 -1.40000000\n0.85000000 0.05000000 -1.00000000\n0.85000000 0.05000000 1.55000000\n0.85000000 0.05000000 1.60000000\n0.85000000 0.05000000 2.00000000\n0.85000000 0.10000000 -1.50000000\n0.85000000 0.10000000 -0.95000000\n0.85000000 0.10000000 1.50000000\n0.85000000 0.10000000 2.05000000\n0.85000000 0.15000000 -1.50000000\n0.85000000 0.15000000 -0.90000000\n0.85000000 0.15000000 1.45000000\n0.85000000 0.15000000 2.10000000\n0.85000000 0.20000000 -1.55000000\n0.85000000 0.20000000 -0.85000000\n0.85000000 0.20000000 1.45000000\n0.85000000 0.20000000 2.10000000\n0.85000000 0.25000000 -1.55000000\n0.85000000 0.25000000 -0.85000000\n0.85000000 0.25000000 -0.40000000\n0.85000000 0.25000000 -0.35000000\n0.85000000 0.25000000 -0.30000000\n0.85000000 0.25000000 -0.25000000\n0.85000000 0.25000000 -0.20000000\n0.85000000 0.25000000 -0.15000000\n0.85000000 0.25000000 -0.10000000\n0.85000000 0.25000000 -0.05000000\n0.85000000 0.25000000 0.00000000\n0.85000000 0.25000000 0.05000000\n0.85000000 0.25000000 0.10000000\n0.85000000 0.25000000 0.15000000\n0.85000000 0.25000000 0.20000000\n0.85000000 0.25000000 0.25000000\n0.85000000 0.25000000 0.30000000\n0.85000000 0.25000000 1.45000000\n0.85000000 0.25000000 2.15000000\n0.85000000 0.30000000 -1.55000000\n0.85000000 0.30000000 -0.85000000\n0.85000000 0.30000000 -0.75000000\n0.85000000 0.30000000 -0.70000000\n0.85000000 0.30000000 -0.65000000\n0.85000000 0.30000000 -0.60000000\n0.85000000 0.30000000 -0.55000000\n0.85000000 0.30000000 -0.50000000\n0.85000000 0.30000000 -0.45000000\n0.85000000 0.30000000 0.35000000\n0.85000000 0.30000000 0.40000000\n0.85000000 0.30000000 0.45000000\n0.85000000 0.30000000 0.50000000\n0.85000000 0.30000000 0.55000000\n0.85000000 0.30000000 1.40000000\n0.85000000 0.30000000 2.15000000\n0.85000000 0.35000000 -1.55000000\n0.85000000 0.35000000 -0.80000000\n0.85000000 0.35000000 0.50000000\n0.85000000 0.35000000 0.55000000\n0.85000000 0.35000000 0.60000000\n0.85000000 0.35000000 0.65000000\n0.85000000 0.35000000 1.40000000\n0.85000000 0.35000000 2.15000000\n0.85000000 0.40000000 -1.55000000\n0.85000000 0.40000000 0.55000000\n0.85000000 0.40000000 0.60000000\n0.85000000 0.40000000 0.65000000\n0.85000000 0.40000000 1.40000000\n0.85000000 0.40000000 2.15000000\n0.85000000 0.45000000 -1.55000000\n0.85000000 0.45000000 0.55000000\n0.85000000 0.45000000 0.60000000\n0.85000000 0.45000000 0.65000000\n0.85000000 0.45000000 1.45000000\n0.85000000 0.45000000 2.15000000\n0.85000000 0.50000000 -1.55000000\n0.85000000 0.50000000 0.50000000\n0.85000000 0.50000000 0.55000000\n0.85000000 0.50000000 0.60000000\n0.85000000 0.50000000 1.45000000\n0.85000000 0.50000000 2.10000000\n0.85000000 0.55000000 -1.50000000\n0.85000000 0.55000000 0.35000000\n0.85000000 0.55000000 0.40000000\n0.85000000 0.55000000 0.45000000\n0.85000000 0.55000000 0.50000000\n0.85000000 0.55000000 1.45000000\n0.85000000 0.55000000 2.10000000\n0.85000000 0.60000000 -1.50000000\n0.85000000 0.60000000 0.00000000\n0.85000000 0.60000000 0.05000000\n0.85000000 0.60000000 0.10000000\n0.85000000 0.60000000 0.15000000\n0.85000000 0.60000000 0.20000000\n0.85000000 0.60000000 0.25000000\n0.85000000 0.60000000 0.30000000\n0.85000000 0.60000000 1.50000000\n0.85000000 0.60000000 2.05000000\n0.85000000 0.65000000 -1.50000000\n0.85000000 0.65000000 -0.30000000\n0.85000000 0.65000000 -0.25000000\n0.85000000 0.65000000 -0.20000000\n0.85000000 0.65000000 -0.15000000\n0.85000000 0.65000000 -0.10000000\n0.85000000 0.65000000 -0.05000000\n0.85000000 0.65000000 1.55000000\n0.85000000 0.65000000 2.00000000\n0.85000000 0.70000000 -1.50000000\n0.85000000 0.70000000 -0.35000000\n0.85000000 0.70000000 -0.30000000\n0.85000000 0.70000000 1.60000000\n0.85000000 0.70000000 1.65000000\n0.85000000 0.70000000 1.70000000\n0.85000000 0.70000000 1.75000000\n0.85000000 0.70000000 1.80000000\n0.85000000 0.70000000 1.85000000\n0.85000000 0.70000000 1.90000000\n0.85000000 0.70000000 1.95000000\n0.85000000 0.75000000 -1.50000000\n0.85000000 0.75000000 -1.45000000\n0.85000000 0.75000000 -0.35000000\n0.85000000 0.75000000 -0.30000000\n0.85000000 0.80000000 -1.45000000\n0.85000000 0.80000000 -1.40000000\n0.85000000 0.80000000 -0.40000000\n0.85000000 0.85000000 -1.40000000\n0.85000000 0.85000000 -1.35000000\n0.85000000 0.85000000 -0.50000000\n0.85000000 0.85000000 -0.45000000\n0.85000000 0.90000000 -1.30000000\n0.85000000 0.90000000 -1.25000000\n0.85000000 0.90000000 -0.65000000\n0.85000000 0.90000000 -0.60000000\n0.85000000 0.90000000 -0.55000000\n0.85000000 0.95000000 -1.20000000\n0.85000000 0.95000000 -1.15000000\n0.85000000 0.95000000 -1.10000000\n0.85000000 0.95000000 -1.05000000\n0.85000000 0.95000000 -1.00000000\n0.85000000 0.95000000 -0.95000000\n0.85000000 0.95000000 -0.90000000\n0.85000000 0.95000000 -0.85000000\n0.85000000 0.95000000 -0.80000000\n0.85000000 0.95000000 -0.75000000\n0.85000000 0.95000000 -0.70000000\n0.90000000 0.00000000 -1.35000000\n0.90000000 0.00000000 -1.30000000\n0.90000000 0.00000000 -1.25000000\n0.90000000 0.00000000 -1.20000000\n0.90000000 0.00000000 -1.15000000\n0.90000000 0.00000000 -1.10000000\n0.90000000 0.00000000 -1.05000000\n0.90000000 0.00000000 1.65000000\n0.90000000 0.00000000 1.70000000\n0.90000000 0.00000000 1.75000000\n0.90000000 0.00000000 1.80000000\n0.90000000 0.00000000 1.85000000\n0.90000000 0.00000000 1.90000000\n0.90000000 0.00000000 1.95000000\n0.90000000 0.05000000 -1.45000000\n0.90000000 0.05000000 -1.40000000\n0.90000000 0.05000000 -1.00000000\n0.90000000 0.05000000 1.55000000\n0.90000000 0.05000000 1.60000000\n0.90000000 0.05000000 2.00000000\n0.90000000 0.10000000 -1.50000000\n0.90000000 0.10000000 -0.95000000\n0.90000000 0.10000000 1.50000000\n0.90000000 0.10000000 2.05000000\n0.90000000 0.15000000 -1.50000000\n0.90000000 0.15000000 -0.90000000\n0.90000000 0.15000000 1.45000000\n0.90000000 0.15000000 2.10000000\n0.90000000 0.20000000 -1.55000000\n0.90000000 0.20000000 -0.85000000\n0.90000000 0.20000000 1.45000000\n0.90000000 0.20000000 2.10000000\n0.90000000 0.25000000 -1.55000000\n0.90000000 0.25000000 -0.85000000\n0.90000000 0.25000000 1.45000000\n0.90000000 0.25000000 2.15000000\n0.90000000 0.30000000 -1.55000000\n0.90000000 0.30000000 -0.85000000\n0.90000000 0.30000000 -0.50000000\n0.90000000 0.30000000 -0.45000000\n0.90000000 0.30000000 -0.40000000\n0.90000000 0.30000000 -0.35000000\n0.90000000 0.30000000 -0.30000000\n0.90000000 0.30000000 -0.25000000\n0.90000000 0.30000000 -0.20000000\n0.90000000 0.30000000 -0.15000000\n0.90000000 0.30000000 -0.10000000\n0.90000000 0.30000000 -0.05000000\n0.90000000 0.30000000 0.00000000\n0.90000000 0.30000000 0.05000000\n0.90000000 0.30000000 0.10000000\n0.90000000 0.30000000 0.15000000\n0.90000000 0.30000000 0.20000000\n0.90000000 0.30000000 0.25000000\n0.90000000 0.30000000 0.30000000\n0.90000000 0.30000000 0.35000000\n0.90000000 0.30000000 1.40000000\n0.90000000 0.30000000 2.15000000\n0.90000000 0.35000000 -1.55000000\n0.90000000 0.35000000 -0.85000000\n0.90000000 0.35000000 -0.75000000\n0.90000000 0.35000000 -0.70000000\n0.90000000 0.35000000 -0.65000000\n0.90000000 0.35000000 -0.60000000\n0.90000000 0.35000000 -0.55000000\n0.90000000 0.35000000 0.25000000\n0.90000000 0.35000000 0.30000000\n0.90000000 0.35000000 0.35000000\n0.90000000 0.35000000 0.40000000\n0.90000000 0.35000000 0.45000000\n0.90000000 0.35000000 1.40000000\n0.90000000 0.35000000 2.15000000\n0.90000000 0.40000000 -1.55000000\n0.90000000 0.40000000 -0.80000000\n0.90000000 0.40000000 -0.75000000\n0.90000000 0.40000000 -0.70000000\n0.90000000 0.40000000 0.35000000\n0.90000000 0.40000000 0.40000000\n0.90000000 0.40000000 0.45000000\n0.90000000 0.40000000 0.50000000\n0.90000000 0.40000000 1.40000000\n0.90000000 0.40000000 2.15000000\n0.90000000 0.45000000 -1.55000000\n0.90000000 0.45000000 0.35000000\n0.90000000 0.45000000 0.40000000\n0.90000000 0.45000000 0.45000000\n0.90000000 0.45000000 0.50000000\n0.90000000 0.45000000 1.45000000\n0.90000000 0.45000000 2.15000000\n0.90000000 0.50000000 -1.55000000\n0.90000000 0.50000000 0.30000000\n0.90000000 0.50000000 0.35000000\n0.90000000 0.50000000 0.40000000\n0.90000000 0.50000000 0.45000000\n0.90000000 0.50000000 1.45000000\n0.90000000 0.50000000 2.10000000\n0.90000000 0.55000000 -1.50000000\n0.90000000 0.55000000 0.10000000\n0.90000000 0.55000000 0.15000000\n0.90000000 0.55000000 0.20000000\n0.90000000 0.55000000 0.25000000\n0.90000000 0.55000000 0.30000000\n0.90000000 0.55000000 0.35000000\n0.90000000 0.55000000 1.45000000\n0.90000000 0.55000000 2.10000000\n0.90000000 0.60000000 -1.50000000\n0.90000000 0.60000000 -0.40000000\n0.90000000 0.60000000 -0.35000000\n0.90000000 0.60000000 -0.30000000\n0.90000000 0.60000000 -0.25000000\n0.90000000 0.60000000 -0.20000000\n0.90000000 0.60000000 -0.15000000\n0.90000000 0.60000000 -0.10000000\n0.90000000 0.60000000 -0.05000000\n0.90000000 0.60000000 0.00000000\n0.90000000 0.60000000 0.05000000\n0.90000000 0.60000000 0.10000000\n0.90000000 0.60000000 1.50000000\n0.90000000 0.60000000 2.05000000\n0.90000000 0.65000000 -1.45000000\n0.90000000 0.65000000 -0.40000000\n0.90000000 0.65000000 -0.35000000\n0.90000000 0.65000000 1.55000000\n0.90000000 0.65000000 1.60000000\n0.90000000 0.65000000 2.00000000\n0.90000000 0.70000000 -1.45000000\n0.90000000 0.70000000 -1.40000000\n0.90000000 0.70000000 -0.45000000\n0.90000000 0.70000000 -0.40000000\n0.90000000 0.70000000 1.65000000\n0.90000000 0.70000000 1.70000000\n0.90000000 0.70000000 1.75000000\n0.90000000 0.70000000 1.80000000\n0.90000000 0.70000000 1.85000000\n0.90000000 0.70000000 1.90000000\n0.90000000 0.70000000 1.95000000\n0.90000000 0.75000000 -1.40000000\n0.90000000 0.75000000 -1.35000000\n0.90000000 0.75000000 -0.45000000\n0.90000000 0.75000000 -0.40000000\n0.90000000 0.80000000 -1.35000000\n0.90000000 0.80000000 -1.30000000\n0.90000000 0.80000000 -0.55000000\n0.90000000 0.80000000 -0.50000000\n0.90000000 0.80000000 -0.45000000\n0.90000000 0.85000000 -1.30000000\n0.90000000 0.85000000 -1.25000000\n0.90000000 0.85000000 -0.65000000\n0.90000000 0.85000000 -0.60000000\n0.90000000 0.85000000 -0.55000000\n0.90000000 0.90000000 -1.20000000\n0.90000000 0.90000000 -1.15000000\n0.90000000 0.90000000 -1.10000000\n0.90000000 0.90000000 -1.05000000\n0.90000000 0.90000000 -1.00000000\n0.90000000 0.90000000 -0.95000000\n0.90000000 0.90000000 -0.90000000\n0.90000000 0.90000000 -0.85000000\n0.90000000 0.90000000 -0.80000000\n0.90000000 0.90000000 -0.75000000\n0.90000000 0.90000000 -0.70000000\n0.90000000 0.90000000 -0.65000000\n0.95000000 0.00000000 -1.35000000\n0.95000000 0.00000000 -1.30000000\n0.95000000 0.00000000 -1.25000000\n0.95000000 0.00000000 -1.20000000\n0.95000000 0.00000000 -1.15000000\n0.95000000 0.00000000 -1.10000000\n0.95000000 0.00000000 1.70000000\n0.95000000 0.00000000 1.75000000\n0.95000000 0.00000000 1.80000000\n0.95000000 0.00000000 1.85000000\n0.95000000 0.05000000 -1.40000000\n0.95000000 0.05000000 -1.05000000\n0.95000000 0.05000000 -1.00000000\n0.95000000 0.05000000 1.60000000\n0.95000000 0.05000000 1.65000000\n0.95000000 0.05000000 1.70000000\n0.95000000 0.05000000 1.85000000\n0.95000000 0.05000000 1.90000000\n0.95000000 0.05000000 1.95000000\n0.95000000 0.10000000 -1.45000000\n0.95000000 0.10000000 -0.95000000\n0.95000000 0.10000000 1.55000000\n0.95000000 0.10000000 2.00000000\n0.95000000 0.10000000 2.05000000\n0.95000000 0.15000000 -1.50000000\n0.95000000 0.15000000 -0.90000000\n0.95000000 0.15000000 1.50000000\n0.95000000 0.15000000 2.05000000\n0.95000000 0.20000000 -1.55000000\n0.95000000 0.20000000 -0.90000000\n0.95000000 0.20000000 1.45000000\n0.95000000 0.20000000 1.50000000\n0.95000000 0.20000000 2.10000000\n0.95000000 0.25000000 -1.55000000\n0.95000000 0.25000000 -0.85000000\n0.95000000 0.25000000 1.45000000\n0.95000000 0.25000000 2.10000000\n0.95000000 0.30000000 -1.55000000\n0.95000000 0.30000000 -0.85000000\n0.95000000 0.30000000 1.45000000\n0.95000000 0.30000000 2.10000000\n0.95000000 0.35000000 -1.55000000\n0.95000000 0.35000000 -0.85000000\n0.95000000 0.35000000 -0.50000000\n0.95000000 0.35000000 -0.45000000\n0.95000000 0.35000000 -0.40000000\n0.95000000 0.35000000 -0.35000000\n0.95000000 0.35000000 -0.30000000\n0.95000000 0.35000000 -0.25000000\n0.95000000 0.35000000 -0.20000000\n0.95000000 0.35000000 -0.15000000\n0.95000000 0.35000000 -0.10000000\n0.95000000 0.35000000 -0.05000000\n0.95000000 0.35000000 0.00000000\n0.95000000 0.35000000 0.05000000\n0.95000000 0.35000000 0.10000000\n0.95000000 0.35000000 0.15000000\n0.95000000 0.35000000 0.20000000\n0.95000000 0.35000000 1.45000000\n0.95000000 0.35000000 2.10000000\n0.95000000 0.40000000 -1.55000000\n0.95000000 0.40000000 -0.85000000\n0.95000000 0.40000000 -0.65000000\n0.95000000 0.40000000 -0.60000000\n0.95000000 0.40000000 -0.55000000\n0.95000000 0.40000000 -0.50000000\n0.95000000 0.40000000 -0.45000000\n0.95000000 0.40000000 -0.40000000\n0.95000000 0.40000000 -0.35000000\n0.95000000 0.40000000 -0.30000000\n0.95000000 0.40000000 -0.25000000\n0.95000000 0.40000000 -0.20000000\n0.95000000 0.40000000 -0.15000000\n0.95000000 0.40000000 -0.10000000\n0.95000000 0.40000000 -0.05000000\n0.95000000 0.40000000 0.00000000\n0.95000000 0.40000000 0.05000000\n0.95000000 0.40000000 0.10000000\n0.95000000 0.40000000 0.15000000\n0.95000000 0.40000000 0.20000000\n0.95000000 0.40000000 0.25000000\n0.95000000 0.40000000 0.30000000\n0.95000000 0.40000000 1.45000000\n0.95000000 0.40000000 2.10000000\n0.95000000 0.45000000 -1.55000000\n0.95000000 0.45000000 -0.85000000\n0.95000000 0.45000000 -0.80000000\n0.95000000 0.45000000 -0.75000000\n0.95000000 0.45000000 -0.70000000\n0.95000000 0.45000000 -0.65000000\n0.95000000 0.45000000 -0.60000000\n0.95000000 0.45000000 -0.55000000\n0.95000000 0.45000000 -0.50000000\n0.95000000 0.45000000 -0.45000000\n0.95000000 0.45000000 -0.40000000\n0.95000000 0.45000000 -0.35000000\n0.95000000 0.45000000 -0.30000000\n0.95000000 0.45000000 -0.25000000\n0.95000000 0.45000000 -0.20000000\n0.95000000 0.45000000 -0.15000000\n0.95000000 0.45000000 -0.10000000\n0.95000000 0.45000000 -0.05000000\n0.95000000 0.45000000 0.00000000\n0.95000000 0.45000000 0.05000000\n0.95000000 0.45000000 0.10000000\n0.95000000 0.45000000 0.15000000\n0.95000000 0.45000000 0.20000000\n0.95000000 0.45000000 0.25000000\n0.95000000 0.45000000 0.30000000\n0.95000000 0.45000000 1.45000000\n0.95000000 0.45000000 2.10000000\n0.95000000 0.50000000 -1.55000000\n0.95000000 0.50000000 -0.70000000\n0.95000000 0.50000000 -0.65000000\n0.95000000 0.50000000 -0.60000000\n0.95000000 0.50000000 -0.55000000\n0.95000000 0.50000000 -0.50000000\n0.95000000 0.50000000 -0.45000000\n0.95000000 0.50000000 -0.40000000\n0.95000000 0.50000000 -0.35000000\n0.95000000 0.50000000 -0.30000000\n0.95000000 0.50000000 -0.25000000\n0.95000000 0.50000000 -0.20000000\n0.95000000 0.50000000 -0.15000000\n0.95000000 0.50000000 -0.10000000\n0.95000000 0.50000000 -0.05000000\n0.95000000 0.50000000 0.00000000\n0.95000000 0.50000000 0.05000000\n0.95000000 0.50000000 0.10000000\n0.95000000 0.50000000 0.15000000\n0.95000000 0.50000000 0.20000000\n0.95000000 0.50000000 0.25000000\n0.95000000 0.50000000 1.45000000\n0.95000000 0.50000000 1.50000000\n0.95000000 0.50000000 2.10000000\n0.95000000 0.55000000 -1.50000000\n0.95000000 0.55000000 -0.60000000\n0.95000000 0.55000000 -0.55000000\n0.95000000 0.55000000 -0.50000000\n0.95000000 0.55000000 -0.45000000\n0.95000000 0.55000000 -0.40000000\n0.95000000 0.55000000 -0.35000000\n0.95000000 0.55000000 -0.30000000\n0.95000000 0.55000000 -0.25000000\n0.95000000 0.55000000 -0.20000000\n0.95000000 0.55000000 -0.15000000\n0.95000000 0.55000000 -0.10000000\n0.95000000 0.55000000 -0.05000000\n0.95000000 0.55000000 0.00000000\n0.95000000 0.55000000 0.05000000\n0.95000000 0.55000000 1.50000000\n0.95000000 0.55000000 2.05000000\n0.95000000 0.60000000 -1.45000000\n0.95000000 0.60000000 -0.55000000\n0.95000000 0.60000000 -0.50000000\n0.95000000 0.60000000 -0.45000000\n0.95000000 0.60000000 1.55000000\n0.95000000 0.60000000 2.00000000\n0.95000000 0.60000000 2.05000000\n0.95000000 0.65000000 -1.40000000\n0.95000000 0.65000000 -0.55000000\n0.95000000 0.65000000 -0.50000000\n0.95000000 0.65000000 -0.45000000\n0.95000000 0.65000000 1.60000000\n0.95000000 0.65000000 1.65000000\n0.95000000 0.65000000 1.90000000\n0.95000000 0.65000000 1.95000000\n0.95000000 0.65000000 2.00000000\n0.95000000 0.70000000 -1.35000000\n0.95000000 0.70000000 -1.30000000\n0.95000000 0.70000000 -1.25000000\n0.95000000 0.70000000 -0.55000000\n0.95000000 0.70000000 -0.50000000\n0.95000000 0.70000000 1.70000000\n0.95000000 0.70000000 1.75000000\n0.95000000 0.70000000 1.80000000\n0.95000000 0.70000000 1.85000000\n0.95000000 0.70000000 1.90000000\n0.95000000 0.75000000 -1.30000000\n0.95000000 0.75000000 -1.25000000\n0.95000000 0.75000000 -1.20000000\n0.95000000 0.75000000 -0.60000000\n0.95000000 0.75000000 -0.55000000\n0.95000000 0.75000000 -0.50000000\n0.95000000 0.80000000 -1.25000000\n0.95000000 0.80000000 -1.20000000\n0.95000000 0.80000000 -1.15000000\n0.95000000 0.80000000 -0.70000000\n0.95000000 0.80000000 -0.65000000\n0.95000000 0.80000000 -0.60000000\n0.95000000 0.85000000 -1.20000000\n0.95000000 0.85000000 -1.15000000\n0.95000000 0.85000000 -1.10000000\n0.95000000 0.85000000 -1.05000000\n0.95000000 0.85000000 -1.00000000\n0.95000000 0.85000000 -0.95000000\n0.95000000 0.85000000 -0.90000000\n0.95000000 0.85000000 -0.85000000\n0.95000000 0.85000000 -0.80000000\n0.95000000 0.85000000 -0.75000000\n0.95000000 0.85000000 -0.70000000\n1.00000000 0.05000000 -1.35000000\n1.00000000 0.05000000 -1.30000000\n1.00000000 0.05000000 -1.25000000\n1.00000000 0.05000000 -1.20000000\n1.00000000 0.05000000 -1.15000000\n1.00000000 0.05000000 -1.10000000\n1.00000000 0.05000000 -1.05000000\n1.00000000 0.05000000 1.75000000\n1.00000000 0.05000000 1.80000000\n1.00000000 0.10000000 -1.40000000\n1.00000000 0.10000000 -1.35000000\n1.00000000 0.10000000 -1.30000000\n1.00000000 0.10000000 -1.25000000\n1.00000000 0.10000000 -1.20000000\n1.00000000 0.10000000 -1.15000000\n1.00000000 0.10000000 -1.10000000\n1.00000000 0.10000000 -1.05000000\n1.00000000 0.10000000 -1.00000000\n1.00000000 0.10000000 1.60000000\n1.00000000 0.10000000 1.65000000\n1.00000000 0.10000000 1.70000000\n1.00000000 0.10000000 1.75000000\n1.00000000 0.10000000 1.80000000\n1.00000000 0.10000000 1.85000000\n1.00000000 0.10000000 1.90000000\n1.00000000 0.10000000 1.95000000\n1.00000000 0.15000000 -1.45000000\n1.00000000 0.15000000 -1.40000000\n1.00000000 0.15000000 -1.05000000\n1.00000000 0.15000000 -1.00000000\n1.00000000 0.15000000 -0.95000000\n1.00000000 0.15000000 1.55000000\n1.00000000 0.15000000 1.60000000\n1.00000000 0.15000000 1.65000000\n1.00000000 0.15000000 1.70000000\n1.00000000 0.15000000 1.75000000\n1.00000000 0.15000000 1.80000000\n1.00000000 0.15000000 1.85000000\n1.00000000 0.15000000 1.90000000\n1.00000000 0.15000000 1.95000000\n1.00000000 0.15000000 2.00000000\n1.00000000 0.20000000 -1.50000000\n1.00000000 0.20000000 -1.45000000\n1.00000000 0.20000000 -0.95000000\n1.00000000 0.20000000 1.55000000\n1.00000000 0.20000000 1.60000000\n1.00000000 0.20000000 1.65000000\n1.00000000 0.20000000 1.90000000\n1.00000000 0.20000000 1.95000000\n1.00000000 0.20000000 2.00000000\n1.00000000 0.20000000 2.05000000\n1.00000000 0.25000000 -1.50000000\n1.00000000 0.25000000 -1.45000000\n1.00000000 0.25000000 -0.95000000\n1.00000000 0.25000000 -0.90000000\n1.00000000 0.25000000 1.50000000\n1.00000000 0.25000000 1.55000000\n1.00000000 0.25000000 1.60000000\n1.00000000 0.25000000 1.95000000\n1.00000000 0.25000000 2.00000000\n1.00000000 0.25000000 2.05000000\n1.00000000 0.30000000 -1.50000000\n1.00000000 0.30000000 -0.95000000\n1.00000000 0.30000000 -0.90000000\n1.00000000 0.30000000 1.50000000\n1.00000000 0.30000000 1.55000000\n1.00000000 0.30000000 1.60000000\n1.00000000 0.30000000 2.00000000\n1.00000000 0.30000000 2.05000000\n1.00000000 0.35000000 -1.50000000\n1.00000000 0.35000000 -0.95000000\n1.00000000 0.35000000 -0.90000000\n1.00000000 0.35000000 1.50000000\n1.00000000 0.35000000 1.55000000\n1.00000000 0.35000000 2.00000000\n1.00000000 0.35000000 2.05000000\n1.00000000 0.40000000 -1.50000000\n1.00000000 0.40000000 -0.95000000\n1.00000000 0.40000000 -0.90000000\n1.00000000 0.40000000 1.50000000\n1.00000000 0.40000000 1.55000000\n1.00000000 0.40000000 1.60000000\n1.00000000 0.40000000 2.00000000\n1.00000000 0.40000000 2.05000000\n1.00000000 0.45000000 -1.50000000\n1.00000000 0.45000000 -1.45000000\n1.00000000 0.45000000 -0.95000000\n1.00000000 0.45000000 -0.90000000\n1.00000000 0.45000000 1.50000000\n1.00000000 0.45000000 1.55000000\n1.00000000 0.45000000 1.60000000\n1.00000000 0.45000000 1.95000000\n1.00000000 0.45000000 2.00000000\n1.00000000 0.45000000 2.05000000\n1.00000000 0.50000000 -1.50000000\n1.00000000 0.50000000 -1.45000000\n1.00000000 0.50000000 -0.95000000\n1.00000000 0.50000000 -0.90000000\n1.00000000 0.50000000 -0.85000000\n1.00000000 0.50000000 -0.80000000\n1.00000000 0.50000000 -0.75000000\n1.00000000 0.50000000 1.55000000\n1.00000000 0.50000000 1.60000000\n1.00000000 0.50000000 1.65000000\n1.00000000 0.50000000 1.90000000\n1.00000000 0.50000000 1.95000000\n1.00000000 0.50000000 2.00000000\n1.00000000 0.50000000 2.05000000\n1.00000000 0.55000000 -1.45000000\n1.00000000 0.55000000 -1.40000000\n1.00000000 0.55000000 -1.00000000\n1.00000000 0.55000000 -0.95000000\n1.00000000 0.55000000 -0.90000000\n1.00000000 0.55000000 -0.85000000\n1.00000000 0.55000000 -0.80000000\n1.00000000 0.55000000 -0.75000000\n1.00000000 0.55000000 -0.70000000\n1.00000000 0.55000000 -0.65000000\n1.00000000 0.55000000 1.55000000\n1.00000000 0.55000000 1.60000000\n1.00000000 0.55000000 1.65000000\n1.00000000 0.55000000 1.70000000\n1.00000000 0.55000000 1.75000000\n1.00000000 0.55000000 1.80000000\n1.00000000 0.55000000 1.85000000\n1.00000000 0.55000000 1.90000000\n1.00000000 0.55000000 1.95000000\n1.00000000 0.55000000 2.00000000\n1.00000000 0.60000000 -1.40000000\n1.00000000 0.60000000 -1.35000000\n1.00000000 0.60000000 -1.30000000\n1.00000000 0.60000000 -1.10000000\n1.00000000 0.60000000 -1.05000000\n1.00000000 0.60000000 -1.00000000\n1.00000000 0.60000000 -0.95000000\n1.00000000 0.60000000 -0.90000000\n1.00000000 0.60000000 -0.85000000\n1.00000000 0.60000000 -0.80000000\n1.00000000 0.60000000 -0.75000000\n1.00000000 0.60000000 -0.70000000\n1.00000000 0.60000000 -0.65000000\n1.00000000 0.60000000 -0.60000000\n1.00000000 0.60000000 1.60000000\n1.00000000 0.60000000 1.65000000\n1.00000000 0.60000000 1.70000000\n1.00000000 0.60000000 1.75000000\n1.00000000 0.60000000 1.80000000\n1.00000000 0.60000000 1.85000000\n1.00000000 0.60000000 1.90000000\n1.00000000 0.60000000 1.95000000\n1.00000000 0.65000000 -1.35000000\n1.00000000 0.65000000 -1.30000000\n1.00000000 0.65000000 -1.25000000\n1.00000000 0.65000000 -1.20000000\n1.00000000 0.65000000 -1.15000000\n1.00000000 0.65000000 -1.10000000\n1.00000000 0.65000000 -1.05000000\n1.00000000 0.65000000 -1.00000000\n1.00000000 0.65000000 -0.95000000\n1.00000000 0.65000000 -0.90000000\n1.00000000 0.65000000 -0.85000000\n1.00000000 0.65000000 -0.80000000\n1.00000000 0.65000000 -0.75000000\n1.00000000 0.65000000 -0.70000000\n1.00000000 0.65000000 -0.65000000\n1.00000000 0.65000000 -0.60000000\n1.00000000 0.65000000 1.70000000\n1.00000000 0.65000000 1.75000000\n1.00000000 0.65000000 1.80000000\n1.00000000 0.65000000 1.85000000\n1.00000000 0.70000000 -1.20000000\n1.00000000 0.70000000 -1.15000000\n1.00000000 0.70000000 -1.10000000\n1.00000000 0.70000000 -1.05000000\n1.00000000 0.70000000 -1.00000000\n1.00000000 0.70000000 -0.95000000\n1.00000000 0.70000000 -0.90000000\n1.00000000 0.70000000 -0.85000000\n1.00000000 0.70000000 -0.80000000\n1.00000000 0.70000000 -0.75000000\n1.00000000 0.70000000 -0.70000000\n1.00000000 0.70000000 -0.65000000\n1.00000000 0.70000000 -0.60000000\n1.00000000 0.75000000 -1.15000000\n1.00000000 0.75000000 -1.10000000\n1.00000000 0.75000000 -1.05000000\n1.00000000 0.75000000 -1.00000000\n1.00000000 0.75000000 -0.95000000\n1.00000000 0.75000000 -0.90000000\n1.00000000 0.75000000 -0.85000000\n1.00000000 0.75000000 -0.80000000\n1.00000000 0.75000000 -0.75000000\n1.00000000 0.75000000 -0.70000000\n1.00000000 0.75000000 -0.65000000\n1.00000000 0.80000000 -1.10000000\n1.00000000 0.80000000 -1.05000000\n1.00000000 0.80000000 -1.00000000\n1.00000000 0.80000000 -0.95000000\n1.00000000 0.80000000 -0.90000000\n1.00000000 0.80000000 -0.85000000\n1.00000000 0.80000000 -0.80000000\n1.00000000 0.80000000 -0.75000000\n1.05000000 0.15000000 -1.35000000\n1.05000000 0.15000000 -1.30000000\n1.05000000 0.15000000 -1.25000000\n1.05000000 0.15000000 -1.20000000\n1.05000000 0.15000000 -1.15000000\n1.05000000 0.15000000 -1.10000000\n1.05000000 0.20000000 -1.40000000\n1.05000000 0.20000000 -1.35000000\n1.05000000 0.20000000 -1.30000000\n1.05000000 0.20000000 -1.25000000\n1.05000000 0.20000000 -1.20000000\n1.05000000 0.20000000 -1.15000000\n1.05000000 0.20000000 -1.10000000\n1.05000000 0.20000000 -1.05000000\n1.05000000 0.20000000 -1.00000000\n1.05000000 0.20000000 1.70000000\n1.05000000 0.20000000 1.75000000\n1.05000000 0.20000000 1.80000000\n1.05000000 0.20000000 1.85000000\n1.05000000 0.25000000 -1.40000000\n1.05000000 0.25000000 -1.35000000\n1.05000000 0.25000000 -1.30000000\n1.05000000 0.25000000 -1.25000000\n1.05000000 0.25000000 -1.20000000\n1.05000000 0.25000000 -1.15000000\n1.05000000 0.25000000 -1.10000000\n1.05000000 0.25000000 -1.05000000\n1.05000000 0.25000000 -1.00000000\n1.05000000 0.25000000 1.65000000\n1.05000000 0.25000000 1.70000000\n1.05000000 0.25000000 1.75000000\n1.05000000 0.25000000 1.80000000\n1.05000000 0.25000000 1.85000000\n1.05000000 0.25000000 1.90000000\n1.05000000 0.30000000 -1.45000000\n1.05000000 0.30000000 -1.40000000\n1.05000000 0.30000000 -1.35000000\n1.05000000 0.30000000 -1.30000000\n1.05000000 0.30000000 -1.25000000\n1.05000000 0.30000000 -1.20000000\n1.05000000 0.30000000 -1.15000000\n1.05000000 0.30000000 -1.10000000\n1.05000000 0.30000000 -1.05000000\n1.05000000 0.30000000 -1.00000000\n1.05000000 0.30000000 1.65000000\n1.05000000 0.30000000 1.70000000\n1.05000000 0.30000000 1.75000000\n1.05000000 0.30000000 1.80000000\n1.05000000 0.30000000 1.85000000\n1.05000000 0.30000000 1.90000000\n1.05000000 0.30000000 1.95000000\n1.05000000 0.35000000 -1.45000000\n1.05000000 0.35000000 -1.40000000\n1.05000000 0.35000000 -1.35000000\n1.05000000 0.35000000 -1.30000000\n1.05000000 0.35000000 -1.25000000\n1.05000000 0.35000000 -1.20000000\n1.05000000 0.35000000 -1.15000000\n1.05000000 0.35000000 -1.10000000\n1.05000000 0.35000000 -1.05000000\n1.05000000 0.35000000 -1.00000000\n1.05000000 0.35000000 1.60000000\n1.05000000 0.35000000 1.65000000\n1.05000000 0.35000000 1.70000000\n1.05000000 0.35000000 1.75000000\n1.05000000 0.35000000 1.80000000\n1.05000000 0.35000000 1.85000000\n1.05000000 0.35000000 1.90000000\n1.05000000 0.35000000 1.95000000\n1.05000000 0.40000000 -1.45000000\n1.05000000 0.40000000 -1.40000000\n1.05000000 0.40000000 -1.35000000\n1.05000000 0.40000000 -1.30000000\n1.05000000 0.40000000 -1.25000000\n1.05000000 0.40000000 -1.20000000\n1.05000000 0.40000000 -1.15000000\n1.05000000 0.40000000 -1.10000000\n1.05000000 0.40000000 -1.05000000\n1.05000000 0.40000000 -1.00000000\n1.05000000 0.40000000 1.65000000\n1.05000000 0.40000000 1.70000000\n1.05000000 0.40000000 1.75000000\n1.05000000 0.40000000 1.80000000\n1.05000000 0.40000000 1.85000000\n1.05000000 0.40000000 1.90000000\n1.05000000 0.40000000 1.95000000\n1.05000000 0.45000000 -1.40000000\n1.05000000 0.45000000 -1.35000000\n1.05000000 0.45000000 -1.30000000\n1.05000000 0.45000000 -1.25000000\n1.05000000 0.45000000 -1.20000000\n1.05000000 0.45000000 -1.15000000\n1.05000000 0.45000000 -1.10000000\n1.05000000 0.45000000 -1.05000000\n1.05000000 0.45000000 -1.00000000\n1.05000000 0.45000000 1.65000000\n1.05000000 0.45000000 1.70000000\n1.05000000 0.45000000 1.75000000\n1.05000000 0.45000000 1.80000000\n1.05000000 0.45000000 1.85000000\n1.05000000 0.45000000 1.90000000\n1.05000000 0.50000000 -1.40000000\n1.05000000 0.50000000 -1.35000000\n1.05000000 0.50000000 -1.30000000\n1.05000000 0.50000000 -1.25000000\n1.05000000 0.50000000 -1.20000000\n1.05000000 0.50000000 -1.15000000\n1.05000000 0.50000000 -1.10000000\n1.05000000 0.50000000 -1.05000000\n1.05000000 0.50000000 -1.00000000\n1.05000000 0.50000000 1.70000000\n1.05000000 0.50000000 1.75000000\n1.05000000 0.50000000 1.80000000\n1.05000000 0.50000000 1.85000000\n1.05000000 0.55000000 -1.35000000\n1.05000000 0.55000000 -1.30000000\n1.05000000 0.55000000 -1.25000000\n1.05000000 0.55000000 -1.20000000\n1.05000000 0.55000000 -1.15000000\n1.05000000 0.55000000 -1.10000000\n1.05000000 0.55000000 -1.05000000\n1.05000000 0.60000000 -1.25000000\n1.05000000 0.60000000 -1.20000000\n1.05000000 0.60000000 -1.15000000"};
-
     array<float> voxelSizes = {
         0.175f,
         0.1f,
         0.05f,
         0.015f
     };
-
     int preset = 0;
     int refreshRate = 30;
-
     int lastPreset = -1;
     bool aborted = false;
-
     class iso4q {
         vec3 Position;
         quat Rotation;
     }
-
     iso4q prevTarget();
-
     uint RENDER_INTERVAL_MS = 1000;
-
     vec3 Cross(const vec3 &in a, const vec3 &in b) {
         return vec3(
             a.y * b.z - a.z * b.y,
@@ -6979,7 +6540,6 @@ namespace CarLocationBf {
             a.x * b.y - a.y * b.x
         );
     }
-
     vec3 QuatMultVec3(const quat &in q, const vec3 &in v) {
         vec3 u = vec3(q.x, q.y, q.z);
         float s = q.w;
@@ -6987,30 +6547,23 @@ namespace CarLocationBf {
             + v * (s*s - Math::Dot(u, u)) 
             + Cross(u, v) * 2.0f * s;
     }
-
     void CarVisualSettingsPage() {
-
         UI::CheckboxVar("Enable Car Visual", id+"_car_visual_enabled");
-
         if(!GetVariableBool(id+"_car_visual_enabled")){
             return;
         }
-
         preset = UI::SliderIntVar("Model Quality", id+"_car_render_quality", 0, voxels.Length);
         if(aborted){
             UI::TextWrapped("MODEL QUALITY TOO HIGH, RENDERING CANNOT BE COMPLETED IN TIME. MAY CAUSE ISSUES.");
             UI::TextWrapped("Please consider using a lower quality setting.");
         }
-
         refreshRate = UI::SliderIntVar("Update rate", id+"_car_render_rate", 1, 100);
         UI::TextDimmed("The update rate is the amount of times per second that the car's visual is updated when values change. Lower values may be less responsive but also cause less lag. This setting does not affect performance for a static visual.");
         RENDER_INTERVAL_MS = int(1000 / refreshRate);
     }
-
     bool vec3Equal(const vec3&in a, const vec3&in b) {
         return a.x == b.x && a.y == b.y && a.z == b.z;
     }
-
     bool iso4qEqual(const iso4q&in a, const iso4q&in b) {
         if(!vec3Equal(a.Position, b.Position)) {
             return false;
@@ -7023,12 +6576,8 @@ namespace CarLocationBf {
         }
         return true;
     }
-
-
     uint64 startTime = 0;
-
     void Render(){
-
         if(GetCurrentGameState() == TM::GameState::StartUp){
             startTime = Time::get_Now();
             return;
@@ -7036,7 +6585,6 @@ namespace CarLocationBf {
         if(Time::get_Now() - startTime < 2000){
             return;
         }
-
         string cachedIdsStr = GetVariableString(id+"_bf_trigger_cache");
         if (cachedIdsStr != "" && g_ellipsoidVisualTriggerIds.Length == 0) {
             array<string> ids = cachedIdsStr.Split(",");
@@ -7051,31 +6599,23 @@ namespace CarLocationBf {
             }
             SetVariable(id+"_bf_trigger_cache", "");
         }
-
         SimulationManager@ simManager = GetSimulationManager();
         uint64 currentTime = Time::get_Now();
-
         if (currentTime - g_lastTriggerUpdateTime > RENDER_INTERVAL_MS) {
             g_lastTriggerUpdateTime = currentTime;
             vec3 pos = Text::ParseVec3(GetVariableString(id+"_bf_target_position"));
-
             float actual_pitch_deg = GetVariableDouble(id+"_bf_target_rotation_pitch");
             float actual_yaw_deg = GetVariableDouble(id+"_bf_target_rotation_yaw");
             float actual_roll_deg = GetVariableDouble(id+"_bf_target_rotation_roll");
-
             quat rotation;
-
             rotation.SetYawPitchRoll(Math::ToRad(actual_yaw_deg), Math::ToRad(actual_pitch_deg), Math::ToRad(actual_roll_deg));
-
             iso4q location;
             location.Position = pos;
             location.Rotation = rotation;
             RenderCar(location);
         }
     }
-
     void RenderCar(iso4q target) {
-        
         if (!GetVariableBool(id + "_car_visual_enabled")) {
             if (g_ellipsoidVisualTriggerIds.Length > 0) {
                 for (uint i = 0; i < g_ellipsoidVisualTriggerIds.Length; ++i) {
@@ -7090,12 +6630,10 @@ namespace CarLocationBf {
             }
             return;
         }
-        
         if (iso4qEqual(prevTarget, target) && lastPreset == preset) {
             return;
         }
         prevTarget = target;
-
         if (GetVariableString(id+"_bf_trigger_cache") != "" && g_ellipsoidVisualTriggerIds.Length == 0){
             array<string> ids = GetVariableString(id+"_bf_trigger_cache").Split(",");
             g_ellipsoidVisualTriggerIds.Resize(ids.Length);
@@ -7104,11 +6642,9 @@ namespace CarLocationBf {
             }
             SetVariable(id+"_bf_trigger_cache", "");
         }
-
         if(lastPreset != preset) {
             int newSize = (preset == 0) ? 4 : voxels[preset - 1].Length;
             int oldSize = g_ellipsoidVisualTriggerIds.Length;
-
             if (newSize < oldSize) {
                 for(int i = newSize; i < oldSize; i++) {
                     if (g_ellipsoidVisualTriggerIds[i] != -1) {
@@ -7124,23 +6660,18 @@ namespace CarLocationBf {
             }
             lastPreset = preset;
         }
-
         auto simManager = GetSimulationManager();
         if (simManager is null || !simManager.InRace) { return; }
-
         uint64 startTime = Time::get_Now();
         bool currAborted = false;
-
         if(preset == 0){
             SimulationWheels@ wheels = simManager.Wheels;
             float maxWheelRadius = 0.364f;
             string cache = "";
             for(uint i = 0; i < 4; ++i) {
-
                 vec3 worldPos = GetCarEllipsoidLocationByIndex(simManager, target, i).Position;
                 vec3 ellipsoidSize = vec3(maxWheelRadius * 2.0f, maxWheelRadius * 2.0f, maxWheelRadius * 2.0f);
                 Trigger3D trig = Trigger3D(worldPos - maxWheelRadius, ellipsoidSize);
-
                 int triggerId = SetTrigger(trig, g_ellipsoidVisualTriggerIds[i]);
                 g_ellipsoidVisualTriggerIds[i] = triggerId;
                 cache += Text::FormatInt(triggerId) + ",";
@@ -7149,12 +6680,10 @@ namespace CarLocationBf {
                 cache = cache.Substr(0, cache.Length - 1);
                 SetVariable(id+"_bf_trigger_cache", cache);
             }
-
         } else {
             float s = voxelSizes[preset - 1];
             const vec3 ellipsoidSize = vec3(s, s, s);
             const array<vec3>@ currentVoxels = voxels[preset - 1];
-
             string cache = "";
             for(uint i = 0; i < currentVoxels.Length; ++i) {
                 if(i % 100 == 0 && Time::get_Now() - startTime > RENDER_INTERVAL_MS) {
@@ -7162,11 +6691,8 @@ namespace CarLocationBf {
                     break;
                 }
                 vec3 v = currentVoxels[i];
-
                 vec3 worldPos = QuatMultVec3(target.Rotation, v) + target.Position;
-
                 Trigger3D trig = Trigger3D(worldPos - (ellipsoidSize / 2.0f), ellipsoidSize);
-
                 int triggerId = SetTrigger(trig, g_ellipsoidVisualTriggerIds[i]);
                 g_ellipsoidVisualTriggerIds[i] = triggerId;
                 cache += Text::FormatInt(triggerId) + ",";
@@ -7178,7 +6704,6 @@ namespace CarLocationBf {
         }
         aborted = currAborted;
     }
-
     iso4q GetCarEllipsoidLocationByIndex(SimulationManager@ simM, const iso4q&in carLocation, uint index) {
         auto simManager = GetSimulationManager();
         iso4q worldTransform;
@@ -7192,15 +6717,12 @@ namespace CarLocationBf {
                 print("Error: Unexpected index in wheel section: " + index, Severity::Error);
                 return iso4q();
         }
-
         worldTransform.Rotation = carLocation.Rotation;
         worldTransform.Position = carLocation.Position + QuatMultVec3(worldTransform.Rotation, wheelSurfaceLocalPos);
         return worldTransform;
     }
-
     void RenderEvalSettings(){
         SimulationManager@ simManager = GetSimulationManager();
-
         UI::Dummy(vec2(0, 17));
         UI::Text("Target position:");
         UI::SameLine();
@@ -7220,35 +6742,29 @@ namespace CarLocationBf {
             }
         }
         UI::Dummy(vec2(0, 19));
-
         UI::Text("Yaw");
         UI::SameLine();
         UI::Dummy(vec2(12, 0));
         UI::SameLine();
         UI::SliderFloatVar("##eaa2aa", id+"_bf_target_rotation_yaw", -180, 180 , "%.2f");
-
         UI::Text("Pitch");
         UI::SameLine();
         UI::Dummy(vec2(6, 0));
         UI::SameLine();
         UI::SliderFloatVar("##ea2a2", id+"_bf_target_rotation_pitch", -180, 180 , "%.2f");
-
         UI::Text("Roll");
         UI::SameLine();
         UI::Dummy(vec2(14, 0));
         UI::SameLine();
         UI::SliderFloatVar("##eaaaaaaa2", id+"_bf_target_rotation_roll", -180, 180 , "%.2f");
         UI::Dummy(vec2(0, 2));
-
         UI::Dummy(vec2(47, 0));
         UI::SameLine();
         if(UI::Button("Copy from Vehicle##1")){
             mat3 vehicleMat = simManager.Dyna.CurrentState.Location.Rotation;
-
             quat vehicleQuat = quat(vehicleMat);
             float vehicleYaw, vehiclePitch, vehicleRoll;
             vehicleQuat.GetYawPitchRoll(vehicleYaw, vehiclePitch, vehicleRoll); 
-
             SetVariable(id+"_bf_target_rotation_yaw", Math::ToDeg(vehicleYaw));
             SetVariable(id+"_bf_target_rotation_pitch", Math::ToDeg(vehiclePitch));
             SetVariable(id+"_bf_target_rotation_roll", Math::ToDeg(vehicleRoll));
@@ -7257,13 +6773,11 @@ namespace CarLocationBf {
         UI::Dummy(vec2(45, 0));
         UI::SameLine();
         if(UI::Button("Reset Rotation")){
-
             SetVariable(id+"_bf_target_rotation_yaw", 0.0);
             SetVariable(id+"_bf_target_rotation_pitch", 0.0);
             SetVariable(id+"_bf_target_rotation_roll", 0.0);
         }
         UI::Dummy(vec2(0, 19));
-
         UI::PushItemWidth(300);
         UI::Text("Weight");
         UI::SameLine();
@@ -7273,7 +6787,6 @@ namespace CarLocationBf {
         UI::Dummy(vec2(0, 0));
         UI::TextDimmed("This parameter is used to weight the rotation difference against the distance. A higher value will make the bruteforcing process more sensitive to rotation differences.");
         UI::Dummy(vec2(0, 17));
-
         UI::Text("From");
         UI::SameLine();
         UI::Dummy(vec2(17, 0));
@@ -7290,30 +6803,23 @@ namespace CarLocationBf {
         UI::TextDimmed("Reducing the maximum evaluation time will make the bruteforcing process faster.");
         UI::Dummy(vec2(0, 12));
     }
-
-
     float bestDist = 0;
     float bestRot = 0;
     int bestTime = 0;
-
     bool base = false;
     bool improvedYet = false;
     BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
     {
         int raceTime = simManager.RaceTime;
-
         auto resp = BFEvaluationResponse();
-
         bool isEvalTime = raceTime >= int(GetVariableDouble(id + "_bf_eval_min_time")) && raceTime <= int(GetVariableDouble(id + "_bf_eval_max_time"));
         bool isPastEvalTime = raceTime > int(GetVariableDouble(id + "_bf_eval_max_time"));
-
         if (info.Phase == BFPhase::Initial) {
             if (isEvalTime) {
                 float d = dist();
                 float r = rotDiff();
                 float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
                 int cps = simManager.PlayerInfo.CurCheckpointCount;
-
                 if(isBetter(d, speed, cps, r)){
                     bestDist = d;
                     bestRot = r;
@@ -7339,13 +6845,11 @@ namespace CarLocationBf {
                 resp.ResultFileStartContent = text;
             }
         } else {
-
             if(isEvalTime){
                 float d = dist();
                 float r = rotDiff();
                 float speed = simManager.Dyna.CurrentState.LinearSpeed.Length();
                 int cps = simManager.PlayerInfo.CurCheckpointCount;
-
                 if(isBetter(d, speed, cps, r)){
                     resp.Decision = BFEvaluationDecision::Accept;
                     improvedYet = false;
@@ -7355,39 +6859,30 @@ namespace CarLocationBf {
                 resp.Decision = BFEvaluationDecision::Reject;
             }
         }
-
         return resp;
     }
-
     vec3 targetP();
     quat targetR();
     float balance = 0;
-
     float dist(){
         return Math::Distance(pos(), targetP);
     }
-
     float Dot(const quat &in a, const quat &in b) {
         return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
     }
-
     float rotDiff(){
         float dot = Math::Abs(Dot(rot(), targetR));
         if(dot > 1.0f) {
             dot = 1.0f;
         }
         return Math::Acos(dot);
-
     }
-
     quat rot(){
         return GetSimulationManager().Dyna.CurrentState.Quat;
     }
-
     vec3 pos() {
         return GetSimulationManager().Dyna.CurrentState.Location.Position;
     }
-
     void OnSimulationBegin(SimulationManager@ simManager) {
         if (!(GetVariableString("bf_target") == id && GetVariableString("controller") == "bfv2")) {
             return;
@@ -7408,15 +6903,12 @@ namespace CarLocationBf {
         cpsCondition = int(GetVariableDouble("bf_condition_cps"));
         balance = (100 - int(GetVariableDouble(id + "_bf_weight"))) / 100.0f;
     }
-
     float speedCondition = 0.0f;
     float distCondition = 0.0f;
     int cpsCondition = 0;
-
     bool meetsConditions(float dist, float speed, int cps = 0) {
         return dist < distCondition && speed > speedCondition/3.6f && cps >= cpsCondition && GlobalConditionsMet(GetSimulationManager());
     }
-
     bool isBetter(float dist, float speed, int cps, float rotDiff) {
         if(meetsConditions(dist, speed, cps)){
             if(!improvedYet){
@@ -7427,10 +6919,7 @@ namespace CarLocationBf {
         }
         return false;
     }
-
     void Main() {
-
-
         g_ellipsoidVisualTriggerIds.Clear();
         for(uint i = 0; i < data.Length; ++i) {
             CommandList list();
@@ -7477,13 +6966,11 @@ namespace CarLocationBf {
         @eval.onSimBegin = @OnSimulationBegin;
     }
 }
-
 namespace TimeBf
 {
     int minTime = 0;
     int bestTime = -1;
     bool base = false;
-
     void RenderEvalSettings()
     {
         UI::PushItemWidth(200);
@@ -7495,16 +6982,13 @@ namespace TimeBf
         UI::PopItemWidth();
         toolTip(300, {"Optional minimum time threshold. Only times at or after this point will be considered. Set to 0 to disable."});
     }
-
     BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         int raceTime = simManager.RaceTime;
         auto resp = BFEvaluationResponse();
         resp.Decision = BFEvaluationDecision::DoNothing;
-
         bool conditionsMet = GlobalConditionsMet(simManager);
         bool isPastMinTime = raceTime >= minTime;
-
         if (info.Phase == BFPhase::Initial)
         {
             if (conditionsMet && isPastMinTime)
@@ -7532,17 +7016,14 @@ namespace TimeBf
                 resp.ResultFileStartContent = "# Best time: " + Text::FormatFloat(bestTime / 1000.0, "", 0, 3) + " s";
             }
         }
-
         return resp;
     }
-
     void OnSimulationBegin(SimulationManager @simManager)
     {
         minTime = int(GetVariableDouble("timebf_min_time"));
         bestTime = -1;
         base = true;
     }
-
     void Main()
     {
         RegisterVariable("timebf_min_time", 0);
