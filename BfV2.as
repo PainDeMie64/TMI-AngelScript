@@ -3,7 +3,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.8.0";
+    info.Version = "1.8.1";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -321,14 +321,6 @@ void BruteforceV2Settings()
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
         string varSuffix = GetInputModVarSuffix(im);
-        string savedAlgoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
-        if (savedAlgoId == "") savedAlgoId = "basic";
-        g_inputModSettings[im].algorithmIndex = GetInputModAlgorithmIndex(savedAlgoId);
-    }
-    for (uint im = 0; im < g_inputModSettings.Length; im++)
-    {
-        string suffix = "##inputmod" + im;
-        string varSuffix = GetInputModVarSuffix(im);
         if (im > 0)
         {
             RegisterVariable("bf_modify_count" + varSuffix, 0);
@@ -339,7 +331,26 @@ void BruteforceV2Settings()
             RegisterVariable("bf_inputs_fill_steer" + varSuffix, false);
             RegisterVariable("bf_input_mod_enabled" + varSuffix, true);
             RegisterVariable("bf_input_mod_algorithm" + varSuffix, "basic");
+            RegisterVariable("bf_range_min_input_count" + varSuffix, 1);
+            RegisterVariable("bf_range_max_input_count" + varSuffix, 1);
+            RegisterVariable("bf_range_min_steer" + varSuffix, -65536);
+            RegisterVariable("bf_range_max_steer" + varSuffix, 65536);
+            RegisterVariable("bf_range_min_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_range_max_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_range_fill_steer" + varSuffix, false);
         }
+    }
+    for (uint im = 0; im < g_inputModSettings.Length; im++)
+    {
+        string varSuffix = GetInputModVarSuffix(im);
+        string savedAlgoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+        if (savedAlgoId == "") savedAlgoId = "basic";
+        g_inputModSettings[im].algorithmIndex = GetInputModAlgorithmIndex(savedAlgoId);
+    }
+    for (uint im = 0; im < g_inputModSettings.Length; im++)
+    {
+        string suffix = "##inputmod" + im;
+        string varSuffix = GetInputModVarSuffix(im);
         if (im == 0)
         {
             if (UI::Button("+" + suffix, vec2(0, 0)))
@@ -419,7 +430,14 @@ void Main()
     RegisterVariable("bf_restart_condition_script_height", 26);
     RegisterVariable("bf_condition_trigger", 0);
     RegisterVariable("bf_input_mod_count", 1);
-    RegisterVariable("bf_input_mod_algorithm", "basic"); 
+    RegisterVariable("bf_input_mod_algorithm", "basic");
+    RegisterVariable("bf_range_min_input_count", 1);
+    RegisterVariable("bf_range_max_input_count", 1);
+    RegisterVariable("bf_range_min_steer", -65536);
+    RegisterVariable("bf_range_max_steer", 65536);
+    RegisterVariable("bf_range_min_time_diff", 0);
+    RegisterVariable("bf_range_max_time_diff", 0);
+    RegisterVariable("bf_range_fill_steer", false);
     PreciseFinishBf::Main();
     PreciseCheckpointBf::Main();
     PreciseTriggerBf::Main();
@@ -601,13 +619,6 @@ void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
 }
 void RangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {
-    RegisterVariable("bf_range_min_input_count" + varSuffix, 1);
-    RegisterVariable("bf_range_max_input_count" + varSuffix, 1);
-    RegisterVariable("bf_range_min_steer" + varSuffix, -65536);
-    RegisterVariable("bf_range_max_steer" + varSuffix, 65536);
-    RegisterVariable("bf_range_min_time_diff" + varSuffix, 0);
-    RegisterVariable("bf_range_max_time_diff" + varSuffix, 0);
-    RegisterVariable("bf_range_fill_steer" + varSuffix, false);
     if (UI::BeginTable("##input_count_range" + suffix, 1))
     {
         UI::TableNextRow();
@@ -692,14 +703,17 @@ void RangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsI
         UI::Dummy(vec2(117, 0));
         UI::SameLine();
         UI::Text("Max");
-        UI::PushItemWidth(142);
+        UI::Dummy(vec2(110, 0));
+        UI::SameLine();
+        UI::PushItemWidth(182);
+        UI::InputTimeVar("##bf_range_max_time_diff" + suffix, "bf_range_max_time_diff" + varSuffix);
+        UI::SameLine();
+        UI::Dummy(vec2(-355, 0));
+        UI::SameLine();
+        UI::PushItemWidth(182);
         UI::InputTimeVar("##bf_range_min_time_diff" + suffix, "bf_range_min_time_diff" + varSuffix);
         UI::PopItemWidth();
         UI::SameLine();
-        UI::Dummy(vec2(0, 0));
-        UI::SameLine();
-        UI::PushItemWidth(142);
-        UI::InputTimeVar("##bf_range_max_time_diff" + suffix, "bf_range_max_time_diff" + varSuffix);
         UI::PopItemWidth();
         UI::EndTable();
     }
@@ -910,6 +924,7 @@ array<string> restartInfos;
 string ResultFileStartContent = "";
 void OnSimulationBegin(SimulationManager @simManager)
 {
+    InitializeInputModAlgorithms();
     InputModification::cachedStartIndex = -1;
     IsBfV2Active = GetVariableString("controller") == "bfv2";
     if (!IsBfV2Active)
@@ -957,6 +972,9 @@ void OnSimulationBegin(SimulationManager @simManager)
         settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
         settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
         settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
+        string savedAlgoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+        if (savedAlgoId == "") savedAlgoId = "basic";
+        settings.algorithmIndex = GetInputModAlgorithmIndex(savedAlgoId);
         if (settings.maxInputsTime == 0)
             settings.maxInputsTime = int(simManager.EventsDuration);
     }
