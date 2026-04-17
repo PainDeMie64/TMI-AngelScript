@@ -3,7 +3,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "2.0-preview-1";
+    info.Version = "2.0-preview-2";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -522,7 +522,7 @@ void Main()
     CarLocationBf::Main();
     TimeBf::Main();
     CustomTargetBf::Main();
-    RegisterSettingsPage("Scripting Reference", ScriptingReference::Render);
+    RegisterSettingsPage("Scripting Docs", ScriptingReference::Render);
 }
 void Render()
 {
@@ -696,10 +696,11 @@ void AdvancedBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
 }
 void AdvancedBasicAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {
+    UI::PushID("adv_basic_" + settingsIndex);
     UI::PushItemWidth(300);
     if (UI::CollapsingHeader("Steering Settings" + suffix))
     {
-        UI::InputIntVar("Modify Count##adv_steer" + suffix, "bf_adv_steer_modify_count" + varSuffix, 1);
+        UI::InputIntVar("Modify Count (Steer)", "bf_adv_steer_modify_count" + varSuffix, 1);
         toolTip(300, {"Number of steering inputs to modify each attempt."});
         UI::Dummy(vec2(0, 0));
         if (UI::BeginTable("##adv_steer_time" + suffix, 1))
@@ -725,19 +726,19 @@ void AdvancedBasicAlgorithm_RenderUI(InputModificationSettings @settings, uint s
         toolTip(300, {"Time frame in which steering inputs can be changed."});
         UI::Dummy(vec2(0, 0));
         UI::PushItemWidth(300);
-        int t = UI::SliderIntVar("Max Steering Difference##adv_steer" + suffix, "bf_adv_steer_max_diff" + varSuffix, 0, 131072);
+        int t = UI::SliderIntVar("Max Steering Difference (Steer)", "bf_adv_steer_max_diff" + varSuffix, 0, 131072);
         toolTip(300, {"Randomize between [-" + t + ", " + t + "] and add to current steering."});
         UI::Dummy(vec2(0, 2));
-        int td = UI::InputTimeVar("Max Time Difference##adv_steer" + suffix, "bf_adv_steer_max_time_diff" + varSuffix);
+        int td = UI::InputTimeVar("Max Time Diff (Steer)", "bf_adv_steer_max_time_diff" + varSuffix);
         UI::PopItemWidth();
         toolTip(300, {"Randomize between [-" + td + ", " + td + "] ms and add to input time."});
-        UI::CheckboxVar("Fill Missing Steering##adv_steer" + suffix, "bf_adv_steer_fill" + varSuffix);
+        UI::CheckboxVar("Fill Missing Steering (Steer)", "bf_adv_steer_fill" + varSuffix);
         toolTip(300, {"Fill timestamps with no steering changes with existing values."});
     }
     UI::Dummy(vec2(0, 2));
     if (UI::CollapsingHeader("Acceleration Settings" + suffix))
     {
-        UI::InputIntVar("Modify Count##adv_accel" + suffix, "bf_adv_accel_modify_count" + varSuffix, 1);
+        UI::InputIntVar("Modify Count (Accel)", "bf_adv_accel_modify_count" + varSuffix, 1);
         toolTip(300, {"Number of acceleration inputs to modify (toggle on/off) each attempt."});
         UI::Dummy(vec2(0, 0));
         if (UI::BeginTable("##adv_accel_time" + suffix, 1))
@@ -763,14 +764,14 @@ void AdvancedBasicAlgorithm_RenderUI(InputModificationSettings @settings, uint s
         toolTip(300, {"Time frame in which acceleration inputs can be changed."});
         UI::Dummy(vec2(0, 2));
         UI::PushItemWidth(300);
-        int td = UI::InputTimeVar("Max Time Difference##adv_accel" + suffix, "bf_adv_accel_max_time_diff" + varSuffix);
+        int td = UI::InputTimeVar("Max Time Diff (Accel)", "bf_adv_accel_max_time_diff" + varSuffix);
         UI::PopItemWidth();
         toolTip(300, {"Randomize between [-" + td + ", " + td + "] ms and add to input time."});
     }
     UI::Dummy(vec2(0, 2));
     if (UI::CollapsingHeader("Brake Settings" + suffix))
     {
-        UI::InputIntVar("Modify Count##adv_brake" + suffix, "bf_adv_brake_modify_count" + varSuffix, 1);
+        UI::InputIntVar("Modify Count (Brake)", "bf_adv_brake_modify_count" + varSuffix, 1);
         toolTip(300, {"Number of brake inputs to modify (toggle on/off) each attempt."});
         UI::Dummy(vec2(0, 0));
         if (UI::BeginTable("##adv_brake_time" + suffix, 1))
@@ -796,11 +797,12 @@ void AdvancedBasicAlgorithm_RenderUI(InputModificationSettings @settings, uint s
         toolTip(300, {"Time frame in which brake inputs can be changed."});
         UI::Dummy(vec2(0, 2));
         UI::PushItemWidth(300);
-        int td = UI::InputTimeVar("Max Time Difference##adv_brake" + suffix, "bf_adv_brake_max_time_diff" + varSuffix);
+        int td = UI::InputTimeVar("Max Time Diff (Brake)", "bf_adv_brake_max_time_diff" + varSuffix);
         UI::PopItemWidth();
         toolTip(300, {"Randomize between [-" + td + ", " + td + "] ms and add to input time."});
     }
     UI::PopItemWidth();
+    UI::PopID();
 }
 void AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
@@ -841,6 +843,7 @@ void AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
 }
 void AdvancedRangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {
+    UI::PushID("adv_range_" + settingsIndex);
     UI::PushItemWidth(300);
     if (UI::CollapsingHeader("Steering Settings" + suffix))
     {
@@ -944,7 +947,7 @@ void AdvancedRangeAlgorithm_RenderUI(InputModificationSettings @settings, uint s
         }
         toolTip(300, {"Time offset randomly chosen between min and max."});
         UI::Dummy(vec2(0, 2));
-        UI::CheckboxVar("Fill Missing Steering##advr_steer" + suffix, "bf_advr_steer_fill" + varSuffix);
+        UI::CheckboxVar("Fill Missing Steering (Steer)", "bf_advr_steer_fill" + varSuffix);
         toolTip(300, {"Fill timestamps with no steering changes with existing values."});
     }
     UI::Dummy(vec2(0, 2));
@@ -1094,6 +1097,7 @@ void AdvancedRangeAlgorithm_RenderUI(InputModificationSettings @settings, uint s
         toolTip(300, {"Time offset randomly chosen between min and max."});
     }
     UI::PopItemWidth();
+    UI::PopID();
 }
 void InitializeInputModAlgorithms()
 {
@@ -8257,17 +8261,21 @@ namespace CustomTargetBf
                     bestScores[i] = currentScores[i];
                 }
                 resp.Decision = BFEvaluationDecision::Accept;
-                string summary = "Base run:";
-                for (uint i = 0; i < directives.Length; i++)
+                if (base)
                 {
-                    string dirType = "";
-                    if (directives[i].type == 0) dirType = "min";
-                    else if (directives[i].type == 1) dirType = "max";
-                    else dirType = "target " + Text::FormatFloat(directives[i].targetValue, "", 0, 3);
-                    summary += " [" + dirType + " " + directives[i].sourceExpr + "=" + FormatScoreAsValue(directives[i], bestScores[i]) + "]";
+                    base = false;
+                    string summary = "Base run:";
+                    for (uint i = 0; i < directives.Length; i++)
+                    {
+                        string dirType = "";
+                        if (directives[i].type == 0) dirType = "min";
+                        else if (directives[i].type == 1) dirType = "max";
+                        else dirType = "target " + Text::FormatFloat(directives[i].targetValue, "", 0, 3);
+                        summary += " [" + dirType + " " + directives[i].sourceExpr + "=" + FormatScoreAsValue(directives[i], bestScores[i]) + "]";
+                    }
+                    print(summary);
+                    resp.ResultFileStartContent = "# " + summary;
                 }
-                print(summary);
-                resp.ResultFileStartContent = "# " + summary;
             }
             else
             {
