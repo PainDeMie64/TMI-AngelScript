@@ -8376,34 +8376,25 @@ namespace StandardTriggerBf
     int bestEntryTick = -1;
     float bestSpeedAtEntry = -1.0f;
     float bestDistBeforeEntry = 1e18f;
-    float DistanceToAABB(vec3 point, vec3 aabbPos, vec3 aabbSize)
-    {
-        vec3 aabbMin = aabbPos;
-        vec3 aabbMax = aabbPos + aabbSize;
-        float dx = Math::Max(aabbMin.x - point.x, Math::Max(0.0f, point.x - aabbMax.x));
-        float dy = Math::Max(aabbMin.y - point.y, Math::Max(0.0f, point.y - aabbMax.y));
-        float dz = Math::Max(aabbMin.z - point.z, Math::Max(0.0f, point.z - aabbMax.z));
-        return Math::Sqrt(dx * dx + dy * dy + dz * dz);
-    }
     bool isBetter(int time, float dist, float speed)
     {
         if (bestSpeedAtEntry < 0.0f)
             return true;
+        if (weight == 100)
+            return speed > bestSpeedAtEntry;
         if (time < bestEntryTick)
         {
             if (weight == 0)
                 return true;
-            if (weight == 100)
-                return speed > bestSpeedAtEntry;
+            float w = float(weight);
             float speedLoss = Math::Max(0.0f, bestSpeedAtEntry - speed);
             if (speedLoss <= 0.0f)
                 return true;
-            return (dist - k * speed) < (bestDistBeforeEntry - k * bestSpeedAtEntry);
+            float timeBenefit = float(bestEntryTick - time);
+            return timeBenefit * (100.0f - w) >= speedLoss * w;
         }
         if (time == bestEntryTick)
         {
-            if (weight == 100)
-                return speed > bestSpeedAtEntry;
             if (weight == 0)
                 return dist < bestDistBeforeEntry;
             if (weight <= 50)
@@ -8415,8 +8406,17 @@ namespace StandardTriggerBf
                 return (speed - k * dist) > (bestSpeedAtEntry - k * bestDistBeforeEntry);
             }
         }
-        if (weight == 100)
-            return speed > bestSpeedAtEntry;
+        if (time > bestEntryTick)
+        {
+            if (weight == 0)
+                return false;
+            float w = float(weight);
+            float speedGain = Math::Max(0.0f, speed - bestSpeedAtEntry);
+            if (speedGain <= 0.0f)
+                return false;
+            float timeLoss = float(time - bestEntryTick);
+            return speedGain * w > timeLoss * (100.0f - w);
+        }
         return false;
     }
     void RenderEvalSettings()
@@ -8511,11 +8511,11 @@ namespace StandardTriggerBf
                 speedAtEntry = simManager.Dyna.CurrentState.LinearSpeed.Length();
                 if (prevTickValid)
                 {
-                    distBeforeEntry = DistanceToAABB(prevTickPos, targetTrigger.Position, targetTrigger.Size);
+                    distBeforeEntry = targetTrigger.Distance(prevTickPos);
                 }
                 else
                 {
-                    distBeforeEntry = DistanceToAABB(carPos, targetTrigger.Position, targetTrigger.Size);
+                    distBeforeEntry = targetTrigger.Distance(carPos);
                 }
             }
             prevTickPos = carPos;
@@ -8564,6 +8564,13 @@ namespace StandardTriggerBf
             }
             if (isBetter(entryTick, distBeforeEntry, speedAtEntry))
             {
+                print("Found better trigger: [time: " + Text::FormatFloat(entryTick / 1000.0, "", 0, 2)
+                    + ", distance: " + Text::FormatFloat(distBeforeEntry, "", 0, 8)
+                    + ", speed: " + Text::FormatFloat(speedAtEntry * 3.6, "", 0, 2) + "km/h]"
+                    + " is better than [time: " + Text::FormatFloat(bestEntryTick / 1000.0, "", 0, 2)
+                    + ", distance: " + Text::FormatFloat(bestDistBeforeEntry, "", 0, 8)
+                    + ", speed: " + Text::FormatFloat(bestSpeedAtEntry * 3.6, "", 0, 2) + "km/h]"
+                    + ", iterations: " + info.Iterations);
                 bestEntryTick = entryTick;
                 bestSpeedAtEntry = speedAtEntry;
                 bestDistBeforeEntry = distBeforeEntry;
