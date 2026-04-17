@@ -3,7 +3,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "2.0-preview-2";
+    info.Version = "2.0-preview-3";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -1398,6 +1398,7 @@ void RemoveInputModificationSettings(uint index)
 }
 void MutateAllInputs(TM::InputEventBuffer @buffer)
 {
+    InputModification::g_earliestMutationTime = 2147483647;
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
         InputModificationSettings @settings = g_inputModSettings[im];
@@ -1501,6 +1502,18 @@ bool GlobalConditionsMet(SimulationManager @simManager)
 }
 SimulationState rewindState;
 bool rewindStateAssigned = false;
+array<SimulationState@> simStateCache;
+array<int> simStateTimes;
+SimulationState@ FindNearestCachedState(int earliestMutationTime)
+{
+    int target = earliestMutationTime - 10;
+    for (int i = int(simStateTimes.Length) - 1; i >= 0; i--)
+    {
+        if (simStateTimes[i] <= target)
+            return simStateCache[i];
+    }
+    return rewindState;
+}
 array<int> CheckpointStates;
 bool IsBfV2Active = false;
 bool running = false;
@@ -1526,6 +1539,8 @@ void OnSimulationBegin(SimulationManager @simManager)
     forceStop = false;
     restartCount = 0;
     rewindStateAssigned = false;
+    simStateCache.Clear();
+    simStateTimes.Clear();
     running = true;
     CheckpointStates = simManager.PlayerInfo.CheckpointStates;
     restartInfos.Clear();
@@ -1822,6 +1837,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         info.Rewinded = false;
         lastRestartTime = now;
         lastImprovementTime = now;
+        simStateCache.Clear();
+        simStateTimes.Clear();
         simManager.RewindToState(rewindState);
         return;
     }
@@ -1849,11 +1866,13 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             lastImprovementTime = Time::Now;
         }
         BFEvaluationResponse @response = current.callback(simManager, info);
+        if (PreciseFinish::IsEstimating)
+            return;
         if (simManager.TickTime > simManager.RaceTime + 10 && !info.Rewinded && response.Decision != BFEvaluationDecision::Accept)
         {
-            simManager.RewindToState(rewindState);
             RestoreBestInputs(simManager);
             MutateAllInputs(simManager.InputEvents);
+            simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
             info.Rewinded = true;
             info.Phase = BFPhase::Search;
             info.Iterations++;
@@ -1863,9 +1882,15 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         info.Rewinded = false;
         if (info.Phase == BFPhase::Initial)
         {
-            if (raceTime == leastMinInputsTime - 10 && !rewindStateAssigned)
+            if (raceTime >= leastMinInputsTime - 10)
             {
-                rewindState = simManager.SaveState();
+                if (!rewindStateAssigned)
+                {
+                    rewindState = simManager.SaveState();
+                    rewindStateAssigned = true;
+                }
+                simStateTimes.Add(raceTime);
+                simStateCache.Add(simManager.SaveState());
             }
             if (response.Decision == BFEvaluationDecision::Stop)
             {
@@ -1875,9 +1900,9 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             {
                 if (raceTime > int(simManager.EventsDuration) + 50 || response.Decision == BFEvaluationDecision::Accept)
                 {
-                    simManager.RewindToState(rewindState);
                     RestoreBestInputs(simManager);
                     MutateAllInputs(simManager.InputEvents);
+                    simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
                     info.Rewinded = true;
                     info.Phase = BFPhase::Search;
                     info.Iterations++;
@@ -1891,9 +1916,9 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             {
                 if (raceTime > int(simManager.EventsDuration))
                 {
-                    simManager.RewindToState(rewindState);
                     RestoreBestInputs(simManager);
                     MutateAllInputs(simManager.InputEvents);
+                    simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
                     info.Rewinded = true;
                     info.Iterations++;
                 }
@@ -1915,6 +1940,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                 }
                 if (g_inputModSettings.Length > 0)
                     maxInputsTime = g_inputModSettings[0].maxInputsTime;
+                simStateCache.Clear();
+                simStateTimes.Clear();
                 simManager.RewindToState(rewindState);
                 RestoreBestInputs(simManager, false);
                 info.Rewinded = true;
@@ -1924,9 +1951,9 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             }
             else if (response.Decision == BFEvaluationDecision::Reject)
             {
-                simManager.RewindToState(rewindState);
                 RestoreBestInputs(simManager);
                 MutateAllInputs(simManager.InputEvents);
+                simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
                 info.Rewinded = true;
                 info.Iterations++;
             }
@@ -3078,6 +3105,7 @@ namespace InputModification
 {
     int cachedStartIndex = -1;
     int cachedMinTime = -1;
+    int g_earliestMutationTime = 2147483647;
     void SortBufferManual(TM::InputEventBuffer @buffer, int startIndex = -1)
     {
         if (buffer is null || buffer.Length < 2)
@@ -3183,6 +3211,9 @@ namespace InputModification
                     evt.Value.Analog = 65536;
                 }
             }
+            int origRaceTime = int(buffer[inputIdx].Time) - 100010;
+            int newRaceTime = int(evt.Time) - 100010;
+            g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
         SortBufferManual(buffer, cachedStartIndex);
@@ -3279,6 +3310,9 @@ namespace InputModification
                     evt.Value.Analog = 65536;
                 }
             }
+            int origRaceTime = int(buffer[inputIdx].Time) - 100010;
+            int newRaceTime = int(evt.Time) - 100010;
+            g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
         SortBufferManual(buffer, cachedStartIndex);
@@ -3429,6 +3463,9 @@ namespace InputModification
                     evt.Value.Analog = 65536;
                 }
             }
+            int origRaceTime = int(buffer[inputIdx].Time) - 100010;
+            int newRaceTime = int(evt.Time) - 100010;
+            g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
         SortBufferManual(buffer, cachedStartIndex);
@@ -3529,6 +3566,9 @@ namespace InputModification
                     evt.Value.Analog = 65536;
                 }
             }
+            int origRaceTime = int(buffer[inputIdx].Time) - 100010;
+            int newRaceTime = int(evt.Time) - 100010;
+            g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
         SortBufferManual(buffer, cachedStartIndex);
@@ -3583,6 +3623,10 @@ namespace Scripting
     float GetCarVelX(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed.x; }
     float GetCarVelY(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed.y; }
     float GetCarVelZ(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed.z; }
+    float GetCarLocalVelX(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed.x; }
+    float GetCarLocalVelY(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed.y; }
+    float GetCarLocalVelZ(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed.z; }
+    float GetCarLocalSpeed(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed.Length(); }
     float GetCarPitch(SimulationManager @sim)
     {
         float x, y, z;
@@ -3616,6 +3660,7 @@ namespace Scripting
     float GetWheelBRSurface(SimulationManager @sim) { return float(sim.Wheels.BackRight.RTState.ContactMaterialId); }
     vec3 GetCarPos(SimulationManager @sim) { return sim.Dyna.CurrentState.Location.Position; }
     vec3 GetCarVel(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed; }
+    vec3 GetCarLocalVel(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed; }
     float GetIterationCount(SimulationManager @sim)
     {
         return float(info.Iterations);
@@ -4008,6 +4053,14 @@ namespace Scripting
             return GetCarVelY;
         if (lower == "car.velocity.z" || lower == "car.vel.z")
             return GetCarVelZ;
+        if (lower == "car.localvelocity.x" || lower == "car.localvel.x")
+            return GetCarLocalVelX;
+        if (lower == "car.localvelocity.y" || lower == "car.localvel.y")
+            return GetCarLocalVelY;
+        if (lower == "car.localvelocity.z" || lower == "car.localvel.z")
+            return GetCarLocalVelZ;
+        if (lower == "car.localspeed")
+            return GetCarLocalSpeed;
         if (lower == "car.rotation.pitch" || lower == "car.pitch")
             return GetCarPitch;
         if (lower == "car.rotation.yaw" || lower == "car.yaw")
@@ -4082,6 +4135,8 @@ namespace Scripting
             return GetCarPos;
         if (lower == "car.velocity" || lower == "car.vel")
             return GetCarVel;
+        if (lower == "car.localvelocity" || lower == "car.localvel")
+            return GetCarLocalVel;
         return null;
     }
 }
@@ -8650,23 +8705,46 @@ namespace ScriptingReference
         UI::PopStyleColor();
         UI::Dummy(vec2(0, 1));
     }
+    uint copyId = 0;
     void Code(const string &in code)
     {
         UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
         UI::Text("  " + code);
         UI::PopStyleColor();
+        UI::SameLine();
+        if (UI::Button("Copy##c" + copyId++))
+            IO::SetClipboard(code);
     }
-    void Desc(const string &in text)
-    {
-        UI::TextDimmed("    " + text);
-    }
-    void Entry(const string &in code, const string &in desc)
+    void CodeNoCopy(const string &in code)
     {
         UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
         UI::Text("  " + code);
         UI::PopStyleColor();
+    }
+    void CodeBlock(const string &in line1, const string &in line2)
+    {
+        UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
+        UI::Text("  " + line1);
+        UI::Text("  " + line2);
+        UI::PopStyleColor();
         UI::SameLine();
-        UI::TextDimmed("  " + desc);
+        if (UI::Button("Copy##c" + copyId++))
+            IO::SetClipboard(line1 + "\n" + line2);
+    }
+    void CodeBlock3(const string &in l1, const string &in l2, const string &in l3)
+    {
+        UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
+        UI::Text("  " + l1);
+        UI::Text("  " + l2);
+        UI::Text("  " + l3);
+        UI::PopStyleColor();
+        UI::SameLine();
+        if (UI::Button("Copy##c" + copyId++))
+            IO::SetClipboard(l1 + "\n" + l2 + "\n" + l3);
+    }
+    void Desc(const string &in text)
+    {
+        UI::TextDimmed("    " + text);
     }
     void VarRow(const string &in name, const string &in desc)
     {
@@ -8675,6 +8753,15 @@ namespace ScriptingReference
         UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
         UI::Text(name);
         UI::PopStyleColor();
+        UI::SameLine();
+        string copyName = name;
+        int slashPos = copyName.FindFirst(" /");
+        if (slashPos != -1)
+            copyName = copyName.Substr(0, slashPos);
+        while (copyName.Length > 0 && copyName[copyName.Length - 1] == 32)
+            copyName = copyName.Substr(0, copyName.Length - 1);
+        if (UI::Button("Copy##v" + copyId++))
+            IO::SetClipboard(copyName);
         UI::TableSetColumnIndex(1);
         UI::TextDimmed(desc);
     }
@@ -8692,6 +8779,7 @@ namespace ScriptingReference
     }
     void Render()
     {
+        copyId = 0;
         UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 1, 0.95));
         UI::TextWrapped("This page documents the scripting language used in Condition Scripts, Restart Condition Scripts, and Custom Target Scripts. All three share the same expression language.");
         UI::PopStyleColor();
@@ -8701,7 +8789,7 @@ namespace ScriptingReference
             UI::Dummy(vec2(0, 2));
             UI::TextWrapped("Used in the Conditions and Restart Condition fields. Each line is a boolean comparison. All lines must be true (AND logic).");
             SubHeader("Format");
-            Code("EXPRESSION  OPERATOR  EXPRESSION");
+            CodeNoCopy("EXPRESSION  OPERATOR  EXPRESSION");
             UI::Dummy(vec2(0, 2));
             UI::TextDimmed("  Operators:  >  <  >=  <=  =");
             SubHeader("Examples");
@@ -8711,8 +8799,7 @@ namespace ScriptingReference
             Code("car.z < 10.5");
             Desc("Z position must be below 10.5");
             UI::Dummy(vec2(0, 1));
-            Code("deg(car.pitch) > 80");
-            Code("car.wheels.frontleft.groundcontact = 1");
+            CodeBlock("deg(car.pitch) > 80", "car.wheels.frontleft.groundcontact = 1");
             Desc("Nose up and front-left wheel touching ground");
             UI::Dummy(vec2(0, 1));
             Code("distance(car.pos, (105.5, 20.0, 300.0)) < 5.0");
@@ -8759,12 +8846,10 @@ namespace ScriptingReference
             Code("min distance(car.pos, (105.5, 20.0, 300.0))");
             Desc("Minimize distance to a point");
             UI::Dummy(vec2(0, 1));
-            Code("max kmh(car.speed)");
-            Code("target 200 car.x");
+            CodeBlock("max kmh(car.speed)", "target 200 car.x");
             Desc("Maximize speed while keeping car.x near 200");
             UI::Dummy(vec2(0, 1));
-            Code("# Optimize for altitude");
-            Code("max car.y");
+            CodeBlock("# Optimize for altitude", "max car.y");
             Desc("Comments are allowed with #");
             UI::Dummy(vec2(0, 4));
         }
@@ -8786,10 +8871,14 @@ namespace ScriptingReference
             {
                 UI::TableSetupColumn("Variable");
                 UI::TableSetupColumn("Description");
-                VarRow("car.vel.x  /  car.velocity.x", "X velocity (m/s)");
-                VarRow("car.vel.y  /  car.velocity.y", "Y velocity (m/s)");
-                VarRow("car.vel.z  /  car.velocity.z", "Z velocity (m/s)");
+                VarRow("car.vel.x  /  car.velocity.x", "X velocity, world (m/s)");
+                VarRow("car.vel.y  /  car.velocity.y", "Y velocity, world (m/s)");
+                VarRow("car.vel.z  /  car.velocity.z", "Z velocity, world (m/s)");
                 VarRow("car.speed", "Total speed (m/s)");
+                VarRow("car.localvel.x", "X velocity, car-relative (m/s)");
+                VarRow("car.localvel.y", "Y velocity, car-relative (m/s)");
+                VarRow("car.localvel.z", "Z velocity, car-relative (m/s)");
+                VarRow("car.localspeed", "Total local speed (m/s)");
                 UI::EndTable();
             }
             SubHeader("Rotation");
@@ -8841,7 +8930,8 @@ namespace ScriptingReference
                 UI::TableSetupColumn("Variable");
                 UI::TableSetupColumn("Description");
                 VarRow("car.pos  /  car.position", "Position as vec3");
-                VarRow("car.vel  /  car.velocity", "Velocity as vec3");
+                VarRow("car.vel  /  car.velocity", "Velocity as vec3 (world)");
+                VarRow("car.localvel  /  car.localvelocity", "Velocity as vec3 (car-relative)");
                 VarRow("(x, y, z)", "Constant vec3 literal");
                 UI::EndTable();
             }
