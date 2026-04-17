@@ -3,7 +3,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2";
     info.Author = "Skycrafter";
-    info.Version = "1.8.1";
+    info.Version = "2.0-preview-1";
     info.Description = "Next generation bruteforce";
     return info;
 }
@@ -34,6 +34,10 @@ void SaveReplay(string name){
     CommandList saveReplayCmd;
     saveReplayCmd.Content="save_replay " + name;
     saveReplayCmd.Process(CommandListProcessOption::ExecuteImmediately);
+}
+int ResolveMaxTime(int maxTime, int eventsDuration)
+{
+    return maxTime == 0 ? eventsDuration : maxTime;
 }
 array<BruteforceEvaluation @> evaluations;
 BruteforceEvaluation @current;
@@ -338,6 +342,41 @@ void BruteforceV2Settings()
             RegisterVariable("bf_range_min_time_diff" + varSuffix, 0);
             RegisterVariable("bf_range_max_time_diff" + varSuffix, 0);
             RegisterVariable("bf_range_fill_steer" + varSuffix, false);
+            RegisterVariable("bf_adv_steer_modify_count" + varSuffix, 0);
+            RegisterVariable("bf_adv_steer_min_time" + varSuffix, 0);
+            RegisterVariable("bf_adv_steer_max_time" + varSuffix, 0);
+            RegisterVariable("bf_adv_steer_max_diff" + varSuffix, 0);
+            RegisterVariable("bf_adv_steer_max_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_adv_steer_fill" + varSuffix, false);
+            RegisterVariable("bf_adv_accel_modify_count" + varSuffix, 0);
+            RegisterVariable("bf_adv_accel_min_time" + varSuffix, 0);
+            RegisterVariable("bf_adv_accel_max_time" + varSuffix, 0);
+            RegisterVariable("bf_adv_accel_max_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_adv_brake_modify_count" + varSuffix, 0);
+            RegisterVariable("bf_adv_brake_min_time" + varSuffix, 0);
+            RegisterVariable("bf_adv_brake_max_time" + varSuffix, 0);
+            RegisterVariable("bf_adv_brake_max_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_advr_steer_min_input_count" + varSuffix, 1);
+            RegisterVariable("bf_advr_steer_max_input_count" + varSuffix, 1);
+            RegisterVariable("bf_advr_steer_min_time" + varSuffix, 0);
+            RegisterVariable("bf_advr_steer_max_time" + varSuffix, 0);
+            RegisterVariable("bf_advr_steer_min_steer" + varSuffix, -65536);
+            RegisterVariable("bf_advr_steer_max_steer" + varSuffix, 65536);
+            RegisterVariable("bf_advr_steer_min_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_advr_steer_max_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_advr_steer_fill" + varSuffix, false);
+            RegisterVariable("bf_advr_accel_min_input_count" + varSuffix, 1);
+            RegisterVariable("bf_advr_accel_max_input_count" + varSuffix, 1);
+            RegisterVariable("bf_advr_accel_min_time" + varSuffix, 0);
+            RegisterVariable("bf_advr_accel_max_time" + varSuffix, 0);
+            RegisterVariable("bf_advr_accel_min_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_advr_accel_max_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_advr_brake_min_input_count" + varSuffix, 1);
+            RegisterVariable("bf_advr_brake_max_input_count" + varSuffix, 1);
+            RegisterVariable("bf_advr_brake_min_time" + varSuffix, 0);
+            RegisterVariable("bf_advr_brake_max_time" + varSuffix, 0);
+            RegisterVariable("bf_advr_brake_min_time_diff" + varSuffix, 0);
+            RegisterVariable("bf_advr_brake_max_time_diff" + varSuffix, 0);
         }
     }
     for (uint im = 0; im < g_inputModSettings.Length; im++)
@@ -438,14 +477,52 @@ void Main()
     RegisterVariable("bf_range_min_time_diff", 0);
     RegisterVariable("bf_range_max_time_diff", 0);
     RegisterVariable("bf_range_fill_steer", false);
+    RegisterVariable("bf_adv_steer_modify_count", 0);
+    RegisterVariable("bf_adv_steer_min_time", 0);
+    RegisterVariable("bf_adv_steer_max_time", 0);
+    RegisterVariable("bf_adv_steer_max_diff", 0);
+    RegisterVariable("bf_adv_steer_max_time_diff", 0);
+    RegisterVariable("bf_adv_steer_fill", false);
+    RegisterVariable("bf_adv_accel_modify_count", 0);
+    RegisterVariable("bf_adv_accel_min_time", 0);
+    RegisterVariable("bf_adv_accel_max_time", 0);
+    RegisterVariable("bf_adv_accel_max_time_diff", 0);
+    RegisterVariable("bf_adv_brake_modify_count", 0);
+    RegisterVariable("bf_adv_brake_min_time", 0);
+    RegisterVariable("bf_adv_brake_max_time", 0);
+    RegisterVariable("bf_adv_brake_max_time_diff", 0);
+    RegisterVariable("bf_advr_steer_min_input_count", 1);
+    RegisterVariable("bf_advr_steer_max_input_count", 1);
+    RegisterVariable("bf_advr_steer_min_time", 0);
+    RegisterVariable("bf_advr_steer_max_time", 0);
+    RegisterVariable("bf_advr_steer_min_steer", -65536);
+    RegisterVariable("bf_advr_steer_max_steer", 65536);
+    RegisterVariable("bf_advr_steer_min_time_diff", 0);
+    RegisterVariable("bf_advr_steer_max_time_diff", 0);
+    RegisterVariable("bf_advr_steer_fill", false);
+    RegisterVariable("bf_advr_accel_min_input_count", 1);
+    RegisterVariable("bf_advr_accel_max_input_count", 1);
+    RegisterVariable("bf_advr_accel_min_time", 0);
+    RegisterVariable("bf_advr_accel_max_time", 0);
+    RegisterVariable("bf_advr_accel_min_time_diff", 0);
+    RegisterVariable("bf_advr_accel_max_time_diff", 0);
+    RegisterVariable("bf_advr_brake_min_input_count", 1);
+    RegisterVariable("bf_advr_brake_max_input_count", 1);
+    RegisterVariable("bf_advr_brake_min_time", 0);
+    RegisterVariable("bf_advr_brake_max_time", 0);
+    RegisterVariable("bf_advr_brake_min_time_diff", 0);
+    RegisterVariable("bf_advr_brake_max_time_diff", 0);
     PreciseFinishBf::Main();
     PreciseCheckpointBf::Main();
     PreciseTriggerBf::Main();
+    StandardTriggerBf::Main();
     SinglePointBf::Main();
     VelocityBf::Main();
     SkyBf::Main();
     CarLocationBf::Main();
     TimeBf::Main();
+    CustomTargetBf::Main();
+    RegisterSettingsPage("Scripting Reference", ScriptingReference::Render);
 }
 void Render()
 {
@@ -587,12 +664,445 @@ void BasicAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsI
     toolTip(300, {"Timestamps with no steering input changes will be filled with existing values "
                   "resulting in more values that can be changed."});
 }
+void AdvancedBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    int steerCount = int(GetVariableDouble("bf_adv_steer_modify_count" + varSuffix));
+    int steerMinTime = int(GetVariableDouble("bf_adv_steer_min_time" + varSuffix));
+    int steerMaxTime = int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix));
+    int steerMaxDiff = int(GetVariableDouble("bf_adv_steer_max_diff" + varSuffix));
+    int steerMaxTimeDiff = int(GetVariableDouble("bf_adv_steer_max_time_diff" + varSuffix));
+    bool steerFill = GetVariableBool("bf_adv_steer_fill" + varSuffix);
+    if (steerCount > 0)
+    {
+        InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.SteerId), steerCount, steerMinTime, steerMaxTime, steerMaxDiff, steerMaxTimeDiff, steerFill, false);
+    }
+    int accelCount = int(GetVariableDouble("bf_adv_accel_modify_count" + varSuffix));
+    int accelMinTime = int(GetVariableDouble("bf_adv_accel_min_time" + varSuffix));
+    int accelMaxTime = int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix));
+    int accelMaxTimeDiff = int(GetVariableDouble("bf_adv_accel_max_time_diff" + varSuffix));
+    if (accelCount > 0)
+    {
+        InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.AccelerateId), accelCount, accelMinTime, accelMaxTime, 0, accelMaxTimeDiff, false, true);
+    }
+    int brakeCount = int(GetVariableDouble("bf_adv_brake_modify_count" + varSuffix));
+    int brakeMinTime = int(GetVariableDouble("bf_adv_brake_min_time" + varSuffix));
+    int brakeMaxTime = int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix));
+    int brakeMaxTimeDiff = int(GetVariableDouble("bf_adv_brake_max_time_diff" + varSuffix));
+    if (brakeCount > 0)
+    {
+        InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.BrakeId), brakeCount, brakeMinTime, brakeMaxTime, 0, brakeMaxTimeDiff, false, true);
+    }
+}
+void AdvancedBasicAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    UI::PushItemWidth(300);
+    if (UI::CollapsingHeader("Steering Settings" + suffix))
+    {
+        UI::InputIntVar("Modify Count##adv_steer" + suffix, "bf_adv_steer_modify_count" + varSuffix, 1);
+        toolTip(300, {"Number of steering inputs to modify each attempt."});
+        UI::Dummy(vec2(0, 0));
+        if (UI::BeginTable("##adv_steer_time" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(18, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_adv_steer_min_time" + suffix, "bf_adv_steer_min_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(37, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_adv_steer_max_time" + suffix, "bf_adv_steer_max_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which steering inputs can be changed."});
+        UI::Dummy(vec2(0, 0));
+        UI::PushItemWidth(300);
+        int t = UI::SliderIntVar("Max Steering Difference##adv_steer" + suffix, "bf_adv_steer_max_diff" + varSuffix, 0, 131072);
+        toolTip(300, {"Randomize between [-" + t + ", " + t + "] and add to current steering."});
+        UI::Dummy(vec2(0, 2));
+        int td = UI::InputTimeVar("Max Time Difference##adv_steer" + suffix, "bf_adv_steer_max_time_diff" + varSuffix);
+        UI::PopItemWidth();
+        toolTip(300, {"Randomize between [-" + td + ", " + td + "] ms and add to input time."});
+        UI::CheckboxVar("Fill Missing Steering##adv_steer" + suffix, "bf_adv_steer_fill" + varSuffix);
+        toolTip(300, {"Fill timestamps with no steering changes with existing values."});
+    }
+    UI::Dummy(vec2(0, 2));
+    if (UI::CollapsingHeader("Acceleration Settings" + suffix))
+    {
+        UI::InputIntVar("Modify Count##adv_accel" + suffix, "bf_adv_accel_modify_count" + varSuffix, 1);
+        toolTip(300, {"Number of acceleration inputs to modify (toggle on/off) each attempt."});
+        UI::Dummy(vec2(0, 0));
+        if (UI::BeginTable("##adv_accel_time" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(18, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_adv_accel_min_time" + suffix, "bf_adv_accel_min_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(37, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_adv_accel_max_time" + suffix, "bf_adv_accel_max_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which acceleration inputs can be changed."});
+        UI::Dummy(vec2(0, 2));
+        UI::PushItemWidth(300);
+        int td = UI::InputTimeVar("Max Time Difference##adv_accel" + suffix, "bf_adv_accel_max_time_diff" + varSuffix);
+        UI::PopItemWidth();
+        toolTip(300, {"Randomize between [-" + td + ", " + td + "] ms and add to input time."});
+    }
+    UI::Dummy(vec2(0, 2));
+    if (UI::CollapsingHeader("Brake Settings" + suffix))
+    {
+        UI::InputIntVar("Modify Count##adv_brake" + suffix, "bf_adv_brake_modify_count" + varSuffix, 1);
+        toolTip(300, {"Number of brake inputs to modify (toggle on/off) each attempt."});
+        UI::Dummy(vec2(0, 0));
+        if (UI::BeginTable("##adv_brake_time" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(18, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_adv_brake_min_time" + suffix, "bf_adv_brake_min_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(37, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_adv_brake_max_time" + suffix, "bf_adv_brake_max_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which brake inputs can be changed."});
+        UI::Dummy(vec2(0, 2));
+        UI::PushItemWidth(300);
+        int td = UI::InputTimeVar("Max Time Difference##adv_brake" + suffix, "bf_adv_brake_max_time_diff" + varSuffix);
+        UI::PopItemWidth();
+        toolTip(300, {"Randomize between [-" + td + ", " + td + "] ms and add to input time."});
+    }
+    UI::PopItemWidth();
+}
+void AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    int steerMinCount = int(GetVariableDouble("bf_advr_steer_min_input_count" + varSuffix));
+    int steerMaxCount = int(GetVariableDouble("bf_advr_steer_max_input_count" + varSuffix));
+    int steerMinTime = int(GetVariableDouble("bf_advr_steer_min_time" + varSuffix));
+    int steerMaxTime = int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix));
+    int steerMinSteer = int(GetVariableDouble("bf_advr_steer_min_steer" + varSuffix));
+    int steerMaxSteer = int(GetVariableDouble("bf_advr_steer_max_steer" + varSuffix));
+    int steerMinTimeDiff = int(GetVariableDouble("bf_advr_steer_min_time_diff" + varSuffix));
+    int steerMaxTimeDiff = int(GetVariableDouble("bf_advr_steer_max_time_diff" + varSuffix));
+    bool steerFill = GetVariableBool("bf_advr_steer_fill" + varSuffix);
+    if (steerMinCount > 0 || steerMaxCount > 0)
+    {
+        InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.SteerId), steerMinCount, steerMaxCount, steerMinTime, steerMaxTime, steerMinSteer, steerMaxSteer, steerMinTimeDiff, steerMaxTimeDiff, steerFill, false);
+    }
+    int accelMinCount = int(GetVariableDouble("bf_advr_accel_min_input_count" + varSuffix));
+    int accelMaxCount = int(GetVariableDouble("bf_advr_accel_max_input_count" + varSuffix));
+    int accelMinTime = int(GetVariableDouble("bf_advr_accel_min_time" + varSuffix));
+    int accelMaxTime = int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix));
+    int accelMinTimeDiff = int(GetVariableDouble("bf_advr_accel_min_time_diff" + varSuffix));
+    int accelMaxTimeDiff = int(GetVariableDouble("bf_advr_accel_max_time_diff" + varSuffix));
+    if (accelMinCount > 0 || accelMaxCount > 0)
+    {
+        InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.AccelerateId), accelMinCount, accelMaxCount, accelMinTime, accelMaxTime, 0, 0, accelMinTimeDiff, accelMaxTimeDiff, false, true);
+    }
+    int brakeMinCount = int(GetVariableDouble("bf_advr_brake_min_input_count" + varSuffix));
+    int brakeMaxCount = int(GetVariableDouble("bf_advr_brake_max_input_count" + varSuffix));
+    int brakeMinTime = int(GetVariableDouble("bf_advr_brake_min_time" + varSuffix));
+    int brakeMaxTime = int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix));
+    int brakeMinTimeDiff = int(GetVariableDouble("bf_advr_brake_min_time_diff" + varSuffix));
+    int brakeMaxTimeDiff = int(GetVariableDouble("bf_advr_brake_max_time_diff" + varSuffix));
+    if (brakeMinCount > 0 || brakeMaxCount > 0)
+    {
+        InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.BrakeId), brakeMinCount, brakeMaxCount, brakeMinTime, brakeMaxTime, 0, 0, brakeMinTimeDiff, brakeMaxTimeDiff, false, true);
+    }
+}
+void AdvancedRangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    UI::PushItemWidth(300);
+    if (UI::CollapsingHeader("Steering Settings" + suffix))
+    {
+        if (UI::BeginTable("##advr_steer_count" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("Min Input Count");
+            UI::SameLine();
+            UI::Dummy(vec2(35, 0));
+            UI::SameLine();
+            UI::Text("Max Input Count");
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_steer_min_input_count" + suffix, "bf_advr_steer_min_input_count" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::SameLine();
+            UI::Dummy(vec2(0, 0));
+            UI::SameLine();
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_steer_max_input_count" + suffix, "bf_advr_steer_max_input_count" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Number of steering inputs to modify, randomly chosen between min and max."});
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##advr_steer_time" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(18, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_advr_steer_min_time" + suffix, "bf_advr_steer_min_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(37, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_advr_steer_max_time" + suffix, "bf_advr_steer_max_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which steering inputs can be changed."});
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##advr_steer_range" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("Steering Value Range");
+            UI::Text("Min");
+            UI::SameLine();
+            UI::Dummy(vec2(117, 0));
+            UI::SameLine();
+            UI::Text("Max");
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_steer_min_steer" + suffix, "bf_advr_steer_min_steer" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::SameLine();
+            UI::Dummy(vec2(0, 0));
+            UI::SameLine();
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_steer_max_steer" + suffix, "bf_advr_steer_max_steer" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Steering will be set to a random value between min and max.",
+                      "Valid range is [-65536, 65536].",
+                      "This OVERWRITES the existing steering value."});
+        int minSteer = int(GetVariableDouble("bf_advr_steer_min_steer" + varSuffix));
+        int maxSteer = int(GetVariableDouble("bf_advr_steer_max_steer" + varSuffix));
+        if (minSteer < -65536) SetVariable("bf_advr_steer_min_steer" + varSuffix, -65536);
+        if (maxSteer > 65536) SetVariable("bf_advr_steer_max_steer" + varSuffix, 65536);
+        if (minSteer > maxSteer) SetVariable("bf_advr_steer_min_steer" + varSuffix, maxSteer);
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##advr_steer_timediff" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("Time Difference Range");
+            UI::Text("Min");
+            UI::SameLine();
+            UI::Dummy(vec2(117, 0));
+            UI::SameLine();
+            UI::Text("Max");
+            UI::Dummy(vec2(110, 0));
+            UI::SameLine();
+            UI::PushItemWidth(182);
+            UI::InputTimeVar("##bf_advr_steer_max_time_diff" + suffix, "bf_advr_steer_max_time_diff" + varSuffix);
+            UI::SameLine();
+            UI::Dummy(vec2(-355, 0));
+            UI::SameLine();
+            UI::PushItemWidth(182);
+            UI::InputTimeVar("##bf_advr_steer_min_time_diff" + suffix, "bf_advr_steer_min_time_diff" + varSuffix);
+            UI::PopItemWidth();
+            UI::SameLine();
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time offset randomly chosen between min and max."});
+        UI::Dummy(vec2(0, 2));
+        UI::CheckboxVar("Fill Missing Steering##advr_steer" + suffix, "bf_advr_steer_fill" + varSuffix);
+        toolTip(300, {"Fill timestamps with no steering changes with existing values."});
+    }
+    UI::Dummy(vec2(0, 2));
+    if (UI::CollapsingHeader("Acceleration Settings" + suffix))
+    {
+        if (UI::BeginTable("##advr_accel_count" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("Min Input Count");
+            UI::SameLine();
+            UI::Dummy(vec2(35, 0));
+            UI::SameLine();
+            UI::Text("Max Input Count");
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_accel_min_input_count" + suffix, "bf_advr_accel_min_input_count" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::SameLine();
+            UI::Dummy(vec2(0, 0));
+            UI::SameLine();
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_accel_max_input_count" + suffix, "bf_advr_accel_max_input_count" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Number of acceleration inputs to modify (toggle on/off), randomly chosen between min and max."});
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##advr_accel_time" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(18, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_advr_accel_min_time" + suffix, "bf_advr_accel_min_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(37, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_advr_accel_max_time" + suffix, "bf_advr_accel_max_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which acceleration inputs can be changed."});
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##advr_accel_timediff" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("Time Difference Range");
+            UI::Text("Min");
+            UI::SameLine();
+            UI::Dummy(vec2(117, 0));
+            UI::SameLine();
+            UI::Text("Max");
+            UI::Dummy(vec2(110, 0));
+            UI::SameLine();
+            UI::PushItemWidth(182);
+            UI::InputTimeVar("##bf_advr_accel_max_time_diff" + suffix, "bf_advr_accel_max_time_diff" + varSuffix);
+            UI::SameLine();
+            UI::Dummy(vec2(-355, 0));
+            UI::SameLine();
+            UI::PushItemWidth(182);
+            UI::InputTimeVar("##bf_advr_accel_min_time_diff" + suffix, "bf_advr_accel_min_time_diff" + varSuffix);
+            UI::PopItemWidth();
+            UI::SameLine();
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time offset randomly chosen between min and max."});
+    }
+    UI::Dummy(vec2(0, 2));
+    if (UI::CollapsingHeader("Brake Settings" + suffix))
+    {
+        if (UI::BeginTable("##advr_brake_count" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("Min Input Count");
+            UI::SameLine();
+            UI::Dummy(vec2(35, 0));
+            UI::SameLine();
+            UI::Text("Max Input Count");
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_brake_min_input_count" + suffix, "bf_advr_brake_min_input_count" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::SameLine();
+            UI::Dummy(vec2(0, 0));
+            UI::SameLine();
+            UI::PushItemWidth(142);
+            UI::InputIntVar("##bf_advr_brake_max_input_count" + suffix, "bf_advr_brake_max_input_count" + varSuffix, 1);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Number of brake inputs to modify (toggle on/off), randomly chosen between min and max."});
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##advr_brake_time" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("From");
+            UI::SameLine();
+            UI::Dummy(vec2(18, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_advr_brake_min_time" + suffix, "bf_advr_brake_min_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::Text("To");
+            UI::SameLine();
+            UI::Dummy(vec2(37, 0));
+            UI::SameLine();
+            UI::PushItemWidth(195);
+            UI::InputTimeVar("##bf_advr_brake_max_time" + suffix, "bf_advr_brake_max_time" + varSuffix);
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time frame in which brake inputs can be changed."});
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##advr_brake_timediff" + suffix, 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::Text("Time Difference Range");
+            UI::Text("Min");
+            UI::SameLine();
+            UI::Dummy(vec2(117, 0));
+            UI::SameLine();
+            UI::Text("Max");
+            UI::Dummy(vec2(110, 0));
+            UI::SameLine();
+            UI::PushItemWidth(182);
+            UI::InputTimeVar("##bf_advr_brake_max_time_diff" + suffix, "bf_advr_brake_max_time_diff" + varSuffix);
+            UI::SameLine();
+            UI::Dummy(vec2(-355, 0));
+            UI::SameLine();
+            UI::PushItemWidth(182);
+            UI::InputTimeVar("##bf_advr_brake_min_time_diff" + suffix, "bf_advr_brake_min_time_diff" + varSuffix);
+            UI::PopItemWidth();
+            UI::SameLine();
+            UI::PopItemWidth();
+            UI::EndTable();
+        }
+        toolTip(300, {"Time offset randomly chosen between min and max."});
+    }
+    UI::PopItemWidth();
+}
 void InitializeInputModAlgorithms()
 {
     if (g_inputModAlgorithms.Length == 0)
     {
         RegisterInputModAlgorithm("basic", "Basic", BasicAlgorithm_Mutate, BasicAlgorithm_RenderUI);
         RegisterInputModAlgorithm("range", "Range", RangeAlgorithm_Mutate, RangeAlgorithm_RenderUI);
+        RegisterInputModAlgorithm("advanced_basic", "Advanced Basic", AdvancedBasicAlgorithm_Mutate, AdvancedBasicAlgorithm_RenderUI);
+        RegisterInputModAlgorithm("advanced_range", "Advanced Range", AdvancedRangeAlgorithm_Mutate, AdvancedRangeAlgorithm_RenderUI);
     }
 }
 void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
@@ -773,6 +1283,41 @@ void AddInputModificationSettings()
         SetVariable("bf_range_min_time_diff" + newSuffix, GetVariableDouble("bf_range_min_time_diff" + lastSuffix));
         SetVariable("bf_range_max_time_diff" + newSuffix, GetVariableDouble("bf_range_max_time_diff" + lastSuffix));
         SetVariable("bf_range_fill_steer" + newSuffix, GetVariableBool("bf_range_fill_steer" + lastSuffix));
+        SetVariable("bf_adv_steer_modify_count" + newSuffix, GetVariableDouble("bf_adv_steer_modify_count" + lastSuffix));
+        SetVariable("bf_adv_steer_min_time" + newSuffix, GetVariableDouble("bf_adv_steer_min_time" + lastSuffix));
+        SetVariable("bf_adv_steer_max_time" + newSuffix, GetVariableDouble("bf_adv_steer_max_time" + lastSuffix));
+        SetVariable("bf_adv_steer_max_diff" + newSuffix, GetVariableDouble("bf_adv_steer_max_diff" + lastSuffix));
+        SetVariable("bf_adv_steer_max_time_diff" + newSuffix, GetVariableDouble("bf_adv_steer_max_time_diff" + lastSuffix));
+        SetVariable("bf_adv_steer_fill" + newSuffix, GetVariableBool("bf_adv_steer_fill" + lastSuffix));
+        SetVariable("bf_adv_accel_modify_count" + newSuffix, GetVariableDouble("bf_adv_accel_modify_count" + lastSuffix));
+        SetVariable("bf_adv_accel_min_time" + newSuffix, GetVariableDouble("bf_adv_accel_min_time" + lastSuffix));
+        SetVariable("bf_adv_accel_max_time" + newSuffix, GetVariableDouble("bf_adv_accel_max_time" + lastSuffix));
+        SetVariable("bf_adv_accel_max_time_diff" + newSuffix, GetVariableDouble("bf_adv_accel_max_time_diff" + lastSuffix));
+        SetVariable("bf_adv_brake_modify_count" + newSuffix, GetVariableDouble("bf_adv_brake_modify_count" + lastSuffix));
+        SetVariable("bf_adv_brake_min_time" + newSuffix, GetVariableDouble("bf_adv_brake_min_time" + lastSuffix));
+        SetVariable("bf_adv_brake_max_time" + newSuffix, GetVariableDouble("bf_adv_brake_max_time" + lastSuffix));
+        SetVariable("bf_adv_brake_max_time_diff" + newSuffix, GetVariableDouble("bf_adv_brake_max_time_diff" + lastSuffix));
+        SetVariable("bf_advr_steer_min_input_count" + newSuffix, GetVariableDouble("bf_advr_steer_min_input_count" + lastSuffix));
+        SetVariable("bf_advr_steer_max_input_count" + newSuffix, GetVariableDouble("bf_advr_steer_max_input_count" + lastSuffix));
+        SetVariable("bf_advr_steer_min_time" + newSuffix, GetVariableDouble("bf_advr_steer_min_time" + lastSuffix));
+        SetVariable("bf_advr_steer_max_time" + newSuffix, GetVariableDouble("bf_advr_steer_max_time" + lastSuffix));
+        SetVariable("bf_advr_steer_min_steer" + newSuffix, GetVariableDouble("bf_advr_steer_min_steer" + lastSuffix));
+        SetVariable("bf_advr_steer_max_steer" + newSuffix, GetVariableDouble("bf_advr_steer_max_steer" + lastSuffix));
+        SetVariable("bf_advr_steer_min_time_diff" + newSuffix, GetVariableDouble("bf_advr_steer_min_time_diff" + lastSuffix));
+        SetVariable("bf_advr_steer_max_time_diff" + newSuffix, GetVariableDouble("bf_advr_steer_max_time_diff" + lastSuffix));
+        SetVariable("bf_advr_steer_fill" + newSuffix, GetVariableBool("bf_advr_steer_fill" + lastSuffix));
+        SetVariable("bf_advr_accel_min_input_count" + newSuffix, GetVariableDouble("bf_advr_accel_min_input_count" + lastSuffix));
+        SetVariable("bf_advr_accel_max_input_count" + newSuffix, GetVariableDouble("bf_advr_accel_max_input_count" + lastSuffix));
+        SetVariable("bf_advr_accel_min_time" + newSuffix, GetVariableDouble("bf_advr_accel_min_time" + lastSuffix));
+        SetVariable("bf_advr_accel_max_time" + newSuffix, GetVariableDouble("bf_advr_accel_max_time" + lastSuffix));
+        SetVariable("bf_advr_accel_min_time_diff" + newSuffix, GetVariableDouble("bf_advr_accel_min_time_diff" + lastSuffix));
+        SetVariable("bf_advr_accel_max_time_diff" + newSuffix, GetVariableDouble("bf_advr_accel_max_time_diff" + lastSuffix));
+        SetVariable("bf_advr_brake_min_input_count" + newSuffix, GetVariableDouble("bf_advr_brake_min_input_count" + lastSuffix));
+        SetVariable("bf_advr_brake_max_input_count" + newSuffix, GetVariableDouble("bf_advr_brake_max_input_count" + lastSuffix));
+        SetVariable("bf_advr_brake_min_time" + newSuffix, GetVariableDouble("bf_advr_brake_min_time" + lastSuffix));
+        SetVariable("bf_advr_brake_max_time" + newSuffix, GetVariableDouble("bf_advr_brake_max_time" + lastSuffix));
+        SetVariable("bf_advr_brake_min_time_diff" + newSuffix, GetVariableDouble("bf_advr_brake_min_time_diff" + lastSuffix));
+        SetVariable("bf_advr_brake_max_time_diff" + newSuffix, GetVariableDouble("bf_advr_brake_max_time_diff" + lastSuffix));
         if (newIndex > 0)
             SetVariable("bf_input_mod_enabled" + newSuffix, true);
     }
@@ -805,6 +1350,41 @@ void RemoveInputModificationSettings(uint index)
             SetVariable("bf_range_min_time_diff" + dstSuffix, GetVariableDouble("bf_range_min_time_diff" + srcSuffix));
             SetVariable("bf_range_max_time_diff" + dstSuffix, GetVariableDouble("bf_range_max_time_diff" + srcSuffix));
             SetVariable("bf_range_fill_steer" + dstSuffix, GetVariableBool("bf_range_fill_steer" + srcSuffix));
+            SetVariable("bf_adv_steer_modify_count" + dstSuffix, GetVariableDouble("bf_adv_steer_modify_count" + srcSuffix));
+            SetVariable("bf_adv_steer_min_time" + dstSuffix, GetVariableDouble("bf_adv_steer_min_time" + srcSuffix));
+            SetVariable("bf_adv_steer_max_time" + dstSuffix, GetVariableDouble("bf_adv_steer_max_time" + srcSuffix));
+            SetVariable("bf_adv_steer_max_diff" + dstSuffix, GetVariableDouble("bf_adv_steer_max_diff" + srcSuffix));
+            SetVariable("bf_adv_steer_max_time_diff" + dstSuffix, GetVariableDouble("bf_adv_steer_max_time_diff" + srcSuffix));
+            SetVariable("bf_adv_steer_fill" + dstSuffix, GetVariableBool("bf_adv_steer_fill" + srcSuffix));
+            SetVariable("bf_adv_accel_modify_count" + dstSuffix, GetVariableDouble("bf_adv_accel_modify_count" + srcSuffix));
+            SetVariable("bf_adv_accel_min_time" + dstSuffix, GetVariableDouble("bf_adv_accel_min_time" + srcSuffix));
+            SetVariable("bf_adv_accel_max_time" + dstSuffix, GetVariableDouble("bf_adv_accel_max_time" + srcSuffix));
+            SetVariable("bf_adv_accel_max_time_diff" + dstSuffix, GetVariableDouble("bf_adv_accel_max_time_diff" + srcSuffix));
+            SetVariable("bf_adv_brake_modify_count" + dstSuffix, GetVariableDouble("bf_adv_brake_modify_count" + srcSuffix));
+            SetVariable("bf_adv_brake_min_time" + dstSuffix, GetVariableDouble("bf_adv_brake_min_time" + srcSuffix));
+            SetVariable("bf_adv_brake_max_time" + dstSuffix, GetVariableDouble("bf_adv_brake_max_time" + srcSuffix));
+            SetVariable("bf_adv_brake_max_time_diff" + dstSuffix, GetVariableDouble("bf_adv_brake_max_time_diff" + srcSuffix));
+            SetVariable("bf_advr_steer_min_input_count" + dstSuffix, GetVariableDouble("bf_advr_steer_min_input_count" + srcSuffix));
+            SetVariable("bf_advr_steer_max_input_count" + dstSuffix, GetVariableDouble("bf_advr_steer_max_input_count" + srcSuffix));
+            SetVariable("bf_advr_steer_min_time" + dstSuffix, GetVariableDouble("bf_advr_steer_min_time" + srcSuffix));
+            SetVariable("bf_advr_steer_max_time" + dstSuffix, GetVariableDouble("bf_advr_steer_max_time" + srcSuffix));
+            SetVariable("bf_advr_steer_min_steer" + dstSuffix, GetVariableDouble("bf_advr_steer_min_steer" + srcSuffix));
+            SetVariable("bf_advr_steer_max_steer" + dstSuffix, GetVariableDouble("bf_advr_steer_max_steer" + srcSuffix));
+            SetVariable("bf_advr_steer_min_time_diff" + dstSuffix, GetVariableDouble("bf_advr_steer_min_time_diff" + srcSuffix));
+            SetVariable("bf_advr_steer_max_time_diff" + dstSuffix, GetVariableDouble("bf_advr_steer_max_time_diff" + srcSuffix));
+            SetVariable("bf_advr_steer_fill" + dstSuffix, GetVariableBool("bf_advr_steer_fill" + srcSuffix));
+            SetVariable("bf_advr_accel_min_input_count" + dstSuffix, GetVariableDouble("bf_advr_accel_min_input_count" + srcSuffix));
+            SetVariable("bf_advr_accel_max_input_count" + dstSuffix, GetVariableDouble("bf_advr_accel_max_input_count" + srcSuffix));
+            SetVariable("bf_advr_accel_min_time" + dstSuffix, GetVariableDouble("bf_advr_accel_min_time" + srcSuffix));
+            SetVariable("bf_advr_accel_max_time" + dstSuffix, GetVariableDouble("bf_advr_accel_max_time" + srcSuffix));
+            SetVariable("bf_advr_accel_min_time_diff" + dstSuffix, GetVariableDouble("bf_advr_accel_min_time_diff" + srcSuffix));
+            SetVariable("bf_advr_accel_max_time_diff" + dstSuffix, GetVariableDouble("bf_advr_accel_max_time_diff" + srcSuffix));
+            SetVariable("bf_advr_brake_min_input_count" + dstSuffix, GetVariableDouble("bf_advr_brake_min_input_count" + srcSuffix));
+            SetVariable("bf_advr_brake_max_input_count" + dstSuffix, GetVariableDouble("bf_advr_brake_max_input_count" + srcSuffix));
+            SetVariable("bf_advr_brake_min_time" + dstSuffix, GetVariableDouble("bf_advr_brake_min_time" + srcSuffix));
+            SetVariable("bf_advr_brake_max_time" + dstSuffix, GetVariableDouble("bf_advr_brake_max_time" + srcSuffix));
+            SetVariable("bf_advr_brake_min_time_diff" + dstSuffix, GetVariableDouble("bf_advr_brake_min_time_diff" + srcSuffix));
+            SetVariable("bf_advr_brake_max_time_diff" + dstSuffix, GetVariableDouble("bf_advr_brake_max_time_diff" + srcSuffix));
             if (i > 0)
                 SetVariable("bf_input_mod_enabled" + dstSuffix, GetVariableBool("bf_input_mod_enabled" + srcSuffix));
         }
@@ -975,8 +1555,28 @@ void OnSimulationBegin(SimulationManager @simManager)
         string savedAlgoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
         if (savedAlgoId == "") savedAlgoId = "basic";
         settings.algorithmIndex = GetInputModAlgorithmIndex(savedAlgoId);
-        if (settings.maxInputsTime == 0)
-            settings.maxInputsTime = int(simManager.EventsDuration);
+        settings.maxInputsTime = ResolveMaxTime(settings.maxInputsTime, int(simManager.EventsDuration));
+        // Fix maxTime==0 for advanced algorithm variables
+        string algoId_fix = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+        int ed = int(simManager.EventsDuration);
+        if (algoId_fix == "advanced_basic")
+        {
+            if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_steer_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_accel_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_brake_max_time" + varSuffix, ed);
+        }
+        else if (algoId_fix == "advanced_range")
+        {
+            if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_steer_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_accel_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_brake_max_time" + varSuffix, ed);
+        }
     }
     if (g_inputModSettings.Length > 0)
     {
@@ -1032,6 +1632,40 @@ void OnSimulationBegin(SimulationManager @simManager)
             print("   - Steering Value Range: " + minSteer + " to " + maxSteer);
             print("   - Time Diff Range: " + Time::Format(minTimeDiff) + " to " + Time::Format(maxTimeDiff));
             print("   - Fill Steer: " + (fillInputs ? "Yes" : "No"));
+        }
+        else if (algo !is null && algo.identifier == "advanced_basic")
+        {
+            print("   [Steering]");
+            print("     - Modify Count: " + int(GetVariableDouble("bf_adv_steer_modify_count" + varSuffix)));
+            print("     - Time Frame: From " + Time::Format(int(GetVariableDouble("bf_adv_steer_min_time" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix))));
+            print("     - Max Steer Diff: " + int(GetVariableDouble("bf_adv_steer_max_diff" + varSuffix)));
+            print("     - Max Time Diff: " + Time::Format(int(GetVariableDouble("bf_adv_steer_max_time_diff" + varSuffix))));
+            print("     - Fill Steer: " + (GetVariableBool("bf_adv_steer_fill" + varSuffix) ? "Yes" : "No"));
+            print("   [Acceleration]");
+            print("     - Modify Count: " + int(GetVariableDouble("bf_adv_accel_modify_count" + varSuffix)));
+            print("     - Time Frame: From " + Time::Format(int(GetVariableDouble("bf_adv_accel_min_time" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix))));
+            print("     - Max Time Diff: " + Time::Format(int(GetVariableDouble("bf_adv_accel_max_time_diff" + varSuffix))));
+            print("   [Brake]");
+            print("     - Modify Count: " + int(GetVariableDouble("bf_adv_brake_modify_count" + varSuffix)));
+            print("     - Time Frame: From " + Time::Format(int(GetVariableDouble("bf_adv_brake_min_time" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix))));
+            print("     - Max Time Diff: " + Time::Format(int(GetVariableDouble("bf_adv_brake_max_time_diff" + varSuffix))));
+        }
+        else if (algo !is null && algo.identifier == "advanced_range")
+        {
+            print("   [Steering]");
+            print("     - Input Count Range: " + int(GetVariableDouble("bf_advr_steer_min_input_count" + varSuffix)) + " to " + int(GetVariableDouble("bf_advr_steer_max_input_count" + varSuffix)));
+            print("     - Time Frame: From " + Time::Format(int(GetVariableDouble("bf_advr_steer_min_time" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix))));
+            print("     - Steer Range: " + int(GetVariableDouble("bf_advr_steer_min_steer" + varSuffix)) + " to " + int(GetVariableDouble("bf_advr_steer_max_steer" + varSuffix)));
+            print("     - Time Diff Range: " + Time::Format(int(GetVariableDouble("bf_advr_steer_min_time_diff" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_advr_steer_max_time_diff" + varSuffix))));
+            print("     - Fill Steer: " + (GetVariableBool("bf_advr_steer_fill" + varSuffix) ? "Yes" : "No"));
+            print("   [Acceleration]");
+            print("     - Input Count Range: " + int(GetVariableDouble("bf_advr_accel_min_input_count" + varSuffix)) + " to " + int(GetVariableDouble("bf_advr_accel_max_input_count" + varSuffix)));
+            print("     - Time Frame: From " + Time::Format(int(GetVariableDouble("bf_advr_accel_min_time" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix))));
+            print("     - Time Diff Range: " + Time::Format(int(GetVariableDouble("bf_advr_accel_min_time_diff" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_advr_accel_max_time_diff" + varSuffix))));
+            print("   [Brake]");
+            print("     - Input Count Range: " + int(GetVariableDouble("bf_advr_brake_min_input_count" + varSuffix)) + " to " + int(GetVariableDouble("bf_advr_brake_max_input_count" + varSuffix)));
+            print("     - Time Frame: From " + Time::Format(int(GetVariableDouble("bf_advr_brake_min_time" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix))));
+            print("     - Time Diff Range: " + Time::Format(int(GetVariableDouble("bf_advr_brake_min_time_diff" + varSuffix))) + " to " + Time::Format(int(GetVariableDouble("bf_advr_brake_max_time_diff" + varSuffix))));
         }
         else
         {
@@ -1143,8 +1777,28 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
             settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
             settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-            if (settings.maxInputsTime == 0)
-                settings.maxInputsTime = int(simManager.EventsDuration);
+            settings.maxInputsTime = ResolveMaxTime(settings.maxInputsTime, int(simManager.EventsDuration));
+            // Fix maxTime==0 for advanced algorithm variables on restart
+            string algoId_fix = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+            int ed = int(simManager.EventsDuration);
+            if (algoId_fix == "advanced_basic")
+            {
+                if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
+                    SetVariable("bf_adv_steer_max_time" + varSuffix, ed);
+                if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
+                    SetVariable("bf_adv_accel_max_time" + varSuffix, ed);
+                if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
+                    SetVariable("bf_adv_brake_max_time" + varSuffix, ed);
+            }
+            else if (algoId_fix == "advanced_range")
+            {
+                if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
+                    SetVariable("bf_advr_steer_max_time" + varSuffix, ed);
+                if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
+                    SetVariable("bf_advr_accel_max_time" + varSuffix, ed);
+                if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
+                    SetVariable("bf_advr_brake_max_time" + varSuffix, ed);
+            }
         }
         if (g_inputModSettings.Length > 0)
         {
@@ -1374,31 +2028,45 @@ namespace PreciseFinishBf
     double bestTime = -1;
     int bestTimeMsImprecise = -1;
     bool conditionsMetBeforeCompute = false;
+    bool baseRunFinished = true;
     BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
     {
         auto resp = BFEvaluationResponse();
         int raceTime = simManager.RaceTime;
         resp.Decision = BFEvaluationDecision::DoNothing;
-        if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating && bestTimeMsImprecise != -1)
+        if (info.Phase == BFPhase::Search && !PreciseFinish::IsEstimating)
         {
-            if (raceTime > bestTimeMsImprecise + 50)
+            if (!baseRunFinished)
             {
-                resp.Decision = BFEvaluationDecision::Reject;
-                PreciseFinish::Reset();
-                return resp;
-            }
-            if (simManager.PlayerInfo.RaceFinished && raceTime < bestTimeMsImprecise)
-            {
-                if (GlobalConditionsMet(simManager))
-                {
-                    resp.Decision = BFEvaluationDecision::Accept;
-                }
-                else
+                // All-or-nothing mode: no best time to compare against yet
+                if (!simManager.PlayerInfo.RaceFinished && raceTime > int(simManager.EventsDuration))
                 {
                     resp.Decision = BFEvaluationDecision::Reject;
+                    return resp;
                 }
-                PreciseFinish::Reset();
-                return resp;
+                // If finished, fall through to compute precise time below
+            }
+            else if (bestTimeMsImprecise != -1)
+            {
+                if (raceTime > bestTimeMsImprecise + 50)
+                {
+                    resp.Decision = BFEvaluationDecision::Reject;
+                    PreciseFinish::Reset();
+                    return resp;
+                }
+                if (simManager.PlayerInfo.RaceFinished && raceTime < bestTimeMsImprecise)
+                {
+                    if (GlobalConditionsMet(simManager))
+                    {
+                        resp.Decision = BFEvaluationDecision::Accept;
+                    }
+                    else
+                    {
+                        resp.Decision = BFEvaluationDecision::Reject;
+                    }
+                    PreciseFinish::Reset();
+                    return resp;
+                }
             }
         }
         bool targetReached = simManager.PlayerInfo.RaceFinished;
@@ -1410,6 +2078,17 @@ namespace PreciseFinishBf
         bool calculationFinished = PreciseFinish::Compute(simManager, targetReached, preciseTime);
         if (!calculationFinished)
         {
+            // Base run did not finish: accept to let BF proceed to Search phase
+            if (info.Phase == BFPhase::Initial && !targetReached && !PreciseFinish::IsEstimating && raceTime > int(simManager.EventsDuration))
+            {
+                baseRunFinished = false;
+                bestTime = -1;
+                bestTimeMsImprecise = -1;
+                resp.Decision = BFEvaluationDecision::Accept;
+                resp.ResultFileStartContent = "# Base run: Did not finish. Searching for any finish.";
+                print("Base run did not finish. Bruteforce will search for any finish.", Severity::Warning);
+                return resp;
+            }
             return resp;
         }
         if (!conditionsMetBeforeCompute)
@@ -1445,7 +2124,17 @@ namespace PreciseFinishBf
         }
         else
         {
-            if (preciseTime < bestTime)
+            if (!baseRunFinished)
+            {
+                // First finish found in all-or-nothing mode
+                baseRunFinished = true;
+                bestTime = preciseTime;
+                bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
+                resp.Decision = BFEvaluationDecision::Accept;
+                resp.ResultFileStartContent = "# First finish found! Precise Finish Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s";
+                print("First finish found! Time: " + Text::FormatFloat(bestTime, "", 0, 9) + " s", Severity::Success);
+            }
+            else if (preciseTime < bestTime)
             {
                 bestTime = preciseTime;
                 bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
@@ -1465,6 +2154,7 @@ namespace PreciseFinishBf
         PreciseFinish::Reset();
         bestTime = -1;
         bestTimeMsImprecise = -1;
+        baseRunFinished = true;
     }
     void Main()
     {
@@ -1476,7 +2166,7 @@ namespace PreciseFinish
 {
     bool IsEstimating = false;
     uint64 CoeffMin = 0;
-    uint64 CoeffMax = 1000000000;
+    uint64 CoeffMax = 18446744073709551615;
     SimulationState @StateBeforeHit;
     SimulationState @StateAtHit;
     int StateBeforeHitTime = -1;
@@ -1488,7 +2178,7 @@ namespace PreciseFinish
     {
         IsEstimating = false;
         CoeffMin = 0;
-        CoeffMax = 1000000000;
+        CoeffMax = 18446744073709551615;
         @StateBeforeHit = null;
         @StateAtHit = null;
         StateAtHitTime = -1;
@@ -1511,7 +2201,7 @@ namespace PreciseFinish
                 @StateAtHit = sim.SaveState();
                 StateAtHitTime = sim.RaceTime;
                 CoeffMin = 0;
-                CoeffMax = 1000000000;
+                CoeffMax = 18446744073709551615;
                 if (StateBeforeHit is null)
                 {
                     result = double(sim.RaceTime) / 1000.0;
@@ -1539,10 +2229,9 @@ namespace PreciseFinish
         if (CoeffMax - CoeffMin <= Precision)
         {
             IsEstimating = false;
-            double baseTimeMs = double(StateBeforeHitTime);
             uint64 currentCoeff = CoeffMin + (CoeffMax - CoeffMin) / 2;
-            double percentage = currentCoeff / 1000000000.0;
-            result = (baseTimeMs / 1000.0) + (percentage / 100.0);
+            double currentCoeffPercentage = double(currentCoeff) / 18446744073709551615.0;
+            result = (double(StateBeforeHitTime) / 1000.0) + (currentCoeffPercentage * 0.01);
             if (StateAtHit !is null)
             {
                 sim.RewindToState(StateAtHit);
@@ -1559,9 +2248,9 @@ namespace PreciseFinish
         }
         sim.RewindToState(StateBeforeHit);
         uint64 currentCoeff = CoeffMin + (CoeffMax - CoeffMin) / 2;
-        double percentage = currentCoeff / 1000000000.0;
-        sim.Dyna.CurrentState.LinearSpeed = sim.Dyna.CurrentState.LinearSpeed * percentage;
-        sim.Dyna.CurrentState.AngularSpeed = sim.Dyna.CurrentState.AngularSpeed * percentage;
+        double currentCoeffPercentage = double(currentCoeff) / 18446744073709551615.0;
+        sim.Dyna.CurrentState.LinearSpeed = sim.Dyna.CurrentState.LinearSpeed * currentCoeffPercentage;
+        sim.Dyna.CurrentState.AngularSpeed = sim.Dyna.CurrentState.AngularSpeed * currentCoeffPercentage;
         return false;
     }
 }
@@ -1829,6 +2518,8 @@ namespace SinglePointBf
     float currentBestSpeed = 0.0f;
     int currentBestTime = 0;
     bool isRunBetter = false;
+    float shiftThreshold = 0.0f;
+    bool shifted = false;
     void RenderEvalSettings()
     {
         if (UI::BeginTable("##ratio_table", 1))
@@ -1912,6 +2603,14 @@ namespace SinglePointBf
             UI::EndTable();
         }
         toolTip(300, {"Time frame in which the distance and/or speed will be evaluated.", "Reducing the maximum evaluation time will make the bruteforcing process faster."});
+        UI::Dummy(vec2(0, 0));
+        UI::PushItemWidth(160);
+        UI::InputFloatVar("Shift threshold##bf_singlepoint_shift", "bf_singlepoint_shift_threshold");
+        if (GetVariableDouble("bf_singlepoint_shift_threshold") < 0.0f)
+        {
+            SetVariable("bf_singlepoint_shift_threshold", 0.0f);
+        }
+        toolTip(300, {"When the car gets within this distance of the target, shift the evaluation window earlier.", "Set to 0 to disable. Works similarly to Distance to Finish's shift feature."});
         UI::Dummy(vec2(0, 0));
         UI::PushItemWidth(160);
         if (GetVariableDouble("bf_condition_distance") > 0.0f)
@@ -2004,6 +2703,27 @@ namespace SinglePointBf
                 {
                     isRunBetter = true;
                 }
+                if (shiftThreshold > 0 && !shifted && d < shiftThreshold)
+                {
+                    CommandList shiftSave();
+                    shiftSave.Content = simManager.InputEvents.ToCommandsText();
+                    print("");
+                    print("Single point within " + Text::FormatFloat(shiftThreshold, "", 0, 3) + "m at " + raceTime + "ms, shifting evaluation earlier...", Severity::Warning);
+                    print("File saved: " + shiftSave.Save(GetVariableString("bf_result_filename").Split(".")[0] + "_restart" + restartCount + "_shift.txt"));
+                    maxTime = raceTime - 10;
+                    if (minTime > maxTime)
+                    {
+                        minTime = maxTime;
+                    }
+                    bestDist = 1e18f;
+                    bestSpeed = -1.0f;
+                    bestTime = 0;
+                    base = true;
+                    shifted = true;
+                    isRunBetter = false;
+                    resp.Decision = BFEvaluationDecision::Accept;
+                    return resp;
+                }
             }
             if (isPastEvalTime)
             {
@@ -2057,8 +2777,9 @@ namespace SinglePointBf
         }
         minTime = int(GetVariableDouble("bf_eval_min_time"));
         maxTime = int(GetVariableDouble("bf_eval_max_time"));
+        maxTime = ResolveMaxTime(maxTime, int(simManager.EventsDuration));
         bestSpeed = -1.0f;
-        bestDist = -1.0f;
+        bestDist = 1e18f;
         bestTime = 0;
         weight = int(GetVariableDouble("bf_weight"));
         target = Text::ParseVec3(GetVariableString("bf_target_point"));
@@ -2073,6 +2794,8 @@ namespace SinglePointBf
         base = true;
         distCondition = GetVariableDouble("bf_condition_distance") > 0.0f ? GetVariableDouble("bf_condition_distance") : 1e18f;
         ignoreSameSpeed = GetVariableBool("bf_ignore_same_speed") ? 1 : 0;
+        shiftThreshold = float(GetVariableDouble("bf_singlepoint_shift_threshold"));
+        shifted = false;
     }
     float dist()
     {
@@ -2089,6 +2812,7 @@ namespace SinglePointBf
         RegisterVariable("bf_condition_distance", 0.0f);
         RegisterVariable("bf_ignore_same_speed", false);
         RegisterVariable("bf_condition_cps", 0);
+        RegisterVariable("bf_singlepoint_shift_threshold", 0.0f);
         auto eval = RegisterBruteforceEval(bfid, "Single point", OnEvaluate, RenderEvalSettings);
         @eval.onSimBegin = @OnSimulationBegin;
     }
@@ -2195,7 +2919,7 @@ namespace VelocityBf
     {
         return GetSimulationManager().Dyna.CurrentState.Location.Position;
     }
-    float bestSpeed = Math::PI;
+    float bestSpeed = -1e18f;
     int bestTime = 0;
     float bestMatchingPercnt = 0.0f;
     float matchingPercnt = 0.0f;
@@ -2237,7 +2961,7 @@ namespace VelocityBf
             if (isPastEvalTime)
             {
                 resp.Decision = BFEvaluationDecision::Accept;
-                if (bestSpeed == Math::PI)
+                if (bestSpeed == -1e18f)
                 {
                     print("Base run: Invalid", Severity::Warning);
                     resp.ResultFileStartContent = "# Base run: Invalid";
@@ -2268,14 +2992,17 @@ namespace VelocityBf
                 {
                     if (conditionsMet && v > bestSpeed && matchingPercnt >= minMatchingPercnt)
                     {
+                        bestSpeed = v;
+                        bestTime = raceTime;
+                        bestMatchingPercnt = matchingPercnt;
                         resp.Decision = BFEvaluationDecision::Accept;
-                    }
-                    else
-                    {
                     }
                 }
                 else if (conditionsMet && v > bestSpeed)
                 {
+                    bestSpeed = v;
+                    bestTime = raceTime;
+                    bestMatchingPercnt = matchingPercnt;
                     resp.Decision = BFEvaluationDecision::Accept;
                 }
             }
@@ -2314,9 +3041,10 @@ namespace VelocityBf
     }
     void OnSimulationBegin(SimulationManager @simManager)
     {
-        bestSpeed = Math::PI;
+        bestSpeed = -1e18f;
         minTime = int(GetVariableDouble("bf_eval_min_time"));
         maxTime = int(GetVariableDouble("bf_eval_max_time"));
+        maxTime = ResolveMaxTime(maxTime, int(simManager.EventsDuration));
         targetVelocity = Text::ParseVec3(GetVariableString("bf_velocity_to")) - Text::ParseVec3(GetVariableString("bf_velocity_from"));
         targetVelocity = targetVelocity.Normalized();
         if (GetVariableString("bf_velocity_type") == "Global")
@@ -2619,6 +3347,188 @@ namespace InputModification
             }
         }
     }
+    void MutateInputsByType(TM::InputEventBuffer @buffer, int eventTypeId, int inputCount, int minTime, int maxTime, int maxSteerDiff, int maxTimeDiff, bool fillInputs, bool isBinaryInput)
+    {
+        if (buffer is null)
+            return;
+        if (maxTime <= 0)
+            return;
+        if (fillInputs && eventTypeId == int(buffer.EventIndices.SteerId))
+        {
+            uint lenBefore = buffer.Length;
+            FillInputs(buffer, maxTime, cachedStartIndex);
+            if (buffer.Length != lenBefore)
+                cachedStartIndex = -1;
+        }
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
+        int actualInputCount = Math::Rand(1, inputCount);
+        array<int> indices;
+        uint start = 0;
+        if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
+        {
+            start = cachedStartIndex;
+        }
+        for (uint i = start; i < buffer.Length; i++)
+        {
+            auto evt = buffer[i];
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                if (cachedStartIndex < int(i))
+                    cachedStartIndex = int(i);
+                continue;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+                break;
+            if (int(evt.Value.EventIndex) == eventTypeId)
+            {
+                indices.Add(i);
+            }
+        }
+        if (indices.Length == 0)
+            return;
+        for (int i = 0; i < actualInputCount; i++)
+        {
+            int timeOffset = Math::Rand(-maxTimeDiff / 10, maxTimeDiff / 10) * 10;
+            int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
+            auto evt = buffer[inputIdx];
+            evt.Time += timeOffset;
+            if (evt.Time < 100010)
+            {
+                evt.Time = 100010;
+            }
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                evt.Time = 100010 + minTime;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+            {
+                evt.Time = 100010 + maxTime;
+            }
+            if (isBinaryInput)
+            {
+                evt.Value.Analog = (evt.Value.Analog == 0) ? 1 : 0;
+            }
+            else
+            {
+                int steerOffset = Math::Rand(-maxSteerDiff, maxSteerDiff);
+                evt.Value.Analog = evt.Value.Analog + steerOffset;
+                if (evt.Value.Analog < -65536)
+                {
+                    evt.Value.Analog = -65536;
+                }
+                if (evt.Value.Analog > 65536)
+                {
+                    evt.Value.Analog = 65536;
+                }
+            }
+            buffer[inputIdx] = evt;
+        }
+        SortBufferManual(buffer, cachedStartIndex);
+    }
+    void MutateInputsRangeByType(TM::InputEventBuffer @buffer, int eventTypeId, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int minTimeDiff, int maxTimeDiff, bool fillInputs, bool isBinaryInput)
+    {
+        if (buffer is null)
+            return;
+        if (maxTime <= 0)
+            return;
+        if (fillInputs && eventTypeId == int(buffer.EventIndices.SteerId))
+        {
+            uint lenBefore = buffer.Length;
+            FillInputs(buffer, maxTime, cachedStartIndex);
+            if (buffer.Length != lenBefore)
+                cachedStartIndex = -1;
+        }
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
+        if (minInputCount > maxInputCount)
+        {
+            int tmp = minInputCount;
+            minInputCount = maxInputCount;
+            maxInputCount = tmp;
+        }
+        if (minInputCount < 1) minInputCount = 1;
+        int actualInputCount = Math::Rand(minInputCount, maxInputCount);
+        array<int> indices;
+        uint start = 0;
+        if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
+        {
+            start = cachedStartIndex;
+        }
+        for (uint i = start; i < buffer.Length; i++)
+        {
+            auto evt = buffer[i];
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                if (cachedStartIndex < int(i))
+                    cachedStartIndex = int(i);
+                continue;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+                break;
+            if (int(evt.Value.EventIndex) == eventTypeId)
+            {
+                indices.Add(i);
+            }
+        }
+        if (indices.Length == 0)
+            return;
+        if (minTimeDiff > maxTimeDiff)
+        {
+            int tmp = minTimeDiff;
+            minTimeDiff = maxTimeDiff;
+            maxTimeDiff = tmp;
+        }
+        if (minSteer > maxSteer)
+        {
+            int tmp = minSteer;
+            minSteer = maxSteer;
+            maxSteer = tmp;
+        }
+        for (int i = 0; i < actualInputCount; i++)
+        {
+            int timeOffset = Math::Rand(minTimeDiff / 10, maxTimeDiff / 10) * 10;
+            int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
+            auto evt = buffer[inputIdx];
+            evt.Time += timeOffset;
+            if (evt.Time < 100010)
+            {
+                evt.Time = 100010;
+            }
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                evt.Time = 100010 + minTime;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+            {
+                evt.Time = 100010 + maxTime;
+            }
+            if (isBinaryInput)
+            {
+                evt.Value.Analog = (evt.Value.Analog == 0) ? 1 : 0;
+            }
+            else
+            {
+                evt.Value.Analog = Math::Rand(minSteer, maxSteer);
+                if (evt.Value.Analog < -65536)
+                {
+                    evt.Value.Analog = -65536;
+                }
+                if (evt.Value.Analog > 65536)
+                {
+                    evt.Value.Analog = 65536;
+                }
+            }
+            buffer[inputIdx] = evt;
+        }
+        SortBufferManual(buffer, cachedStartIndex);
+    }
 }
 void OnCheckpointCountChanged(SimulationManager @simManager, int curr, int target)
 {
@@ -2696,6 +3606,10 @@ namespace Scripting
     float GetWheelFRGroundContact(SimulationManager @sim) { return sim.Wheels.FrontRight.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelBLGroundContact(SimulationManager @sim) { return sim.Wheels.BackLeft.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelBRGroundContact(SimulationManager @sim) { return sim.Wheels.BackRight.RTState.HasGroundContact ? 1.0f : 0.0f; }
+    float GetWheelFLSurface(SimulationManager @sim) { return float(sim.Wheels.FrontLeft.RTState.ContactMaterialId); }
+    float GetWheelFRSurface(SimulationManager @sim) { return float(sim.Wheels.FrontRight.RTState.ContactMaterialId); }
+    float GetWheelBLSurface(SimulationManager @sim) { return float(sim.Wheels.BackLeft.RTState.ContactMaterialId); }
+    float GetWheelBRSurface(SimulationManager @sim) { return float(sim.Wheels.BackRight.RTState.ContactMaterialId); }
     vec3 GetCarPos(SimulationManager @sim) { return sim.Dyna.CurrentState.Location.Position; }
     vec3 GetCarVel(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed; }
     float GetIterationCount(SimulationManager @sim)
@@ -3114,6 +4028,14 @@ namespace Scripting
             return GetWheelBLGroundContact;
         if (lower == "car.wheels.backright.groundcontact")
             return GetWheelBRGroundContact;
+        if (lower == "car.wheels.frontleft.surface")
+            return GetWheelFLSurface;
+        if (lower == "car.wheels.frontright.surface")
+            return GetWheelFRSurface;
+        if (lower == "car.wheels.backleft.surface")
+            return GetWheelBLSurface;
+        if (lower == "car.wheels.backright.surface")
+            return GetWheelBRSurface;
         if (lower == "last_improvement.time")
             return GetTimeLastImprovement;
         if (lower == "last_restart.time")
@@ -5789,6 +6711,16 @@ namespace SkyBf
             g_trajectoryDrawTriggerIds.Clear();
             return;
         }
+        vec3 diff = p2 - p1;
+        if (diff.LengthSquared() < 1e-6f)
+        {
+            for (uint i = 0; i < g_trajectoryDrawTriggerIds.Length; i++)
+            {
+                RemoveTrigger(g_trajectoryDrawTriggerIds[i]);
+            }
+            g_trajectoryDrawTriggerIds.Clear();
+            return;
+        }
         if (p1 == prev1 && p2 == prev2)
         {
             if (g_trajectoryDrawTriggerIds.Length != 0)
@@ -5804,7 +6736,7 @@ namespace SkyBf
         }
         g_trajectoryDrawTriggerIds.Clear();
         SetVariable(g_uberPluginPrefix + "_trajectory_trigger_cache", "");
-        vec3 dir = (p2 - p1).Normalized();
+        vec3 dir = diff.Normalized();
         float s = 0.4f;
         float spacing = 5.0f;
         vec3 size = vec3(s, s, s);
@@ -6824,14 +7756,16 @@ namespace CarLocationBf {
     float bestDist = 0;
     float bestRot = 0;
     int bestTime = 0;
+    int minTime = 0;
+    int maxTime = 0;
     bool base = false;
     bool improvedYet = false;
     BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo&in info)
     {
         int raceTime = simManager.RaceTime;
         auto resp = BFEvaluationResponse();
-        bool isEvalTime = raceTime >= int(GetVariableDouble(id + "_bf_eval_min_time")) && raceTime <= int(GetVariableDouble(id + "_bf_eval_max_time"));
-        bool isPastEvalTime = raceTime > int(GetVariableDouble(id + "_bf_eval_max_time"));
+        bool isEvalTime = raceTime >= minTime && raceTime <= maxTime;
+        bool isPastEvalTime = raceTime > maxTime;
         if (info.Phase == BFPhase::Initial) {
             if (isEvalTime) {
                 float d = dist();
@@ -6909,6 +7843,9 @@ namespace CarLocationBf {
         bestRot = -1.0f;
         bestTime = 0;
         improvedYet = false;
+        minTime = int(GetVariableDouble(id + "_bf_eval_min_time"));
+        maxTime = int(GetVariableDouble(id + "_bf_eval_max_time"));
+        maxTime = ResolveMaxTime(maxTime, int(simManager.EventsDuration));
         targetP = Text::ParseVec3(GetVariableString(id + "_bf_target_position"));
         targetR.SetYawPitchRoll(
             Math::ToRad(GetVariableDouble(id + "_bf_target_rotation_yaw")),
@@ -7047,5 +7984,914 @@ namespace TimeBf
         RegisterVariable("timebf_min_time", 0);
         auto eval = RegisterBruteforceEval("time", "Time", OnEvaluate, RenderEvalSettings);
         @eval.onSimBegin = @OnSimulationBegin;
+    }
+}
+namespace CustomTargetBf
+{
+    class TargetDirective
+    {
+        int type; // 0=min, 1=max, 2=target
+        float targetValue; // only used when type==2
+        Scripting::FloatGetter @getter;
+        string sourceExpr; // original expression text for display
+    }
+    array<TargetDirective @> directives;
+    array<float> bestScores;
+    array<float> currentScores;
+    int minTime = 0;
+    int maxTime = 0;
+    bool base = false;
+    string lastCompiledScript = "";
+    bool compilationError = false;
+    bool scriptEmpty = true;
+    float ComputeScore(TargetDirective @dir, float value)
+    {
+        if (dir.type == 0)
+            return -value;
+        if (dir.type == 1)
+            return value;
+        // type == 2: target
+        return -Math::Abs(value - dir.targetValue);
+    }
+    string FormatScoreAsValue(TargetDirective @dir, float score)
+    {
+        if (dir.type == 0)
+            return Text::FormatFloat(-score, "", 0, 5);
+        if (dir.type == 1)
+            return Text::FormatFloat(score, "", 0, 5);
+        // type == 2: show distance from target
+        return Text::FormatFloat(-score, "", 0, 5) + " from " + Text::FormatFloat(dir.targetValue, "", 0, 3);
+    }
+    array<TargetDirective @>@ CompileTargetScript(array<string> &in lines)
+    {
+        array<TargetDirective @> result;
+        for (uint i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            // Remove leading/trailing whitespace manually
+            while (line.Length > 0 && (line[0] == 32 || line[0] == 9))
+                line = line.Substr(1);
+            while (line.Length > 0 && (line[line.Length - 1] == 32 || line[line.Length - 1] == 9))
+                line = line.Substr(0, line.Length - 1);
+            if (line == "" || line[0] == 35) // skip empty lines and comments (#)
+                continue;
+            string lower = Scripting::ToLower(line);
+            TargetDirective @dir = TargetDirective();
+            if (Scripting::StartsWith(lower, "min "))
+            {
+                dir.type = 0;
+                dir.targetValue = 0;
+                string exprStr = line.Substr(4);
+                dir.sourceExpr = exprStr;
+                string cleaned = Scripting::CleanSource(exprStr);
+                if (cleaned == "")
+                    return null;
+                Scripting::FloatGetter @g = Scripting::ParseExpression(cleaned);
+                if (g is null)
+                    return null;
+                @dir.getter = g;
+            }
+            else if (Scripting::StartsWith(lower, "max "))
+            {
+                dir.type = 1;
+                dir.targetValue = 0;
+                string exprStr = line.Substr(4);
+                dir.sourceExpr = exprStr;
+                string cleaned = Scripting::CleanSource(exprStr);
+                if (cleaned == "")
+                    return null;
+                Scripting::FloatGetter @g = Scripting::ParseExpression(cleaned);
+                if (g is null)
+                    return null;
+                @dir.getter = g;
+            }
+            else if (Scripting::StartsWith(lower, "target "))
+            {
+                string rest = line.Substr(7);
+                // Remove leading whitespace
+                while (rest.Length > 0 && (rest[0] == 32 || rest[0] == 9))
+                    rest = rest.Substr(1);
+                // Extract the numeric target value (first token)
+                int spaceIdx = -1;
+                for (uint c = 0; c < rest.Length; c++)
+                {
+                    if (rest[c] == 32 || rest[c] == 9)
+                    {
+                        spaceIdx = int(c);
+                        break;
+                    }
+                }
+                if (spaceIdx == -1)
+                    return null; // no expression after target value
+                string valStr = rest.Substr(0, spaceIdx);
+                string exprStr = rest.Substr(spaceIdx + 1);
+                // Remove leading whitespace from expression
+                while (exprStr.Length > 0 && (exprStr[0] == 32 || exprStr[0] == 9))
+                    exprStr = exprStr.Substr(1);
+                dir.type = 2;
+                dir.targetValue = Text::ParseFloat(valStr);
+                dir.sourceExpr = exprStr;
+                string cleaned = Scripting::CleanSource(exprStr);
+                if (cleaned == "")
+                    return null;
+                Scripting::FloatGetter @g = Scripting::ParseExpression(cleaned);
+                if (g is null)
+                    return null;
+                @dir.getter = g;
+            }
+            else
+            {
+                return null; // unknown directive
+            }
+            result.Add(dir);
+        }
+        return result;
+    }
+    void RenderEvalSettings()
+    {
+        UI::Dummy(vec2(0, 2));
+        string lines = Replace(GetVariableString("bf_customtarget_script"), ":", "\n");
+        int currentHeight = int(GetVariableDouble("bf_customtarget_script_height"));
+        UI::PushItemWidth(245);
+        if (UI::InputTextMultiline("##bf_customtarget_script", lines, vec2(0, currentHeight)))
+        {
+            SetVariable("bf_customtarget_script", Replace(lines, "\n", ":"));
+        }
+        UI::SameLine();
+        if (UI::Button("^##customtarget_script_up"))
+        {
+            if (currentHeight < 42)
+                currentHeight = 42;
+            SetVariable("bf_customtarget_script_height", currentHeight - 17);
+        }
+        UI::SameLine();
+        if (UI::Button("v##customtarget_script_down"))
+        {
+            SetVariable("bf_customtarget_script_height", currentHeight + 17);
+        }
+        UI::SameLine();
+        UI::Text("Target script");
+        UI::PopItemWidth();
+        if (lines != lastCompiledScript)
+        {
+            lastCompiledScript = lines;
+            array<string> parts = lines.Split("\n");
+            // Check if all lines are empty/comments
+            scriptEmpty = true;
+            for (uint i = 0; i < parts.Length; i++)
+            {
+                string cleaned = Scripting::CleanSource(parts[i]);
+                if (cleaned != "" && cleaned[0] != 35)
+                {
+                    scriptEmpty = false;
+                    break;
+                }
+            }
+            if (scriptEmpty)
+            {
+                directives.Resize(0);
+                compilationError = false;
+            }
+            else
+            {
+                auto @result = CompileTargetScript(parts);
+                if (result is null)
+                {
+                    compilationError = true;
+                    directives.Resize(0);
+                }
+                else
+                {
+                    compilationError = false;
+                    directives = result;
+                }
+            }
+        }
+        if (compilationError)
+        {
+            UI::PushStyleColor(UI::Col::Text, vec4(1, 0, 0, 1));
+            UI::Text("Script has errors! Script has errors!");
+            UI::Text("Script has errors! Script has errors!");
+            UI::Text("Script has errors! Script has errors!");
+            UI::PopStyleColor();
+        }
+        else if (scriptEmpty)
+        {
+            UI::TextDimmed("No target script set.");
+        }
+        else
+        {
+            UI::TextDimmed("Script compiled: " + directives.Length + " directive(s).");
+        }
+        UI::Dummy(vec2(0, 5));
+        UI::Text("Evaluation time frame:");
+        UI::Dummy(vec2(0, 0));
+        UI::Text("From");
+        UI::SameLine();
+        UI::Dummy(vec2(17, 0));
+        UI::SameLine();
+        UI::PushItemWidth(200);
+        UI::InputTimeVar("##bf_customtarget_eval_min_time", "bf_customtarget_eval_min_time");
+        UI::Text("To");
+        UI::SameLine();
+        UI::Dummy(vec2(36, 0));
+        UI::SameLine();
+        UI::PushItemWidth(200);
+        UI::InputTimeVar("##bf_customtarget_eval_max_time", "bf_customtarget_eval_max_time");
+        UI::Dummy(vec2(0, 0));
+        UI::TextDimmed("Reducing the maximum evaluation time will make the bruteforcing process faster.");
+        UI::Dummy(vec2(0, 2));
+        toolTip(350, {
+            "Each line defines an optimization directive:",
+            "  min EXPRESSION  - minimize the value",
+            "  max EXPRESSION  - maximize the value",
+            "  target VALUE EXPRESSION - get as close to VALUE as possible",
+            "",
+            "Examples:",
+            "  max car.speed",
+            "  min car.y",
+            "  target 500 car.x",
+            "  max kmh(car.speed)",
+            "  min distance(car.pos, (100,50,200))",
+            "",
+            "Multiple lines combine with Pareto logic:",
+            "a run is better if it improves at least one",
+            "objective without worsening any other."
+        });
+    }
+    BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
+    {
+        int raceTime = simManager.RaceTime;
+        auto resp = BFEvaluationResponse();
+        resp.Decision = BFEvaluationDecision::DoNothing;
+        if (directives.Length == 0)
+        {
+            if (raceTime > maxTime && maxTime > 0)
+            {
+                if (info.Phase == BFPhase::Initial)
+                    resp.Decision = BFEvaluationDecision::Accept;
+                else
+                    resp.Decision = BFEvaluationDecision::Reject;
+            }
+            return resp;
+        }
+        bool isEvalTime = raceTime >= minTime && raceTime <= maxTime;
+        bool isPastEvalTime = raceTime > maxTime;
+        bool conditionsMet = GlobalConditionsMet(simManager);
+        if (isEvalTime && conditionsMet)
+        {
+            for (uint i = 0; i < directives.Length; i++)
+            {
+                float value = directives[i].getter(simManager);
+                float score = ComputeScore(directives[i], value);
+                if (score > currentScores[i])
+                    currentScores[i] = score;
+            }
+        }
+        if (isPastEvalTime)
+        {
+            if (info.Phase == BFPhase::Initial)
+            {
+                for (uint i = 0; i < directives.Length; i++)
+                {
+                    bestScores[i] = currentScores[i];
+                }
+                resp.Decision = BFEvaluationDecision::Accept;
+                string summary = "Base run:";
+                for (uint i = 0; i < directives.Length; i++)
+                {
+                    string dirType = "";
+                    if (directives[i].type == 0) dirType = "min";
+                    else if (directives[i].type == 1) dirType = "max";
+                    else dirType = "target " + Text::FormatFloat(directives[i].targetValue, "", 0, 3);
+                    summary += " [" + dirType + " " + directives[i].sourceExpr + "=" + FormatScoreAsValue(directives[i], bestScores[i]) + "]";
+                }
+                print(summary);
+                resp.ResultFileStartContent = "# " + summary;
+            }
+            else
+            {
+                // Pareto comparison: accept if at least one is strictly better
+                // and none are worse
+                bool anyBetter = false;
+                bool anyWorse = false;
+                for (uint i = 0; i < directives.Length; i++)
+                {
+                    if (currentScores[i] > bestScores[i])
+                        anyBetter = true;
+                    else if (currentScores[i] < bestScores[i])
+                        anyWorse = true;
+                }
+                if (anyBetter && !anyWorse)
+                {
+                    for (uint i = 0; i < directives.Length; i++)
+                    {
+                        bestScores[i] = currentScores[i];
+                    }
+                    resp.Decision = BFEvaluationDecision::Accept;
+                    string summary = "Improved:";
+                    for (uint i = 0; i < directives.Length; i++)
+                    {
+                        string dirType = "";
+                        if (directives[i].type == 0) dirType = "min";
+                        else if (directives[i].type == 1) dirType = "max";
+                        else dirType = "target " + Text::FormatFloat(directives[i].targetValue, "", 0, 3);
+                        summary += " [" + dirType + " " + directives[i].sourceExpr + "=" + FormatScoreAsValue(directives[i], bestScores[i]) + "]";
+                    }
+                    print(summary);
+                    resp.ResultFileStartContent = "# " + summary;
+                }
+                else
+                {
+                    resp.Decision = BFEvaluationDecision::Reject;
+                }
+            }
+            // Reset current scores for the next iteration
+            for (uint i = 0; i < currentScores.Length; i++)
+            {
+                currentScores[i] = -1e18f;
+            }
+        }
+        return resp;
+    }
+    void OnSimulationBegin(SimulationManager @simManager)
+    {
+        minTime = int(GetVariableDouble("bf_customtarget_eval_min_time"));
+        maxTime = int(GetVariableDouble("bf_customtarget_eval_max_time"));
+        maxTime = ResolveMaxTime(maxTime, int(simManager.EventsDuration));
+        base = true;
+        // Recompile script from variable in case it changed
+        string scriptText = Replace(GetVariableString("bf_customtarget_script"), ":", "\n");
+        array<string> parts = scriptText.Split("\n");
+        scriptEmpty = true;
+        for (uint i = 0; i < parts.Length; i++)
+        {
+            string cleaned = Scripting::CleanSource(parts[i]);
+            if (cleaned != "" && cleaned[0] != 35)
+            {
+                scriptEmpty = false;
+                break;
+            }
+        }
+        if (!scriptEmpty)
+        {
+            auto @result = CompileTargetScript(parts);
+            if (result !is null)
+            {
+                directives = result;
+                compilationError = false;
+            }
+        }
+        // Initialize score arrays
+        bestScores.Resize(directives.Length);
+        currentScores.Resize(directives.Length);
+        for (uint i = 0; i < directives.Length; i++)
+        {
+            bestScores[i] = -1e18f;
+            currentScores[i] = -1e18f;
+        }
+    }
+    void Main()
+    {
+        RegisterVariable("bf_customtarget_script", "");
+        RegisterVariable("bf_customtarget_script_height", 60);
+        RegisterVariable("bf_customtarget_eval_min_time", 0);
+        RegisterVariable("bf_customtarget_eval_max_time", 0);
+        auto eval = RegisterBruteforceEval("customtarget", "Custom Target", OnEvaluate, RenderEvalSettings);
+        @eval.onSimBegin = @OnSimulationBegin;
+    }
+}
+namespace StandardTriggerBf
+{
+    Trigger3D targetTrigger;
+    int weight = 0;
+    float k = 0.0f;
+    bool base = false;
+    int entryTick = -1;
+    float speedAtEntry = 0.0f;
+    float distBeforeEntry = 0.0f;
+    vec3 prevTickPos = vec3(0, 0, 0);
+    bool prevTickValid = false;
+    bool entryDetected = false;
+    int bestEntryTick = -1;
+    float bestSpeedAtEntry = -1.0f;
+    float bestDistBeforeEntry = 1e18f;
+    float DistanceToAABB(vec3 point, vec3 aabbPos, vec3 aabbSize)
+    {
+        vec3 aabbMin = aabbPos;
+        vec3 aabbMax = aabbPos + aabbSize;
+        float dx = Math::Max(aabbMin.x - point.x, Math::Max(0.0f, point.x - aabbMax.x));
+        float dy = Math::Max(aabbMin.y - point.y, Math::Max(0.0f, point.y - aabbMax.y));
+        float dz = Math::Max(aabbMin.z - point.z, Math::Max(0.0f, point.z - aabbMax.z));
+        return Math::Sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    bool isBetter(int time, float dist, float speed)
+    {
+        if (bestSpeedAtEntry < 0.0f)
+            return true;
+        if (time < bestEntryTick)
+        {
+            if (weight == 0)
+                return true;
+            if (weight == 100)
+                return speed > bestSpeedAtEntry;
+            float speedLoss = Math::Max(0.0f, bestSpeedAtEntry - speed);
+            if (speedLoss <= 0.0f)
+                return true;
+            return (dist - k * speed) < (bestDistBeforeEntry - k * bestSpeedAtEntry);
+        }
+        if (time == bestEntryTick)
+        {
+            if (weight == 100)
+                return speed > bestSpeedAtEntry;
+            if (weight == 0)
+                return dist < bestDistBeforeEntry;
+            if (weight <= 50)
+            {
+                return (dist - k * speed) < (bestDistBeforeEntry - k * bestSpeedAtEntry);
+            }
+            else
+            {
+                return (speed - k * dist) > (bestSpeedAtEntry - k * bestDistBeforeEntry);
+            }
+        }
+        if (weight == 100)
+            return speed > bestSpeedAtEntry;
+        return false;
+    }
+    void RenderEvalSettings()
+    {
+        uint triggerIndex = uint(GetVariableDouble("bf_stdtrigger_trigger"));
+        array<int> @triggerIds = GetTriggerIds();
+        if (triggerIds.Length == 0)
+        {
+            UI::Text("No triggers found.");
+            return;
+        }
+        if (triggerIndex >= triggerIds.Length)
+        {
+            triggerIndex = 0;
+            SetVariable("bf_stdtrigger_trigger", 0);
+        }
+        Trigger3D selectedTrigger = GetTrigger(triggerIds[triggerIndex]);
+        vec3 pos = selectedTrigger.Position;
+        if (UI::BeginCombo("Target Trigger", (triggerIndex + 1) + ". Position: (" + pos.x + ", " + pos.y + ", " + pos.z + ")"))
+        {
+            for (uint i = 0; i < triggerIds.Length; i++)
+            {
+                Trigger3D trigger = GetTrigger(triggerIds[i]);
+                pos = trigger.Position;
+                string triggerName = (i + 1) + ". Position: (" + pos.x + ", " + pos.y + ", " + pos.z + ")";
+                if (UI::Selectable(triggerName, triggerIndex == i))
+                {
+                    SetVariable("bf_stdtrigger_trigger", i);
+                }
+            }
+            UI::EndCombo();
+        }
+        UI::Dummy(vec2(0, 2));
+        if (UI::BeginTable("##stdtrigger_ratio_table", 1))
+        {
+            UI::TableNextRow();
+            UI::TableSetColumnIndex(0);
+            UI::PushItemWidth(300);
+            UI::SliderIntVar("Ratio", "bf_stdtrigger_weight", 0, 100, "%d%%");
+            if (!(GetVariableDouble("bf_stdtrigger_weight") < 1.0f || GetVariableDouble("bf_stdtrigger_weight") > 99.0f))
+            {
+                UI::SameLine();
+                UI::Text("❔");
+                if (UI::IsItemHovered())
+                {
+                    UI::BeginTooltip();
+                    if (GetVariableDouble("bf_stdtrigger_weight") <= 50)
+                    {
+                        UI::Text("This ratio means gaining 1m is worth sacrificing speed until " + Text::FormatFloat(100 / GetVariableDouble("bf_stdtrigger_weight") - 1, "", 0, 3) + "m/s.");
+                    }
+                    else
+                    {
+                        UI::Text("This ratio means gaining 1m/s is worth sacrificing distance until " + Text::FormatFloat(100 / (100 - GetVariableDouble("bf_stdtrigger_weight")) - 1, "", 0, 3) + "m.");
+                    }
+                    UI::EndTooltip();
+                }
+            }
+            UI::Text("Distance");
+            UI::SameLine();
+            UI::Dummy(vec2(188, 0));
+            UI::SameLine();
+            UI::Text("Speed");
+            UI::EndTable();
+        }
+        toolTip(300, {"The ratio slider determines which metric bruteforce should value more.",
+                      "Setting the slider fully to the left side (0%) will just optimize how fast the vehicle gets to the trigger.",
+                      "Setting the slider fully to the right side (100%) will instead optimize only vehicle speed when it enters the trigger."});
+    }
+    int lastRaceTime = -1;
+    BFEvaluationResponse @OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
+    {
+        int raceTime = simManager.RaceTime;
+        auto resp = BFEvaluationResponse();
+        resp.Decision = BFEvaluationDecision::DoNothing;
+        if (raceTime < lastRaceTime)
+        {
+            entryTick = -1;
+            speedAtEntry = 0.0f;
+            distBeforeEntry = 0.0f;
+            prevTickValid = false;
+            entryDetected = false;
+        }
+        lastRaceTime = raceTime;
+        vec3 carPos = simManager.Dyna.CurrentState.Location.Position;
+        if (!entryDetected)
+        {
+            bool inTrigger = targetTrigger.ContainsPoint(carPos);
+            if (inTrigger)
+            {
+                entryDetected = true;
+                entryTick = raceTime;
+                speedAtEntry = simManager.Dyna.CurrentState.LinearSpeed.Length();
+                if (prevTickValid)
+                {
+                    distBeforeEntry = DistanceToAABB(prevTickPos, targetTrigger.Position, targetTrigger.Size);
+                }
+                else
+                {
+                    distBeforeEntry = DistanceToAABB(carPos, targetTrigger.Position, targetTrigger.Size);
+                }
+            }
+            prevTickPos = carPos;
+            prevTickValid = true;
+        }
+        if (!entryDetected)
+            return resp;
+        if (raceTime != entryTick)
+            return resp;
+        bool conditionsMet = GlobalConditionsMet(simManager);
+        if (info.Phase == BFPhase::Initial)
+        {
+            if (conditionsMet)
+            {
+                bestEntryTick = entryTick;
+                bestSpeedAtEntry = speedAtEntry;
+                bestDistBeforeEntry = distBeforeEntry;
+            }
+            resp.Decision = BFEvaluationDecision::Accept;
+            if (base)
+            {
+                base = false;
+                if (conditionsMet)
+                {
+                    print("Base run: entry at " + Text::FormatFloat(entryTick / 1000.0, "", 0, 3)
+                        + " s, speed " + Text::FormatFloat(speedAtEntry * 3.6, "", 0, 3)
+                        + " km/h, dist before " + Text::FormatFloat(distBeforeEntry, "", 0, 6) + " m");
+                    resp.ResultFileStartContent = "# Base: entry " + Text::FormatFloat(entryTick / 1000.0, "", 0, 3)
+                        + " s, " + Text::FormatFloat(speedAtEntry * 3.6, "", 0, 3)
+                        + " km/h, dist " + Text::FormatFloat(distBeforeEntry, "", 0, 6) + " m";
+                }
+                else
+                {
+                    print("Base run: entry at " + Text::FormatFloat(entryTick / 1000.0, "", 0, 3)
+                        + " s but conditions not met. Search will require conditions.", Severity::Warning);
+                    resp.ResultFileStartContent = "# Base: conditions not met";
+                }
+            }
+        }
+        else
+        {
+            if (!conditionsMet)
+            {
+                resp.Decision = BFEvaluationDecision::Reject;
+                return resp;
+            }
+            if (isBetter(entryTick, distBeforeEntry, speedAtEntry))
+            {
+                bestEntryTick = entryTick;
+                bestSpeedAtEntry = speedAtEntry;
+                bestDistBeforeEntry = distBeforeEntry;
+                resp.Decision = BFEvaluationDecision::Accept;
+                resp.ResultFileStartContent = "# Entry " + Text::FormatFloat(entryTick / 1000.0, "", 0, 3)
+                    + " s, " + Text::FormatFloat(speedAtEntry * 3.6, "", 0, 3)
+                    + " km/h, dist " + Text::FormatFloat(distBeforeEntry, "", 0, 6) + " m";
+            }
+            else
+            {
+                resp.Decision = BFEvaluationDecision::Reject;
+            }
+        }
+        return resp;
+    }
+    void OnSimulationBegin(SimulationManager @simManager)
+    {
+        weight = int(GetVariableDouble("bf_stdtrigger_weight"));
+        if (weight <= 50)
+        {
+            k = float(weight) / (100.0f - float(weight));
+        }
+        else
+        {
+            k = (100.0f - float(weight)) / float(weight);
+        }
+        bestEntryTick = -1;
+        bestSpeedAtEntry = -1.0f;
+        bestDistBeforeEntry = 1e18f;
+        base = true;
+        lastRaceTime = -1;
+        entryDetected = false;
+        prevTickValid = false;
+        int triggerIndex = int(GetVariableDouble("bf_stdtrigger_trigger"));
+        array<int> @triggerIds = GetTriggerIds();
+        if (triggerIds.Length > 0 && triggerIndex < int(triggerIds.Length))
+        {
+            targetTrigger = GetTrigger(triggerIds[triggerIndex]);
+        }
+        else
+        {
+            print("Error: Invalid trigger index selected for standard trigger BF.", Severity::Error);
+        }
+    }
+    void Main()
+    {
+        RegisterVariable("bf_stdtrigger_trigger", 0);
+        RegisterVariable("bf_stdtrigger_weight", 0);
+        auto eval = RegisterBruteforceEval("standardtrigger", "Standard Trigger", OnEvaluate, RenderEvalSettings);
+        @eval.onSimBegin = @OnSimulationBegin;
+    }
+}
+namespace ScriptingReference
+{
+    void SectionHeader(const string &in title)
+    {
+        UI::Dummy(vec2(0, 6));
+        UI::PushStyleColor(UI::Col::Text, vec4(1.0, 0.85, 0.3, 1.0));
+        UI::Text(title);
+        UI::PopStyleColor();
+        UI::Separator();
+        UI::Dummy(vec2(0, 2));
+    }
+    void SubHeader(const string &in title)
+    {
+        UI::Dummy(vec2(0, 3));
+        UI::PushStyleColor(UI::Col::Text, vec4(0.5, 0.85, 1.0, 1.0));
+        UI::Text(title);
+        UI::PopStyleColor();
+        UI::Dummy(vec2(0, 1));
+    }
+    void Code(const string &in code)
+    {
+        UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
+        UI::Text("  " + code);
+        UI::PopStyleColor();
+    }
+    void Desc(const string &in text)
+    {
+        UI::TextDimmed("    " + text);
+    }
+    void Entry(const string &in code, const string &in desc)
+    {
+        UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
+        UI::Text("  " + code);
+        UI::PopStyleColor();
+        UI::SameLine();
+        UI::TextDimmed("  " + desc);
+    }
+    void VarRow(const string &in name, const string &in desc)
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::PushStyleColor(UI::Col::Text, vec4(0.6, 1.0, 0.6, 1.0));
+        UI::Text(name);
+        UI::PopStyleColor();
+        UI::TableSetColumnIndex(1);
+        UI::TextDimmed(desc);
+    }
+    void SurfaceRow(const string &in id, const string &in name, const string &in id2, const string &in name2)
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text(id);
+        UI::TableSetColumnIndex(1);
+        UI::TextDimmed(name);
+        UI::TableSetColumnIndex(2);
+        UI::Text(id2);
+        UI::TableSetColumnIndex(3);
+        UI::TextDimmed(name2);
+    }
+    void Render()
+    {
+        UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 1, 0.95));
+        UI::TextWrapped("This page documents the scripting language used in Condition Scripts, Restart Condition Scripts, and Custom Target Scripts. All three share the same expression language.");
+        UI::PopStyleColor();
+        UI::Dummy(vec2(0, 4));
+        if (UI::CollapsingHeader("Condition Script"))
+        {
+            UI::Dummy(vec2(0, 2));
+            UI::TextWrapped("Used in the Conditions and Restart Condition fields. Each line is a boolean comparison. All lines must be true (AND logic).");
+            SubHeader("Format");
+            Code("EXPRESSION  OPERATOR  EXPRESSION");
+            UI::Dummy(vec2(0, 2));
+            UI::TextDimmed("  Operators:  >  <  >=  <=  =");
+            SubHeader("Examples");
+            Code("kmh(car.speed) > 500");
+            Desc("Speed must exceed 500 km/h");
+            UI::Dummy(vec2(0, 1));
+            Code("car.z < 10.5");
+            Desc("Z position must be below 10.5");
+            UI::Dummy(vec2(0, 1));
+            Code("deg(car.pitch) > 80");
+            Code("car.wheels.frontleft.groundcontact = 1");
+            Desc("Nose up and front-left wheel touching ground");
+            UI::Dummy(vec2(0, 1));
+            Code("distance(car.pos, (105.5, 20.0, 300.0)) < 5.0");
+            Desc("Car within 5m of a fixed point");
+            UI::Dummy(vec2(0, 1));
+            Code("distance(car.pos, variable(\"bf_target_point\")) < 3.0");
+            Desc("Car within 3m of the single point BF target");
+            UI::Dummy(vec2(0, 1));
+            Code("car.wheels.frontleft.surface = 2");
+            Desc("Front-left wheel is on Grass (ID 2)");
+            UI::Dummy(vec2(0, 1));
+            Code("time_since(last_improvement.time) > 60");
+            Desc("Restart if no improvement for 60 seconds");
+            UI::Dummy(vec2(0, 1));
+            Code("time_since(last_restart.time) > 60*5");
+            Desc("Restart every 5 minutes");
+            UI::Dummy(vec2(0, 4));
+        }
+        if (UI::CollapsingHeader("Custom Target Script"))
+        {
+            UI::Dummy(vec2(0, 2));
+            UI::TextWrapped("Used in the Custom Target bruteforce evaluation. Each line defines an optimization objective instead of a boolean condition.");
+            SubHeader("Directives");
+            if (UI::BeginTable("##directives_table", 2))
+            {
+                UI::TableSetupColumn("Directive");
+                UI::TableSetupColumn("Meaning");
+                VarRow("min EXPR", "Minimize the expression (lower is better)");
+                VarRow("max EXPR", "Maximize the expression (higher is better)");
+                VarRow("target VALUE EXPR", "Get expression as close to VALUE as possible");
+                UI::EndTable();
+            }
+            UI::Dummy(vec2(0, 2));
+            UI::TextDimmed("  Lines starting with # are comments. Blank lines are ignored.");
+            SubHeader("Multi-Objective (Pareto)");
+            UI::TextWrapped("  When multiple directives are used, a run is accepted only if it improves at least one objective without worsening any other.");
+            SubHeader("Examples");
+            Code("max car.speed");
+            Desc("Maximize raw speed");
+            UI::Dummy(vec2(0, 1));
+            Code("target 500 car.x");
+            Desc("Get car.x as close to 500 as possible");
+            UI::Dummy(vec2(0, 1));
+            Code("min distance(car.pos, (105.5, 20.0, 300.0))");
+            Desc("Minimize distance to a point");
+            UI::Dummy(vec2(0, 1));
+            Code("max kmh(car.speed)");
+            Code("target 200 car.x");
+            Desc("Maximize speed while keeping car.x near 200");
+            UI::Dummy(vec2(0, 1));
+            Code("# Optimize for altitude");
+            Code("max car.y");
+            Desc("Comments are allowed with #");
+            UI::Dummy(vec2(0, 4));
+        }
+        if (UI::CollapsingHeader("Variables Reference"))
+        {
+            UI::Dummy(vec2(0, 2));
+            SubHeader("Position");
+            if (UI::BeginTable("##vars_pos", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Description");
+                VarRow("car.x  /  car.position.x", "X position");
+                VarRow("car.y  /  car.position.y", "Y position (height)");
+                VarRow("car.z  /  car.position.z", "Z position");
+                UI::EndTable();
+            }
+            SubHeader("Velocity");
+            if (UI::BeginTable("##vars_vel", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Description");
+                VarRow("car.vel.x  /  car.velocity.x", "X velocity (m/s)");
+                VarRow("car.vel.y  /  car.velocity.y", "Y velocity (m/s)");
+                VarRow("car.vel.z  /  car.velocity.z", "Z velocity (m/s)");
+                VarRow("car.speed", "Total speed (m/s)");
+                UI::EndTable();
+            }
+            SubHeader("Rotation");
+            if (UI::BeginTable("##vars_rot", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Description");
+                VarRow("car.yaw  /  car.rotation.yaw", "Yaw angle (radians)");
+                VarRow("car.pitch  /  car.rotation.pitch", "Pitch angle (radians)");
+                VarRow("car.roll  /  car.rotation.roll", "Roll angle (radians)");
+                UI::EndTable();
+            }
+            SubHeader("Vehicle State");
+            if (UI::BeginTable("##vars_state", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Description");
+                VarRow("car.freewheel", "1 if freewheeling, 0 otherwise");
+                VarRow("car.lateralcontact", "1 if lateral contact, 0 otherwise");
+                VarRow("car.sliding", "1 if sliding, 0 otherwise");
+                VarRow("car.gear", "Current gear (-1 = reverse)");
+                UI::EndTable();
+            }
+            SubHeader("Wheels - Ground Contact");
+            if (UI::BeginTable("##vars_gc", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Value");
+                VarRow("car.wheels.frontleft.groundcontact", "0 or 1");
+                VarRow("car.wheels.frontright.groundcontact", "0 or 1");
+                VarRow("car.wheels.backleft.groundcontact", "0 or 1");
+                VarRow("car.wheels.backright.groundcontact", "0 or 1");
+                UI::EndTable();
+            }
+            SubHeader("Wheels - Surface Material");
+            if (UI::BeginTable("##vars_surf", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Value");
+                VarRow("car.wheels.frontleft.surface", "Material ID (see table)");
+                VarRow("car.wheels.frontright.surface", "Material ID (see table)");
+                VarRow("car.wheels.backleft.surface", "Material ID (see table)");
+                VarRow("car.wheels.backright.surface", "Material ID (see table)");
+                UI::EndTable();
+            }
+            SubHeader("Vectors (for distance() function)");
+            if (UI::BeginTable("##vars_vec", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Description");
+                VarRow("car.pos  /  car.position", "Position as vec3");
+                VarRow("car.vel  /  car.velocity", "Velocity as vec3");
+                VarRow("(x, y, z)", "Constant vec3 literal");
+                UI::EndTable();
+            }
+            SubHeader("Bruteforce State");
+            if (UI::BeginTable("##vars_bf", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Description");
+                VarRow("iterations", "Current iteration count");
+                VarRow("last_improvement.time", "Timestamp of last improvement (s)");
+                VarRow("last_restart.time", "Timestamp of last restart (s)");
+                UI::EndTable();
+            }
+            UI::Dummy(vec2(0, 4));
+        }
+        if (UI::CollapsingHeader("Functions Reference"))
+        {
+            UI::Dummy(vec2(0, 2));
+            if (UI::BeginTable("##funcs_table", 2))
+            {
+                UI::TableSetupColumn("Function");
+                UI::TableSetupColumn("Description");
+                VarRow("kmh(value)", "Converts m/s to km/h (x 3.6)");
+                VarRow("deg(value)", "Converts radians to degrees");
+                VarRow("distance(vec1, vec2)", "Euclidean distance between two vec3s");
+                VarRow("time_since(timestamp)", "Seconds elapsed since timestamp");
+                VarRow("variable(\"name\")", "Read a TMInterface variable as float or vec3");
+                UI::EndTable();
+            }
+            SubHeader("Operators");
+            UI::TextDimmed("  Arithmetic:   +   -   *   /");
+            UI::TextDimmed("  Comparison:   >   <   >=   <=   =");
+            UI::TextDimmed("  Grouping:     ( ... )");
+            UI::Dummy(vec2(0, 4));
+        }
+        if (UI::CollapsingHeader("Surface Material IDs"))
+        {
+            UI::Dummy(vec2(0, 2));
+            UI::TextDimmed("  Use with car.wheels.*.surface variables in conditions.");
+            UI::Dummy(vec2(0, 2));
+            if (UI::BeginTable("##surface_ids", 4))
+            {
+                UI::TableSetupColumn("ID");
+                UI::TableSetupColumn("Surface");
+                UI::TableSetupColumn("ID");
+                UI::TableSetupColumn("Surface");
+                UI::TableHeadersRow();
+                SurfaceRow("0", "Concrete", "15", "Rubber");
+                SurfaceRow("1", "Pavement", "16", "SlidingRubber");
+                SurfaceRow("2", "Grass", "17", "Test");
+                SurfaceRow("3", "Ice", "18", "Rock");
+                SurfaceRow("4", "Metal", "19", "Water");
+                SurfaceRow("5", "Sand", "20", "Wood");
+                SurfaceRow("6", "Dirt", "21", "Danger");
+                SurfaceRow("7", "DirtRoad", "22", "Asphalt");
+                SurfaceRow("8", "Plastic", "23", "WetDirtRoad");
+                SurfaceRow("9", "Green", "24", "WetAsphalt");
+                SurfaceRow("10", "Snow", "25", "WetPavement");
+                SurfaceRow("11", "MetalTrans", "26", "WetGrass");
+                SurfaceRow("12", "GrassGreen", "27", "Snow2");
+                SurfaceRow("13", "GrassBrown", "28", "TurboRoulette");
+                SurfaceRow("14", "NotCollidable", "29", "FreeWheeling");
+                UI::EndTable();
+            }
+            UI::Dummy(vec2(0, 4));
+        }
     }
 }
