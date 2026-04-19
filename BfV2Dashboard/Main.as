@@ -163,7 +163,7 @@ void SetupAsRole(bool tryMaster)
 void SendHeartbeat()
 {
     Net::Socket@ sock = Net::Socket();
-    if (sock.Connect("127.0.0.1", MASTER_PORT, 1))
+    if (sock.Connect("127.0.0.1", MASTER_PORT, 200))
     {
         string body = "pid=" + Text::FormatUInt(instancePid) + "&port=" + Text::FormatUInt(localPort);
         string req = "POST /api/internal/register HTTP/1.1\r\n";
