@@ -40,12 +40,12 @@ namespace NoseposPlusBf
             str("0 0 0");
         }
 
-        Point(string& s)
+        Point(const string &in s)
         {
             str(s);
         }
 
-        void str(string& s)
+        void str(const string &in s)
         {
             pstr = s;
             array<string>@ splits = s.Split(" ");
@@ -54,7 +54,7 @@ namespace NoseposPlusBf
             pvec.z = Text::ParseFloat(splits[2]);
         }
 
-        void vec(vec3& v)
+        void vec(const vec3 &in v)
         {
             pvec = v;
         }
@@ -71,17 +71,17 @@ namespace NoseposPlusBf
     }
 
     // === Utility functions from Common.as ===
-    bool GetB(string& str)
+    bool GetB(const string &in str)
     {
         return GetVariableBool(str);
     }
 
-    double GetD(string& str)
+    double GetD(const string &in str)
     {
         return GetVariableDouble(str);
     }
 
-    string GetS(string& str)
+    string GetS(const string &in str)
     {
         return GetVariableString(str);
     }
@@ -108,7 +108,7 @@ namespace NoseposPlusBf
         return GetD("shweetz_eval_time_max") == raceTime;
     }
 
-    double DistanceToPoint(vec3& pos)
+    double DistanceToPoint(const vec3 &in pos)
     {
         Point point(GetS("shweetz_point"));
         return Math::Distance(pos, point.pvec);
@@ -126,18 +126,18 @@ namespace NoseposPlusBf
         return count;
     }
 
-    bool IsInTrigger(vec3& pos, string& var)
+    bool IsInTrigger(const vec3 &in pos, const string &in var)
     {
         auto trigger = GetTriggerVar(var);
         return trigger.ContainsPoint(pos);
     }
 
-    bool IsInTrigger(vec3& pos)
+    bool IsInTrigger(const vec3 &in pos)
     {
         return IsInTrigger(pos, "shweetz_trigger_index");
     }
 
-    Trigger3D GetTriggerVar(string& var)
+    Trigger3D GetTriggerVar(const string &in var)
     {
         uint triggerIndex = int(GetD(var));
         return GetTriggerByIndex(triggerIndex - 1);
@@ -317,6 +317,7 @@ namespace NoseposPlusBf
         iterations = info.Iterations;
 
         auto resp = BFEvaluationResponse();
+        resp.Decision = BFEvaluationDecision::DoNothing;
 
         if (GetS("shweetz_next_eval") == "Hold") {
             if (info.Phase == BFPhase::Initial) {

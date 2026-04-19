@@ -2276,13 +2276,13 @@ double GetScalarValue(SimulationManager@ simManager, const ScalarKind kind)
         value = position.z;
         break;
     case ScalarKind::ROTATION_YAW:
-        rotation.GetYawPitchRoll(value, void, void);
+        { float y, _p, _r; rotation.GetYawPitchRoll(y, _p, _r); value = y; }
         break;
     case ScalarKind::ROTATION_PITCH:
-        rotation.GetYawPitchRoll(void, value, void);
+        { float _y, p, _r; rotation.GetYawPitchRoll(_y, p, _r); value = p; }
         break;
     case ScalarKind::ROTATION_ROLL:
-        rotation.GetYawPitchRoll(void, void, value);
+        { float _y, _p, r; rotation.GetYawPitchRoll(_y, _p, r); value = r; }
         break;
     case ScalarKind::SPEED_GLOBAL_X:
         value = globalSpeed.x;

@@ -483,7 +483,7 @@ string HandleGetAllSettings(const string &in body)
         json += "," + JsonFloat("shweetz_gear", float(GetVariableDouble("shweetz_gear")));
         json += "," + JsonFloat("shweetz_trigger_index", float(GetVariableDouble("shweetz_trigger_index")));
         json += "," + JsonFloat("shweetz_antitrigger_index", float(GetVariableDouble("shweetz_antitrigger_index")));
-        json += "," + JsonFloat("shweetz_debug", float(GetVariableDouble("shweetz_debug")));
+        json += "," + JsonInt("shweetz_debug", int(GetVariableDouble("shweetz_debug")));
     }
     json += "}";
 
