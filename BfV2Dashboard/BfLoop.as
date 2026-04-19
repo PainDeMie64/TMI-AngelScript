@@ -91,6 +91,68 @@ void DashboardImprovement(const string &in evalName, const string &in details)
         FileAppendLine(SessionPath("improvements.txt"), entry);
 }
 
+void RefreshInputModSettings(SimulationManager@ simManager)
+{
+    int savedCount = int(GetVariableDouble("bf_input_mod_count"));
+    if (savedCount < 1) savedCount = 1;
+    while (int(g_inputModSettings.Length) < savedCount)
+    {
+        InputModificationSettings @s = InputModificationSettings();
+        g_inputModSettings.Add(s);
+    }
+    while (int(g_inputModSettings.Length) > savedCount)
+        g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
+    for (uint im = 0; im < g_inputModSettings.Length; im++)
+    {
+        string varSuffix = GetInputModVarSuffix(im);
+        InputModificationSettings @s = g_inputModSettings[im];
+        s.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
+        s.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
+        s.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
+        s.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
+        s.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
+        s.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+        s.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
+        s.maxInputsTime = ResolveMaxTime(s.maxInputsTime, int(simManager.EventsDuration));
+        string algoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+        s.algorithmIndex = GetInputModAlgorithmIndex(algoId);
+        int ed = int(simManager.EventsDuration);
+        if (algoId == "advanced_basic")
+        {
+            if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_steer_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_accel_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_brake_max_time" + varSuffix, ed);
+        }
+        else if (algoId == "advanced_range")
+        {
+            if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_steer_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_accel_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_brake_max_time" + varSuffix, ed);
+        }
+    }
+    if (g_inputModSettings.Length > 0)
+    {
+        inputCount = g_inputModSettings[0].inputCount;
+        minInputsTime = g_inputModSettings[0].minInputsTime;
+        maxInputsTime = g_inputModSettings[0].maxInputsTime;
+        maxSteerDiff = g_inputModSettings[0].maxSteerDiff;
+        maxTimeDiff = g_inputModSettings[0].maxTimeDiff;
+        fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
+    }
+    leastMinInputsTime = 1000000000;
+    for (uint lm = 0; lm < g_inputModSettings.Length; lm++)
+    {
+        if (g_inputModSettings[lm].enabled && g_inputModSettings[lm].minInputsTime < leastMinInputsTime)
+            leastMinInputsTime = g_inputModSettings[lm].minInputsTime;
+    }
+}
+
 class InputModificationAlgorithm
 {
     string identifier;

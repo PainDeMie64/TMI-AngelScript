@@ -32,6 +32,7 @@ string HandleGetBfStatus(const string &in body)
     if (bfRunning && bfStartTime > 0)
         elapsed = Time::Now - bfStartTime;
     json += "," + JsonUInt("elapsedMs", uint(elapsed));
+    json += "," + JsonUInt("improvements", uint(improvementLog.Length));
     json += "}";
     return json;
 }
@@ -665,4 +666,49 @@ string HandlePostSetBatch(const string &in body)
         setCount++;
     }
     return "{\"ok\":true,\"count\":" + Text::FormatInt(setCount) + "}";
+}
+
+string HandleApplyInputs(const string &in body)
+{
+    if (!IsBfV2Active)
+        return "{\"ok\":false,\"error\":\"BfV2 not active\"}";
+    if (!rewindStateAssigned)
+        return "{\"ok\":false,\"error\":\"BF not initialized (no rewind state yet)\"}";
+
+    SimulationManager@ sim = GetSimulationManager();
+    if (sim is null)
+        return "{\"ok\":false,\"error\":\"no simulation manager\"}";
+
+    CommandList list;
+    list.Content = body;
+    list.Process(CommandListProcessOption::OnlyParse);
+    array<InputCommand>@ cmds = list.InputCommands;
+    if (cmds is null || cmds.Length == 0)
+        return "{\"ok\":false,\"error\":\"no valid inputs parsed\"}";
+
+    sim.InputEvents.Clear();
+    for (uint i = 0; i < cmds.Length; i++)
+        sim.InputEvents.Add(cmds[i].Timestamp, cmds[i].Type, cmds[i].State);
+
+    SaveBaseInputs(sim);
+    SaveBestInputs(sim);
+
+    RefreshInputModSettings(sim);
+
+    info.Iterations = 0;
+    info.Phase = BFPhase::Initial;
+    info.Rewinded = false;
+    currentIterations = 0;
+    currentPhase = "Initial";
+    simStateCache.Clear();
+    simStateTimes.Clear();
+
+    if (current !is null && current.onSimBegin !is null)
+        current.onSimBegin(sim);
+
+    sim.RewindToState(rewindState);
+    RestoreBestInputs(sim);
+
+    DashboardLog("Base inputs replaced (" + Text::FormatUInt(cmds.Length) + " commands), BF restarted");
+    return "{\"ok\":true,\"commands\":" + Text::FormatUInt(cmds.Length) + "}";
 }

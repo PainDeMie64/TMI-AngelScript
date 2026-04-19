@@ -32,6 +32,7 @@ void RegisterCommonRoutes()
     RegisterRoute("POST", "/api/bf/copy-position", HandleCopyPosition);
     RegisterRoute("POST", "/api/bf/delete-session", HandleDeleteSession);
     RegisterRoute("POST", "/api/bf/set-batch", HandlePostSetBatch);
+    RegisterRoute("POST", "/api/bf/apply-inputs", HandleApplyInputs);
     RegisterRoute("GET", "/api/map", HandleGetMap);
 }
 
@@ -108,12 +109,12 @@ void Main()
     routes.Resize(0);
     RegisterCommonRoutes();
     RegisterRoute("GET", "/", HandleBfDashboard);
-    StartServer("127.0.0.1", MASTER_PORT);
+    StartServer("127.0.0.1", MASTER_PORT, true);
     if (@listenSock !is null)
     {
         isMaster = true;
         localPort = MASTER_PORT;
-        log("BfV2Dashboard: Listening on port " + Text::FormatUInt(MASTER_PORT) + " (PID " + Text::FormatUInt(instancePid) + ")");
+        log("BfV2Dashboard: === Started successfully on port " + Text::FormatUInt(MASTER_PORT) + " (PID " + Text::FormatUInt(instancePid) + ") — open http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/ ===");
         return;
     }
 
@@ -122,15 +123,15 @@ void Main()
     RegisterRoute("GET", "/", HandleWorkerRedirect);
     for (uint16 p = WORKER_PORT_START; p <= WORKER_PORT_END; p++)
     {
-        StartServer("127.0.0.1", p);
+        StartServer("127.0.0.1", p, true);
         if (@listenSock !is null)
         {
             localPort = p;
-            log("BfV2Dashboard: Listening on port " + Text::FormatUInt(localPort) + " (PID " + Text::FormatUInt(instancePid) + ")");
+            log("BfV2Dashboard: === Started successfully on port " + Text::FormatUInt(localPort) + " (PID " + Text::FormatUInt(instancePid) + ") — dashboard at http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/ ===");
             return;
         }
     }
-    log("BfV2Dashboard: No free port found");
+    log("BfV2Dashboard: ERROR — No free port found (all ports 8489-" + Text::FormatUInt(WORKER_PORT_END) + " taken)");
 }
 
 void Render()

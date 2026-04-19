@@ -109,7 +109,7 @@ string ExtractMethod(const string &in raw)
 
 // --- Server lifecycle ---
 
-void StartServer(const string &in host, uint16 port)
+void StartServer(const string &in host, uint16 port, bool silent = false)
 {
     @clientSock = null;
     @listenSock = null;
@@ -120,12 +120,12 @@ void StartServer(const string &in host, uint16 port)
     if (listenSock.Listen(host, port))
     {
         serverStatus = "Listening on " + host + ":" + Text::FormatUInt(port);
-        log("HTTP Server: " + serverStatus);
     }
     else
     {
         serverStatus = "FAILED to listen on " + host + ":" + Text::FormatUInt(port);
-        log("HTTP Server: " + serverStatus);
+        if (!silent)
+            log("HTTP Server: " + serverStatus);
         @listenSock = null;
     }
 }

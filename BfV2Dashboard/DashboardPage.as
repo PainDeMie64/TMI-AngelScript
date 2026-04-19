@@ -44,22 +44,22 @@ string HandleBfDashboard(const string &in body)
     h += "<button id='btnApply' class='btn-action btn-apply' disabled>Apply All</button>";
     h += "</div>";
 
-    // Optimization section
-    h += "<details id='secOptimization' open>";
-    h += "<summary>Optimization <button class='propagate-btn' data-section='secOptimization' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
-    h += "<div class='sec-body'>";
-    h += "<div class='field-row'><label>Target</label><select id='optTarget' data-var='bf_target'></select></div>";
-    h += "<div id='evalFields'></div>";
-    h += "</div></details>";
-
     // Behavior section
-    h += "<details id='secBehavior'>";
+    h += "<details id='secBehavior' open>";
     h += "<summary>Behavior <button class='propagate-btn' data-section='secBehavior' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div class='field-row'><label>Result Filename</label><input type='text' id='behFile' data-var='bf_result_filename'></div>";
     h += "<div class='field-row'><label>Iterations Before Restart</label><input type='number' id='behIter' data-var='bf_iterations_before_restart' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Result Folder</label><input type='text' id='behFolder' data-var='bf_result_folder'></div>";
     h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' data-script='1' rows='3'></textarea></div>";
+    h += "</div></details>";
+
+    // Optimization section
+    h += "<details id='secOptimization'>";
+    h += "<summary>Optimization <button class='propagate-btn' data-section='secOptimization' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
+    h += "<div class='sec-body'>";
+    h += "<div class='field-row'><label>Target</label><select id='optTarget' data-var='bf_target'></select></div>";
+    h += "<div id='evalFields'></div>";
     h += "</div></details>";
 
     // Conditions section
@@ -82,14 +82,32 @@ string HandleBfDashboard(const string &in body)
 
     h += "</section>";
 
-    // Session history panel (wide)
-    h += "<section class='panel wide' id='history'>";
+    // Live Bruteforce panel (wide, hidden by default)
+    h += "<section class='panel wide' id='liveBf' style='display:none'>";
+    h += "<h2>Live Bruteforce</h2>";
+    h += "<div id='liveCards' class='live-cards'></div>";
+    h += "</section>";
+
+    // Past Sessions panel (wide)
+    h += "<section class='panel wide' id='pastSessions'>";
+    h += "<h2>Past Sessions</h2>";
     h += "<div class='tab-bar' id='sessionTabs'></div>";
     h += "<div class='sub-tabs'>";
     h += "<button class='sub-tab active' id='tabImp'>Improvements</button>";
     h += "<button class='sub-tab' id='tabLog'>Log</button>";
     h += "</div>";
     h += "<div id='historyContent' class='history-content'></div>";
+    h += "</section>";
+
+    // Base Run Inputs panel (wide)
+    h += "<section class='panel wide' id='baseInputs'>";
+    h += "<h2>Base Run Inputs</h2>";
+    h += "<p class='hint'>Paste input commands to replace the current base run. Click Apply to restart bruteforce with these inputs.</p>";
+    h += "<textarea id='inputScript' rows='8' class='code-input' placeholder='press up 0&#10;steer 1000 100&#10;press down 5000&#10;...'></textarea>";
+    h += "<div class='base-actions'>";
+    h += "<button id='btnApplyInputs' class='btn-action btn-apply'>Apply &amp; Restart Bruteforce</button>";
+    h += "<span id='inputResult' class='input-result'></span>";
+    h += "</div>";
     h += "</section>";
 
     h += "</main>";
@@ -225,6 +243,23 @@ string BfDashCSS()
     c += ".inst-btn { background:#21262d; color:#8b949e; border:1px solid #30363d; padding:0.4rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem; }";
     c += ".inst-btn:hover { background:#30363d; }";
     c += ".inst-btn.active { background:#f0883e20; color:#f0883e; border-color:#f0883e40; }";
+
+    // Live BF cards
+    c += ".live-cards { display:flex; flex-wrap:wrap; gap:0.5rem; }";
+    c += ".live-card { flex:0 0 calc(25% - 0.375rem); background:#0d1117; border:1px solid #30363d; border-radius:6px; overflow:hidden; min-width:200px; }";
+    c += ".live-card-hdr { padding:0.4rem 0.6rem; background:#161b22; border-bottom:1px solid #21262d; font-size:0.8rem; }";
+    c += ".live-card-hdr .port { color:#f0883e; font-weight:600; }";
+    c += ".live-card-hdr .target { color:#8b949e; margin-left:0.3rem; }";
+    c += ".live-card-tabs { display:flex; border-bottom:1px solid #21262d; }";
+    c += ".live-card-tab { flex:1; text-align:center; padding:0.25rem; font-size:0.7rem; cursor:pointer; color:#8b949e; background:none; border:none; border-bottom:2px solid transparent; }";
+    c += ".live-card-tab.active { color:#f0883e; border-bottom-color:#f0883e; }";
+    c += ".live-card-body { max-height:200px; overflow-y:auto; padding:0.3rem; font-size:0.75rem; font-family:monospace; }";
+
+    // Base Run Inputs
+    c += ".code-input { width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:0.5rem; font-family:monospace; font-size:0.8rem; resize:vertical; }";
+    c += ".hint { color:#8b949e; font-size:0.75rem; margin-bottom:0.5rem; }";
+    c += ".base-actions { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; }";
+    c += ".input-result { font-size:0.8rem; font-family:monospace; }";
 
     c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
 
@@ -490,6 +525,7 @@ string BfDashJS_Status()
     j += "setText('bfIter',fmtNum(d.iterations||0));";
     j += "setText('bfIterSec',(d.iterationsPerSec||0).toFixed(1));";
     j += "setText('bfRestarts',d.restarts||0);";
+    j += "setText('bfImpCount',d.improvements||0);";
     // Track bfIsRunning transitions
     j += "var wasRunning = bfIsRunning;";
     j += "bfIsRunning = d.running;";
@@ -539,7 +575,8 @@ string BfDashJS_Status()
     j += "if(activeInstancePort===0&&found.length>0){";
     j += "activeInstancePort=found[0].port;";
     j += "apiBase='http://localhost:'+found[0].port;}";
-    j += "renderInstances();}";
+    j += "renderInstances();";
+    j += "updateLiveCards(found);}";
 
     j += "function renderInstances(){";
     j += "var bar=document.getElementById('instanceBar');";
@@ -589,7 +626,7 @@ string BfDashJS_Status()
     j += "bfIsRunning=null;";
     j += "lastLogLen=-1;";
     j += "lastImpLen=-1;";
-    j += "activeSession='current';";
+    j += "activeSession=null;";
     j += "activeSubTab='imp';";
     j += "prevTarget='';";
     j += "prevSlotAlgos='';";
@@ -1067,41 +1104,29 @@ string BfDashJS_Settings()
 }
 
 // ============================================================
-// JS: Session history (log, improvements, session tabs)
+// JS: Session history (log, improvements, session tabs) + Live BF cards
 // ============================================================
 
 string BfDashJS_Sessions()
 {
     string j = "";
 
-    j += "var activeSession='current',activeSubTab='imp',sessions=[];";
-
-    // Current session log/improvements polling
+    j += "var activeSession=null,activeSubTab='imp',sessions=[];";
     j += "var lastLogLen=-1,lastImpLen=-1;";
-    j += "function pollCurrentLog(){";
-    j += "if(activeSession!=='current'||activeSubTab!=='log')return;";
-    j += "fetch(apiBase+'/api/bf/log').then(function(r){return r.json();}).then(function(arr){";
-    j += "if(arr.length!==lastLogLen){lastLogLen=arr.length;renderLog(arr);}";
-    j += "}).catch(function(){});}";
 
-    j += "function pollCurrentImp(){";
-    j += "if(activeSession!=='current'||activeSubTab!=='imp')return;";
-    j += "fetch(apiBase+'/api/bf/improvements').then(function(r){return r.json();}).then(function(arr){";
-    j += "if(arr.length!==lastImpLen){lastImpLen=arr.length;renderImp(arr);setText('bfImpCount',arr.length);}";
-    j += "}).catch(function(){});}";
-
-    j += "setInterval(pollCurrentLog,1000);setInterval(pollCurrentImp,2000);";
+    // Live cards state
+    j += "var liveCards={};";
 
     // Sessions polling
     j += "function pollSessions(){";
     j += "fetch(apiBase+'/api/bf/sessions').then(function(r){return r.json();}).then(function(arr){sessions=arr;renderSessionTabs();}).catch(function(){});}";
     j += "setInterval(pollSessions,5000);pollSessions();";
 
-    // Render session tabs (with X delete buttons on past sessions)
+    // Render session tabs (past sessions only, no "Current" tab)
     j += "function renderSessionTabs(){";
     j += "var bar=document.getElementById('sessionTabs');while(bar.firstChild)bar.removeChild(bar.firstChild);";
-    j += "var cur=document.createElement('button');cur.className='tab-btn'+(activeSession==='current'?' active':'');cur.textContent='Current';";
-    j += "cur.addEventListener('click',function(){activeSession='current';renderSessionTabs();loadSessionData();});bar.appendChild(cur);";
+    j += "if(sessions.length===0){var em=document.createElement('span');em.textContent='No past sessions';em.style.color='#8b949e';em.style.fontSize='0.8rem';bar.appendChild(em);return;}";
+    j += "if(activeSession===null&&sessions.length>0)activeSession=sessions[sessions.length-1].id;";
     j += "for(var i=sessions.length-1;i>=0;i--){";
     j += "(function(s){";
     j += "var btn=document.createElement('button');btn.className='tab-btn'+(activeSession===s.id?' active':'');";
@@ -1118,7 +1143,7 @@ string BfDashJS_Sessions()
     j += "if(!e.shiftKey&&!confirm('Delete session #'+s.id+'?\\n(Hold Shift to bypass this confirmation)'))return;";
     j += "fetch(apiBase+'/api/bf/delete-session',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+encodeURIComponent(s.id)}).then(function(r){return r.json();}).then(function(d){";
     j += "if(d.ok){";
-    j += "if(activeSession===s.id)activeSession='current';";
+    j += "if(activeSession===s.id){activeSession=null;}";
     j += "for(var j2=0;j2<sessions.length;j2++){if(sessions[j2].id===s.id){sessions.splice(j2,1);break;}}";
     j += "renderSessionTabs();";
     j += "loadSessionData();}});});";
@@ -1134,12 +1159,11 @@ string BfDashJS_Sessions()
     j += "document.getElementById('tabLog').addEventListener('click',function(){activeSubTab='log';";
     j += "document.getElementById('tabLog').className='sub-tab active';document.getElementById('tabImp').className='sub-tab';loadSessionData();});";
 
-    // Load data for selected session+tab
+    // Load data for selected session+tab (past sessions only)
     j += "function loadSessionData(){";
     j += "lastLogLen=-1;lastImpLen=-1;";
     j += "var hc=document.getElementById('historyContent');while(hc&&hc.firstChild)hc.removeChild(hc.firstChild);";
-    j += "if(activeSession==='current'){";
-    j += "if(activeSubTab==='log'){pollCurrentLog();}else{pollCurrentImp();}return;}";
+    j += "if(activeSession===null)return;";
     j += "var type=activeSubTab==='log'?'session-log':'session-imp';";
     j += "fetch(apiBase+'/api/bf/'+type+'?id='+encodeURIComponent(activeSession)).then(function(r){return r.json();}).then(function(arr){";
     j += "if(activeSubTab==='log'){renderLog(arr);}else{renderImp(arr);}";
@@ -1167,7 +1191,119 @@ string BfDashJS_Sessions()
     j += "var is2=document.createElement('span');is2.textContent=fmtNum(e.iteration||0);";
     j += "var rs=document.createElement('span');rs.textContent=e.restart||0;";
     j += "row.appendChild(ns);row.appendChild(ts);row.appendChild(ds);row.appendChild(is2);row.appendChild(rs);c.appendChild(row);}";
-    j += "if(activeSession==='current')setText('bfImpCount',arr.length);}";
+    j += "}";
+
+    // ---- Live BF Cards ----
+
+    j += "function updateLiveCards(found){";
+    j += "var running=found.filter(function(i){return i.running;});";
+    j += "var liveSec=document.getElementById('liveBf');";
+    j += "if(running.length===0){liveSec.style.display='none';";
+    j += "var keys=Object.keys(liveCards);for(var k=0;k<keys.length;k++){clearInterval(liveCards[keys[k]].logTimer);clearInterval(liveCards[keys[k]].impTimer);liveCards[keys[k]].contentEl.parentNode.removeChild(liveCards[keys[k]].contentEl.parentNode);}";
+    j += "liveCards={};return;}";
+    j += "liveSec.style.display='';";
+
+    // Remove cards for instances no longer running
+    j += "var existingPorts=Object.keys(liveCards);";
+    j += "for(var ep=0;ep<existingPorts.length;ep++){";
+    j += "var still=false;for(var ri=0;ri<running.length;ri++){if(String(running[ri].port)===existingPorts[ep]){still=true;break;}}";
+    j += "if(!still){clearInterval(liveCards[existingPorts[ep]].logTimer);clearInterval(liveCards[existingPorts[ep]].impTimer);";
+    j += "var cardEl=liveCards[existingPorts[ep]].contentEl.parentNode;cardEl.parentNode.removeChild(cardEl);";
+    j += "delete liveCards[existingPorts[ep]];}}";
+
+    // Add cards for newly running instances
+    j += "var container=document.getElementById('liveCards');";
+    j += "for(var ri=0;ri<running.length;ri++){";
+    j += "(function(inst){";
+    j += "var portKey=String(inst.port);";
+    j += "if(liveCards[portKey])return;";
+
+    // Build card element
+    j += "var card=document.createElement('div');card.className='live-card';";
+
+    // Header
+    j += "var hdr=document.createElement('div');hdr.className='live-card-hdr';";
+    j += "var portSpan=document.createElement('span');portSpan.className='port';portSpan.textContent=':'+inst.port;hdr.appendChild(portSpan);";
+    j += "var targetSpan=document.createElement('span');targetSpan.className='target';targetSpan.textContent=inst.target||'-';hdr.appendChild(targetSpan);";
+    j += "card.appendChild(hdr);";
+
+    // Sub-tabs
+    j += "var tabs=document.createElement('div');tabs.className='live-card-tabs';";
+    j += "var tabImp=document.createElement('button');tabImp.className='live-card-tab active';tabImp.textContent='Imp';";
+    j += "var tabLog=document.createElement('button');tabLog.className='live-card-tab';tabLog.textContent='Log';";
+    j += "tabs.appendChild(tabImp);tabs.appendChild(tabLog);card.appendChild(tabs);";
+
+    // Body
+    j += "var body=document.createElement('div');body.className='live-card-body';";
+    j += "card.appendChild(body);container.appendChild(card);";
+
+    // State object
+    j += "var state={lastLogLen:-1,lastImpLen:-1,subTab:'imp',logTimer:null,impTimer:null,contentEl:body};";
+    j += "liveCards[portKey]=state;";
+
+    // Tab switching
+    j += "tabImp.addEventListener('click',function(){state.subTab='imp';tabImp.className='live-card-tab active';tabLog.className='live-card-tab';pollCardImp();});";
+    j += "tabLog.addEventListener('click',function(){state.subTab='log';tabLog.className='live-card-tab active';tabImp.className='live-card-tab';pollCardLog();});";
+
+    // Poll functions
+    j += "function pollCardLog(){";
+    j += "if(state.subTab!=='log')return;";
+    j += "fetch('http://localhost:'+inst.port+'/api/bf/log').then(function(r){return r.json();}).then(function(arr){";
+    j += "if(arr.length!==state.lastLogLen){state.lastLogLen=arr.length;renderCardLog(body,arr);}";
+    j += "}).catch(function(){});}";
+
+    j += "function pollCardImp(){";
+    j += "if(state.subTab!=='imp')return;";
+    j += "fetch('http://localhost:'+inst.port+'/api/bf/improvements').then(function(r){return r.json();}).then(function(arr){";
+    j += "if(arr.length!==state.lastImpLen){state.lastImpLen=arr.length;renderCardImp(body,arr);}";
+    j += "}).catch(function(){});}";
+
+    // Start timers
+    j += "state.logTimer=setInterval(pollCardLog,2000);";
+    j += "state.impTimer=setInterval(pollCardImp,2000);";
+    j += "pollCardImp();";
+
+    j += "})(running[ri]);}";
+    j += "}";
+
+    // Render helpers for live cards
+    j += "function renderCardLog(el,arr){";
+    j += "while(el.firstChild)el.removeChild(el.firstChild);";
+    j += "for(var i=0;i<arr.length;i++){var e=arr[i];var div=document.createElement('div');div.className='log-entry';";
+    j += "var ts=document.createElement('span');ts.className='lt';ts.textContent='['+fmtSec(e.t)+']';";
+    j += "var msg=document.createElement('span');msg.className='lm';msg.textContent=e.msg;";
+    j += "div.appendChild(ts);div.appendChild(msg);el.appendChild(div);}el.scrollTop=el.scrollHeight;}";
+
+    j += "function renderCardImp(el,arr){";
+    j += "while(el.firstChild)el.removeChild(el.firstChild);";
+    j += "for(var i=arr.length-1;i>=0;i--){var e=arr[i];var div=document.createElement('div');div.className='log-entry';";
+    j += "var txt=document.createElement('span');txt.className='lm';txt.textContent='#'+(i+1)+' '+fmtSec(e.t)+' '+(e.eval||'')+' '+(e.details||'');";
+    j += "div.appendChild(txt);el.appendChild(div);}}";
+
+    // ---- Base Run Inputs ----
+
+    j += "document.getElementById('btnApplyInputs').addEventListener('click', function() {";
+    j += "var script = document.getElementById('inputScript').value;";
+    j += "if (!script.trim()) return;";
+    j += "var res = document.getElementById('inputResult');";
+    j += "res.textContent = 'Sending...';";
+    j += "res.style.color = '#8b949e';";
+    j += "fetch(apiBase + '/api/bf/apply-inputs', {method:'POST', body:script})";
+    j += ".then(function(r) { return r.json(); })";
+    j += ".then(function(d) {";
+    j += "if (d.ok) {";
+    j += "res.textContent = 'Applied ' + d.commands + ' commands';";
+    j += "res.style.color = '#3fb950';";
+    j += "} else {";
+    j += "res.textContent = 'Error: ' + (d.error || 'unknown');";
+    j += "res.style.color = '#f85149';";
+    j += "}";
+    j += "})";
+    j += ".catch(function() {";
+    j += "res.textContent = 'Request failed';";
+    j += "res.style.color = '#f85149';";
+    j += "});";
+    j += "});";
 
     // Initial load
     j += "setTimeout(loadSessionData,500);";
