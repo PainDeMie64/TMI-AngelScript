@@ -501,11 +501,12 @@ string HandlePostSetVar(const string &in body)
         }
     }
 
-    if (!found)
-        return "{\"ok\":false,\"error\":\"variable not found\"}";
-
     bool ok = false;
-    if (varType == VariableType::Double)
+    if (!found)
+    {
+        ok = SetVariable(name, value);
+    }
+    else if (varType == VariableType::Double)
     {
         double dval = Text::ParseFloat(value);
         ok = SetVariable(name, dval);
@@ -640,14 +641,19 @@ string HandlePostSetBatch(const string &in body)
                 }
             }
         }
-        if (!found) continue;
-
-        if (varType == VariableType::Double)
-            SetVariable(name, double(Text::ParseFloat(value)));
-        else if (varType == VariableType::Boolean)
-            SetVariable(name, value == "true" || value == "1");
+        if (found)
+        {
+            if (varType == VariableType::Double)
+                SetVariable(name, double(Text::ParseFloat(value)));
+            else if (varType == VariableType::Boolean)
+                SetVariable(name, value == "true" || value == "1");
+            else
+                SetVariable(name, value);
+        }
         else
+        {
             SetVariable(name, value);
+        }
         setCount++;
     }
     return "{\"ok\":true,\"count\":" + Text::FormatInt(setCount) + "}";
