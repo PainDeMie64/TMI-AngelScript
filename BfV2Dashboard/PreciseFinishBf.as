@@ -30,19 +30,6 @@ namespace PreciseFinishBf
                     PreciseFinish::Reset();
                     return resp;
                 }
-                if (simManager.PlayerInfo.RaceFinished && raceTime < bestTimeMsImprecise)
-                {
-                    if (GlobalConditionsMet(simManager))
-                    {
-                        resp.Decision = BFEvaluationDecision::Accept;
-                    }
-                    else
-                    {
-                        resp.Decision = BFEvaluationDecision::Reject;
-                    }
-                    PreciseFinish::Reset();
-                    return resp;
-                }
             }
         }
         bool targetReached = simManager.PlayerInfo.RaceFinished;
@@ -87,6 +74,19 @@ namespace PreciseFinishBf
                 resp.Decision = BFEvaluationDecision::Reject;
                 PreciseFinish::Reset();
                 return resp;
+            }
+            // Reject imprecise times in Initial phase too
+            if (bestTime != -1)
+            {
+                double scaledI = preciseTime * 10000.0;
+                double fracI = scaledI - int64(scaledI);
+                if (fracI < 0) fracI = -fracI;
+                if (fracI < 1e-5 || fracI > (1.0 - 1e-5))
+                {
+                    resp.Decision = BFEvaluationDecision::Reject;
+                    PreciseFinish::Reset();
+                    return resp;
+                }
             }
             if (bestTime != -1)
                 print("Precise finish time: " + Text::FormatFloat(preciseTime, "", 0, 9));
