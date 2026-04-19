@@ -1412,6 +1412,63 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             SetConsoleWindowTitle("BfV2 - " + current.title + " | Restarts: " + restartCount + " | Iterations: " + info.Iterations);
         }
     }
+    // Mid-BF hot-swap: re-resolve target and re-read input mod settings
+    string liveTargetId = GetVariableString("bf_target");
+    if (liveTargetId != current.identifier)
+    {
+        @current = @GetBruteforceTarget();
+        if (current is null)
+        {
+            SetVariable("bf_target", evaluations[0].identifier);
+            @current = @evaluations[0];
+        }
+        currentTarget = current.title;
+        if (current.onSimBegin !is null)
+            current.onSimBegin(simManager);
+        DashboardLog("Target switched to: " + currentTarget);
+    }
+    // Re-read input mod settings every second (covers Apply changes)
+    if (now - lastWindowTitleUpdateTime < 50)
+    {
+        int savedCount = int(GetVariableDouble("bf_input_mod_count"));
+        if (savedCount < 1) savedCount = 1;
+        while (int(g_inputModSettings.Length) < savedCount)
+        {
+            InputModificationSettings @s = InputModificationSettings();
+            g_inputModSettings.Add(s);
+        }
+        while (int(g_inputModSettings.Length) > savedCount)
+            g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
+        for (uint im = 0; im < g_inputModSettings.Length; im++)
+        {
+            string varSuffix = GetInputModVarSuffix(im);
+            InputModificationSettings @s = g_inputModSettings[im];
+            s.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
+            s.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
+            s.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
+            s.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
+            s.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
+            s.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+            s.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
+            s.maxInputsTime = ResolveMaxTime(s.maxInputsTime, int(simManager.EventsDuration));
+            s.algorithmIndex = GetInputModAlgorithmIndex(GetVariableString("bf_input_mod_algorithm" + varSuffix));
+        }
+        if (g_inputModSettings.Length > 0)
+        {
+            inputCount = g_inputModSettings[0].inputCount;
+            minInputsTime = g_inputModSettings[0].minInputsTime;
+            maxInputsTime = g_inputModSettings[0].maxInputsTime;
+            maxSteerDiff = g_inputModSettings[0].maxSteerDiff;
+            maxTimeDiff = g_inputModSettings[0].maxTimeDiff;
+            fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
+        }
+        leastMinInputsTime = 1000000000;
+        for (uint lm = 0; lm < g_inputModSettings.Length; lm++)
+        {
+            if (g_inputModSettings[lm].enabled && g_inputModSettings[lm].minInputsTime < leastMinInputsTime)
+                leastMinInputsTime = g_inputModSettings[lm].minInputsTime;
+        }
+    }
     int raceTime = simManager.RaceTime;
     if (current.type == CallbackType::FullControl)
     {
