@@ -682,7 +682,7 @@ string HandleApplyInputs(const string &in body)
     CommandList list;
     list.Content = body;
     list.Process(CommandListProcessOption::OnlyParse);
-    array<InputCommand>@ cmds = list.InputCommands;
+    const array<InputCommand>@ cmds = list.InputCommands;
     if (cmds is null || cmds.Length == 0)
         return "{\"ok\":false,\"error\":\"no valid inputs parsed\"}";
 
