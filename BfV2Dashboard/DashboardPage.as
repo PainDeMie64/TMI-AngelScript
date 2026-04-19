@@ -223,7 +223,6 @@ string BfDashCSS()
     c += ".inst-btn { background:#21262d; color:#8b949e; border:1px solid #30363d; padding:0.4rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem; }";
     c += ".inst-btn:hover { background:#30363d; }";
     c += ".inst-btn.active { background:#f0883e20; color:#f0883e; border-color:#f0883e40; }";
-    c += ".inst-single { display:none; }";
 
     c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
 
@@ -1048,7 +1047,7 @@ string BfDashJS_Sessions()
     j += "var activeSession='current',activeSubTab='imp',sessions=[];";
 
     // Current session log/improvements polling
-    j += "var lastLogLen=0,lastImpLen=0;";
+    j += "var lastLogLen=-1,lastImpLen=-1;";
     j += "function pollCurrentLog(){";
     j += "if(activeSession!=='current'||activeSubTab!=='log')return;";
     j += "fetch(apiBase+'/api/bf/log').then(function(r){return r.json();}).then(function(arr){";
