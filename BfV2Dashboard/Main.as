@@ -1,6 +1,6 @@
 const uint16 MASTER_PORT = 8489;
 const uint16 WORKER_PORT_START = 8490;
-const uint16 WORKER_PORT_END = 8499;
+const uint16 WORKER_PORT_END = 8520;
 
 bool isMaster = false;
 uint16 localPort = 0;
