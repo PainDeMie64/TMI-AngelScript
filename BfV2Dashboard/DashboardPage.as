@@ -660,7 +660,10 @@ string BfDashJS_Helpers()
     j += "lbInp.addEventListener('blur',function(){";
     j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
     j += "ss[scIdx].displayLower=parseFloat(this.value)||0;";
-    j += "ss[scIdx].valueLower=ss[scIdx].displayLower;";
+    j += "var grpIdx=Math.floor(scIdx/3);";
+    j += "if(grpIdx===1)ss[scIdx].valueLower=ss[scIdx].displayLower*Math.PI/180;";
+    j += "else if(grpIdx===2||grpIdx===3)ss[scIdx].valueLower=ss[scIdx].displayLower/3.6;";
+    j += "else ss[scIdx].valueLower=ss[scIdx].displayLower;";
     j += "var ser=geSerializeScalars(ss);";
     j += "es.finetuner_common_scalars=ser;";
     j += "setVar('finetuner_common_scalars',ser);});";
@@ -683,7 +686,10 @@ string BfDashJS_Helpers()
     j += "ubInp.addEventListener('blur',function(){";
     j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
     j += "ss[scIdx].displayUpper=parseFloat(this.value)||0;";
-    j += "ss[scIdx].valueUpper=ss[scIdx].displayUpper;";
+    j += "var grpIdx2=Math.floor(scIdx/3);";
+    j += "if(grpIdx2===1)ss[scIdx].valueUpper=ss[scIdx].displayUpper*Math.PI/180;";
+    j += "else if(grpIdx2===2||grpIdx2===3)ss[scIdx].valueUpper=ss[scIdx].displayUpper/3.6;";
+    j += "else ss[scIdx].valueUpper=ss[scIdx].displayUpper;";
     j += "var ser=geSerializeScalars(ss);";
     j += "es.finetuner_common_scalars=ser;";
     j += "setVar('finetuner_common_scalars',ser);});";
@@ -1165,7 +1171,7 @@ string BfDashJS_Settings()
     j += "var chkGrp=mkCheck('finetuner_target_grouped');c.appendChild(mkFieldRow('Grouped Target?',chkGrp));";
     j += "var grpOpts=[{value:'0',text:'Position'},{value:'1',text:'Rotation'},{value:'2',text:'Global Speed'},{value:'3',text:'Local Speed'},{value:'4',text:'Front Left Wheel'},{value:'5',text:'Front Right Wheel'},{value:'6',text:'Back Right Wheel'},{value:'7',text:'Back Left Wheel'}];";
     j += "c.appendChild(mkFieldRow('Target (Group)',mkSelect('finetuner_target_group',grpOpts)));";
-    j += "var sclOpts=[{value:'0',text:'X Position'},{value:'1',text:'Y Position'},{value:'2',text:'Z Position'},{value:'3',text:'Yaw'},{value:'4',text:'Pitch'},{value:'5',text:'Roll'},{value:'6',text:'Global X Speed'},{value:'7',text:'Global Y Speed'},{value:'8',text:'Global Z Speed'},{value:'9',text:'Local X Speed'},{value:'10',text:'Local Y Speed'},{value:'11',text:'Local Z Speed'},{value:'12',text:'X Front Left Wheel'},{value:'13',text:'Y Front Left Wheel'},{value:'14',text:'Z Front Left Wheel'},{value:'15',text:'X Front Right Wheel'},{value:'16',text:'Y Front Right Wheel'},{value:'17',text:'Z Front Right Wheel'},{value:'18',text:'X Back Right Wheel'},{value:'19',text:'Y Back Right Wheel'},{value:'20',text:'Z Back Right Wheel'},{value:'21',text:'X Back Left Wheel'},{value:'22',text:'Y Back Left Wheel'},{value:'23',text:'Z Back Left Wheel'}];";
+    j += "var sclOpts=[{value:'0',text:'X Position'},{value:'1',text:'Y Position'},{value:'2',text:'Z Position'},{value:'3',text:'Yaw'},{value:'4',text:'Pitch'},{value:'5',text:'Roll'},{value:'6',text:'Global X Speed'},{value:'7',text:'Global Y Speed'},{value:'8',text:'Global Z Speed'},{value:'9',text:'Local X Speed (Sideways)'},{value:'10',text:'Local Y Speed (Upwards)'},{value:'11',text:'Local Z Speed (Forwards)'},{value:'12',text:'X Front Left Wheel'},{value:'13',text:'Y Front Left Wheel'},{value:'14',text:'Z Front Left Wheel'},{value:'15',text:'X Front Right Wheel'},{value:'16',text:'Y Front Right Wheel'},{value:'17',text:'Z Front Right Wheel'},{value:'18',text:'X Back Right Wheel'},{value:'19',text:'Y Back Right Wheel'},{value:'20',text:'Z Back Right Wheel'},{value:'21',text:'X Back Left Wheel'},{value:'22',text:'Y Back Left Wheel'},{value:'23',text:'Z Back Left Wheel'}];";
     j += "c.appendChild(mkFieldRow('Target (Scalar)',mkSelect('finetuner_target_scalar',sclOpts)));";
     j += "c.appendChild(mkFieldRow('Target Towards',mkRange('finetuner_target_towards',-1,1,1)));";
     j += "c.appendChild(mkFieldRow('Target Value',mkNum('finetuner_target_value_display',null,null,0.1)));";
@@ -1230,25 +1236,39 @@ string BfDashJS_Settings()
 
     // nosepos_plus
     j += "if(t==='nosepos_plus'){";
-    j += "c.appendChild(mkFieldRow('Eval Time Min',mkTime('shweetz_eval_time_min')));";
-    j += "c.appendChild(mkFieldRow('Eval Time Max',mkTime('shweetz_eval_time_max')));";
+    j += "c.appendChild(mkFieldRow('Eval time min',mkTime('shweetz_eval_time_min')));";
+    j += "c.appendChild(mkFieldRow('Eval time max',mkTime('shweetz_eval_time_max')));";
     j += "c.appendChild(mkFieldRow('Target yaw (\\u00b0) (90 for left gs and uber, -90 for right)',mkNum('shweetz_yaw_deg',null,null,1)));";
-    j += "c.appendChild(mkFieldRow('Target pitch (\\u00b0) (85-90 nosepos, 0 gs, -25 uber)',mkNum('shweetz_pitch_deg',null,null,1)));";
+    j += "c.appendChild(mkFieldRow('Target pitch (\\u00b0) (85 to 90 for nosepos, 0 for gs, -25 for uber)',mkNum('shweetz_pitch_deg',null,null,1)));";
     j += "c.appendChild(mkFieldRow('Target roll (\\u00b0) (usually 0)',mkNum('shweetz_roll_deg',null,null,1)));";
-    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180');c.appendChild(mkFieldRow('Accept any yaw for nosepos',chkYaw));";
+    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180');c.appendChild(mkFieldRow('Accept any yaw for nosepos (uncheck for yaw bruteforce)',chkYaw));";
     j += "var chkNext=mkCheck('shweetz_next_eval_check');c.appendChild(mkFieldRow('Change eval after nosepos is good enough',chkNext));";
-    j += "var nextOpts=[{value:'Point',text:'Point'},{value:'Speed',text:'Speed'},{value:'Time',text:'Time'},{value:'Hold',text:'Hold'}];";
-    j += "c.appendChild(mkFieldRow('Next Eval Mode',mkSelect('shweetz_next_eval',nextOpts)));";
-    j += "c.appendChild(mkFieldRow('Target Point',mkVec3('shweetz_point',true),true));";
-    j += "c.appendChild(mkFieldRow('Max angle from ideal (\\u00b0)',mkNum('shweetz_angle_min_deg',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Min speed (km/h)',mkRange('shweetz_condition_speed',0,1000,1)));";
+    // Conditional block: only shown when next_eval_check is true (matching in-game order: angle first, then combo + point)
+    j += "var npCondDiv=document.createElement('div');npCondDiv.id='npCondBlock';c.appendChild(npCondDiv);";
+    j += "c.appendChild(mkFieldRow('Min speed (km/h)',mkRange('shweetz_condition_speed',0,1000,0.1)));";
     j += "c.appendChild(mkFieldRow('Min CP collected',mkNum('shweetz_min_cp',0,null,1)));";
     j += "c.appendChild(mkFieldRow('Min wheels on ground',mkRange('shweetz_min_wheels_on_ground',0,4,1)));";
     j += "c.appendChild(mkFieldRow('Gear (0 to disable)',mkRange('shweetz_gear',-1,6,1)));";
     j += "c.appendChild(mkFieldRow('Trigger index (0 to disable)',mkNum('shweetz_trigger_index',0,null,1)));";
     j += "c.appendChild(mkFieldRow('Anti-Trigger index (0 to disable)',mkNum('shweetz_antitrigger_index',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Debug tick (0 to disable)',mkTime('shweetz_debug')));";
+    j += "c.appendChild(mkFieldRow('Tick to print if conditions are met (0 to disable)',mkTime('shweetz_debug')));";
     j += "return;}";
+
+    // NoseposPlus conditional block updater (called from updateEvalValues)
+    j += "function updateNpCondBlock(es){";
+    j += "var blk=document.getElementById('npCondBlock');if(!blk)return;";
+    j += "while(blk.firstChild)blk.removeChild(blk.firstChild);";
+    j += "var nextCheck=es['shweetz_next_eval_check'];";
+    j += "if(!nextCheck)return;";
+    j += "blk.appendChild(mkFieldRow('Max angle from ideal (\\u00b0)',mkNum('shweetz_angle_min_deg',0,null,1)));";
+    j += "var nextOpts=[{value:'Point',text:'Point'},{value:'Speed',text:'Speed'},{value:'Time',text:'Time'},{value:'Hold',text:'Hold'}];";
+    j += "blk.appendChild(mkFieldRow('Next eval',mkSelect('shweetz_next_eval',nextOpts)));";
+    j += "var nextMode=es['shweetz_next_eval']||'Point';";
+    j += "var nSel=blk.querySelector('[data-var=\"shweetz_next_eval\"]');if(nSel)nSel.value=nextMode;";
+    j += "if(nextMode==='Point'){";
+    j += "blk.appendChild(mkFieldRow('Point',mkVec3('shweetz_point',true),true));}";
+    j += "var angleEl=blk.querySelector('[data-var=\"shweetz_angle_min_deg\"]');if(angleEl&&es['shweetz_angle_min_deg']!==undefined)angleEl.value=es['shweetz_angle_min_deg'];";
+    j += "}";
 
     j += "}";
 
@@ -1277,6 +1297,8 @@ string BfDashJS_Settings()
     j += "if(document.getElementById('geDetail')){geLastEs=es;if(!document.getElementById('geDetail').contains(document.activeElement)){renderGroupEditor(es);}}";
     // Refresh condition editor if present and no condition editor element is focused
     j += "if(document.getElementById('ceDetail')){ceLastEs=es;if(!document.getElementById('ceDetail').contains(document.activeElement)){renderConditionEditor(es);}}";
+    // Refresh NoseposPlus conditional block
+    j += "if(document.getElementById('npCondBlock')){updateNpCondBlock(es);}";
     j += "}";
 
     // Build slot UI
