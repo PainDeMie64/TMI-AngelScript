@@ -454,9 +454,15 @@ string HandleGetAllSettings(const string &in body)
         json += "," + JsonInt("finetuner_target_group", int(GetVariableDouble("finetuner_target_group")));
         json += "," + JsonInt("finetuner_target_towards", int(GetVariableDouble("finetuner_target_towards")));
         json += "," + JsonFloat("finetuner_target_value", float(GetVariableDouble("finetuner_target_value")));
+        json += "," + JsonFloat("finetuner_target_value_display", float(GetVariableDouble("finetuner_target_value_display")));
         vec3 ftVec = Text::ParseVec3(GetVariableString("finetuner_target_vec3"));
         json += "," + JsonVec3("finetuner_target_vec3", ftVec);
+        vec3 ftVecDisp = Text::ParseVec3(GetVariableString("finetuner_target_vec3_display"));
+        json += "," + JsonVec3("finetuner_target_vec3_display", ftVecDisp);
         json += "," + JsonBool("finetuner_print_by_component", GetVariableBool("finetuner_print_by_component"));
+        json += "," + JsonString("finetuner_common_groups", GetVariableString("finetuner_common_groups"));
+        json += "," + JsonString("finetuner_common_scalars", GetVariableString("finetuner_common_scalars"));
+        json += "," + JsonString("finetuner_common_conditions", GetVariableString("finetuner_common_conditions"));
     }
     else if (targetId == "nosepos_plus")
     {

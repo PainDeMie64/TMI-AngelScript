@@ -281,6 +281,41 @@ string BfDashCSS()
     c += ".disabled-overlay span{color:#8b949e;font-size:0.9rem;padding:1rem;text-align:center}";
     c += ".input-result { font-size:0.8rem; font-family:monospace; }";
 
+    // Group Editor
+    c += ".ge-wrap{grid-column:1/-1;border:1px solid #30363d;border-radius:6px;margin-top:0.4rem;background:#0d1117}";
+    c += ".ge-title{font-size:0.85rem;font-weight:600;color:#f0883e;padding:0.5rem 0.7rem;border-bottom:1px solid #21262d}";
+    c += ".ge-body{padding:0.5rem 0.7rem}";
+    c += ".ge-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;flex-wrap:wrap}";
+    c += ".ge-row label{color:#8b949e;font-size:0.75rem;text-transform:uppercase;min-width:5rem}";
+    c += ".ge-row select,.ge-row input[type=number]{background:#161b22;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.25rem 0.4rem;font-size:0.8rem}";
+    c += ".ge-row select{min-width:10rem}";
+    c += ".ge-row input[type=number]{width:6rem}";
+    c += ".ge-row input[type=checkbox]{width:1rem;height:1rem;accent-color:#f0883e}";
+    c += ".ge-scalar{border:1px solid #21262d;border-radius:4px;padding:0.4rem 0.6rem;margin-top:0.3rem}";
+    c += ".ge-scalar-name{font-size:0.8rem;font-weight:600;color:#c9d1d9;margin-bottom:0.3rem}";
+    c += ".ge-bound{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.2rem}";
+    c += ".ge-bound label{color:#8b949e;font-size:0.7rem;min-width:4rem}";
+    c += ".ge-hint{color:#8b949e;font-size:0.7rem;font-style:italic;padding:0.3rem 0}";
+
+    // Condition Editor
+    c += ".ce-wrap{grid-column:1/-1;border:1px solid #30363d;border-radius:6px;margin-top:0.4rem;background:#0d1117}";
+    c += ".ce-title{font-size:0.85rem;font-weight:600;color:#f0883e;padding:0.5rem 0.7rem;border-bottom:1px solid #21262d}";
+    c += ".ce-body{padding:0.5rem 0.7rem}";
+    c += ".ce-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;flex-wrap:wrap}";
+    c += ".ce-row label{color:#8b949e;font-size:0.75rem;text-transform:uppercase;min-width:5rem}";
+    c += ".ce-row select,.ce-row input[type=number]{background:#161b22;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.25rem 0.4rem;font-size:0.8rem}";
+    c += ".ce-row select{min-width:10rem}";
+    c += ".ce-row input[type=number]{width:6rem}";
+    c += ".ce-row input[type=checkbox]{width:1rem;height:1rem;accent-color:#f0883e}";
+    c += ".ce-fields{border:1px solid #21262d;border-radius:4px;padding:0.4rem 0.6rem;margin-top:0.3rem}";
+    c += ".ce-hint{color:#8b949e;font-size:0.7rem;font-style:italic;padding:0.3rem 0}";
+    c += ".ce-range-row{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.2rem}";
+    c += ".ce-range-row label{color:#8b949e;font-size:0.7rem;min-width:3rem}";
+    c += ".ce-range-row input[type=range]{flex:1;min-width:4rem}";
+    c += ".ce-range-row .ce-range-val{font-size:0.8rem;color:#c9d1d9;min-width:2rem;text-align:right;font-family:monospace}";
+    c += ".ce-reset{background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.7rem;cursor:pointer;margin-left:auto}";
+    c += ".ce-reset:hover{background:#f8514920;color:#f85149;border-color:#f8514940}";
+
     c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
 
     return c;
@@ -520,6 +555,318 @@ string BfDashJS_Helpers()
     j += "setVar(varName,d.vehiclePosition.x+' '+d.vehiclePosition.y+' '+d.vehiclePosition.z);}});});";
     j += "wrap.appendChild(btn);}";
     j += "return wrap;}";
+
+    // ---- Group Editor globals ----
+    // Constants: group and scalar names (must match FinetunerBf.as exactly)
+    j += "var GE_GROUPS=['Position','Rotation','Global Speed','Local Speed',";
+    j += "'Front Left Wheel','Front Right Wheel','Back Right Wheel','Back Left Wheel'];";
+    j += "var GE_SCALARS=['X Position','Y Position','Z Position',";
+    j += "'Yaw','Pitch','Roll',";
+    j += "'Global X Speed','Global Y Speed','Global Z Speed',";
+    j += "'Local X Speed (Sideways)','Local Y Speed (Upwards)','Local Z Speed (Forwards)',";
+    j += "'X Front Left Wheel','Y Front Left Wheel','Z Front Left Wheel',";
+    j += "'X Front Right Wheel','Y Front Right Wheel','Z Front Right Wheel',";
+    j += "'X Back Right Wheel','Y Back Right Wheel','Z Back Right Wheel',";
+    j += "'X Back Left Wheel','Y Back Left Wheel','Z Back Left Wheel'];";
+
+    // Parse groups: "v2.0.0|Name:0;Name:1;..." -> [{name,active}]
+    j += "function geParseGroups(s){";
+    j += "var result=[];for(var i=0;i<GE_GROUPS.length;i++)result.push({name:GE_GROUPS[i],active:false});";
+    j += "if(!s||s.indexOf('|')===-1)return result;";
+    j += "var parts=s.split('|');if(parts.length!==2)return result;";
+    j += "var entries=parts[1].split(';');";
+    j += "for(var i=0;i<entries.length;i++){";
+    j += "var kv=entries[i].split(':');if(kv.length!==2)continue;";
+    j += "var idx=GE_GROUPS.indexOf(kv[0]);if(idx===-1)continue;";
+    j += "result[idx].active=kv[1]==='1';}";
+    j += "return result;}";
+
+    // Serialize groups: [{name,active}] -> "v2.0.0|Name:0;Name:1;..."
+    j += "function geSerializeGroups(groups){";
+    j += "var parts=[];for(var i=0;i<groups.length;i++){";
+    j += "parts.push(groups[i].name+':'+(groups[i].active?'1':'0'));}";
+    j += "return 'v2.0.0|'+parts.join(';');}";
+
+    // Parse scalars: "v2.0.0|Name:lower,upper,valLow,valUp,dispLow,dispUp;..."
+    j += "function geParseScalars(s){";
+    j += "var result=[];for(var i=0;i<GE_SCALARS.length;i++)result.push({name:GE_SCALARS[i],lower:false,upper:false,valueLower:0,valueUpper:0,displayLower:0,displayUpper:0});";
+    j += "if(!s||s.indexOf('|')===-1)return result;";
+    j += "var parts=s.split('|');if(parts.length!==2)return result;";
+    j += "var entries=parts[1].split(';');";
+    j += "for(var i=0;i<entries.length;i++){";
+    j += "var kv=entries[i].split(':');if(kv.length!==2)continue;";
+    j += "var idx=GE_SCALARS.indexOf(kv[0]);if(idx===-1)continue;";
+    j += "var vals=kv[1].split(',');if(vals.length!==6)continue;";
+    j += "result[idx].lower=vals[0]==='1';";
+    j += "result[idx].upper=vals[1]==='1';";
+    j += "result[idx].valueLower=parseFloat(vals[2])||0;";
+    j += "result[idx].valueUpper=parseFloat(vals[3])||0;";
+    j += "result[idx].displayLower=parseFloat(vals[4])||0;";
+    j += "result[idx].displayUpper=parseFloat(vals[5])||0;}";
+    j += "return result;}";
+
+    // Serialize scalars
+    j += "function geSerializeScalars(scalars){";
+    j += "var parts=[];for(var i=0;i<scalars.length;i++){var sc=scalars[i];";
+    j += "parts.push(sc.name+':'+(sc.lower?'1':'0')+','+(sc.upper?'1':'0')+','+sc.valueLower+','+sc.valueUpper+','+sc.displayLower+','+sc.displayUpper);}";
+    j += "return 'v2.0.0|'+parts.join(';');}";
+
+    // Render the group editor detail panel for the selected group
+    j += "function renderGroupEditor(es){";
+    j += "var detail=document.getElementById('geDetail');if(!detail)return;";
+    j += "while(detail.firstChild)detail.removeChild(detail.firstChild);";
+    j += "var sel=document.getElementById('geGroupSel');if(!sel)return;";
+    j += "var gi=parseInt(sel.value,10);if(gi<0)return;";
+    j += "var grpStr=es.finetuner_common_groups||'';";
+    j += "var sclStr=es.finetuner_common_scalars||'';";
+    j += "var groups=geParseGroups(grpStr);";
+    j += "var scalars=geParseScalars(sclStr);";
+    j += "var grp=groups[gi];";
+
+    // Group active checkbox
+    j += "var gaRow=document.createElement('div');gaRow.className='ge-row';";
+    j += "var gaLabel=document.createElement('label');gaLabel.textContent='Active';gaRow.appendChild(gaLabel);";
+    j += "var gaCb=document.createElement('input');gaCb.type='checkbox';gaCb.checked=grp.active;";
+    j += "gaCb.addEventListener('change',function(){";
+    j += "var gs=geParseGroups(es.finetuner_common_groups||'');";
+    j += "gs[gi].active=this.checked;";
+    j += "var ser=geSerializeGroups(gs);";
+    j += "es.finetuner_common_groups=ser;";
+    j += "setVar('finetuner_common_groups',ser);});";
+    j += "gaRow.appendChild(gaCb);detail.appendChild(gaRow);";
+
+    // Scalars for this group (3 per group, at indices gi*3 .. gi*3+2)
+    j += "for(var si=0;si<3;si++){";
+    j += "(function(si){";
+    j += "var scIdx=gi*3+si;";
+    j += "var sc=scalars[scIdx];";
+    j += "var scDiv=document.createElement('div');scDiv.className='ge-scalar';";
+    j += "var scName=document.createElement('div');scName.className='ge-scalar-name';scName.textContent=GE_SCALARS[scIdx];";
+    j += "scDiv.appendChild(scName);";
+
+    // Lower bound row
+    j += "var lbRow=document.createElement('div');lbRow.className='ge-bound';";
+    j += "var lbCb=document.createElement('input');lbCb.type='checkbox';lbCb.checked=sc.lower;";
+    j += "var lbLabel=document.createElement('label');lbLabel.textContent='Lower';";
+    j += "var lbInp=document.createElement('input');lbInp.type='number';lbInp.step='0.001';lbInp.value=sc.displayLower;";
+    j += "lbInp.disabled=!sc.lower;";
+    j += "lbCb.addEventListener('change',function(){";
+    j += "lbInp.disabled=!this.checked;";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].lower=this.checked;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "lbInp.addEventListener('blur',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].displayLower=parseFloat(this.value)||0;";
+    j += "ss[scIdx].valueLower=ss[scIdx].displayLower;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "lbRow.appendChild(lbCb);lbRow.appendChild(lbLabel);lbRow.appendChild(lbInp);";
+    j += "scDiv.appendChild(lbRow);";
+
+    // Upper bound row
+    j += "var ubRow=document.createElement('div');ubRow.className='ge-bound';";
+    j += "var ubCb=document.createElement('input');ubCb.type='checkbox';ubCb.checked=sc.upper;";
+    j += "var ubLabel=document.createElement('label');ubLabel.textContent='Upper';";
+    j += "var ubInp=document.createElement('input');ubInp.type='number';ubInp.step='0.001';ubInp.value=sc.displayUpper;";
+    j += "ubInp.disabled=!sc.upper;";
+    j += "ubCb.addEventListener('change',function(){";
+    j += "ubInp.disabled=!this.checked;";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].upper=this.checked;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "ubInp.addEventListener('blur',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].displayUpper=parseFloat(this.value)||0;";
+    j += "ss[scIdx].valueUpper=ss[scIdx].displayUpper;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "ubRow.appendChild(ubCb);ubRow.appendChild(ubLabel);ubRow.appendChild(ubInp);";
+    j += "scDiv.appendChild(ubRow);";
+
+    j += "detail.appendChild(scDiv);";
+    j += "})(si);}";
+    j += "}";
+
+    // Store the latest evalSettings ref for group/condition editor refresh from updateEvalValues
+    j += "var geLastEs=null;";
+    j += "var ceLastEs=null;";
+
+    // ---- Condition Editor globals ----
+    // Constants: condition names (must match FinetunerBf.as ConditionKind enum exactly)
+    j += "var CE_CONDS=['Minimum Real Speed','Freewheeling','Sliding','Wheel Touching Wall','Wheel Contacts',";
+    j += "'Checkpoints','RPM','Gear','Rear Gear','Glitching'];";
+
+    // Parse conditions string: "v2.0.0|Name:active,value,valueMin,valueMax,display,displayMin,displayMax;..."
+    j += "function ceParseConditions(s){";
+    j += "var result=[];for(var i=0;i<CE_CONDS.length;i++)result.push({name:CE_CONDS[i],active:false,value:0,valueMin:0,valueMax:0,display:0,displayMin:0,displayMax:0});";
+    j += "if(!s||s.indexOf('|')===-1)return result;";
+    j += "var parts=s.split('|');if(parts.length!==2)return result;";
+    j += "var entries=parts[1].split(';');";
+    j += "for(var i=0;i<entries.length;i++){";
+    j += "var kv=entries[i].split(':');if(kv.length!==2)continue;";
+    j += "var idx=CE_CONDS.indexOf(kv[0]);if(idx===-1)continue;";
+    j += "var vals=kv[1].split(',');if(vals.length!==7)continue;";
+    j += "result[idx].active=vals[0]==='1';";
+    j += "result[idx].value=parseFloat(vals[1])||0;";
+    j += "result[idx].valueMin=parseFloat(vals[2])||0;";
+    j += "result[idx].valueMax=parseFloat(vals[3])||0;";
+    j += "result[idx].display=parseFloat(vals[4])||0;";
+    j += "result[idx].displayMin=parseFloat(vals[5])||0;";
+    j += "result[idx].displayMax=parseFloat(vals[6])||0;}";
+    j += "return result;}";
+
+    // Serialize conditions back: "v2.0.0|Name:active,value,valueMin,valueMax,display,displayMin,displayMax;..."
+    j += "function ceSerializeConditions(conds){";
+    j += "var parts=[];for(var i=0;i<conds.length;i++){var cd=conds[i];";
+    j += "parts.push(cd.name+':'+(cd.active?'1':'0')+','+cd.value+','+cd.valueMin+','+cd.valueMax+','+cd.display+','+cd.displayMin+','+cd.displayMax);}";
+    j += "return 'v2.0.0|'+parts.join(';');}";
+
+    // Helper: re-parse conditions, apply a mutation, serialize and send
+    j += "function ceSave(es,ci,mutate){";
+    j += "var conds=ceParseConditions(es.finetuner_common_conditions||'');";
+    j += "mutate(conds[ci]);";
+    j += "var ser=ceSerializeConditions(conds);";
+    j += "es.finetuner_common_conditions=ser;";
+    j += "setVar('finetuner_common_conditions',ser);}";
+
+    // Helper: create a labeled range slider row for condition editor
+    j += "function ceMkRange(labelText,min,max,step,initVal,onChange){";
+    j += "var row=document.createElement('div');row.className='ce-range-row';";
+    j += "var lb=document.createElement('label');lb.textContent=labelText;row.appendChild(lb);";
+    j += "var inp=document.createElement('input');inp.type='range';inp.min=min;inp.max=max;inp.step=step||'1';inp.value=initVal;";
+    j += "var sp=document.createElement('span');sp.className='ce-range-val';sp.textContent=String(initVal);";
+    j += "inp.addEventListener('input',function(){sp.textContent=this.value;});";
+    j += "inp.addEventListener('change',function(){onChange(parseInt(this.value,10));});";
+    j += "row.appendChild(inp);row.appendChild(sp);return row;}";
+
+    // Render the condition editor detail panel for the selected condition
+    j += "function renderConditionEditor(es){";
+    j += "var detail=document.getElementById('ceDetail');if(!detail)return;";
+    j += "while(detail.firstChild)detail.removeChild(detail.firstChild);";
+    j += "var sel=document.getElementById('ceCondSel');if(!sel)return;";
+    j += "var ci=parseInt(sel.value,10);if(ci<0)return;";
+    j += "var condStr=es.finetuner_common_conditions||'';";
+    j += "var conds=ceParseConditions(condStr);";
+    j += "var cond=conds[ci];";
+
+    // Active checkbox + Reset button row
+    j += "var actRow=document.createElement('div');actRow.className='ce-row';";
+    j += "var actLabel=document.createElement('label');actLabel.textContent='Active';actRow.appendChild(actLabel);";
+    j += "var actCb=document.createElement('input');actCb.type='checkbox';actCb.checked=cond.active;";
+    j += "actCb.addEventListener('change',function(){var chk=this.checked;ceSave(es,ci,function(cd){cd.active=chk;});});";
+    j += "actRow.appendChild(actCb);";
+    j += "var rstBtn=document.createElement('button');rstBtn.className='ce-reset';rstBtn.textContent='Reset';";
+    j += "rstBtn.addEventListener('click',function(){ceSave(es,ci,function(cd){cd.active=false;cd.value=0;cd.valueMin=0;cd.valueMax=0;cd.display=0;cd.displayMin=0;cd.displayMax=0;});renderConditionEditor(es);});";
+    j += "actRow.appendChild(rstBtn);";
+    j += "detail.appendChild(actRow);";
+
+    // Condition-specific fields container
+    j += "var fields=document.createElement('div');fields.className='ce-fields';";
+
+    // Kind 0: MIN_REAL_SPEED - float input (display km/h, value = display / 3.6)
+    j += "if(ci===0){";
+    j += "var fr=document.createElement('div');fr.className='ce-row';";
+    j += "var fl=document.createElement('label');fl.textContent='Min Speed (km/h)';fr.appendChild(fl);";
+    j += "var fi=document.createElement('input');fi.type='number';fi.step='0.1';fi.value=cond.display;";
+    j += "fi.addEventListener('blur',function(){var v=parseFloat(this.value)||0;ceSave(es,ci,function(cd){cd.display=v;cd.value=v/3.6;});});";
+    j += "fr.appendChild(fi);fields.appendChild(fr);";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "ht.textContent='The car MUST have a real speed of at least '+cond.display+' km/h in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kinds 1,2,3,9: checkbox (FREEWHEELING, SLIDING, WHEEL_TOUCHING, GLITCHING)
+    j += "if(ci===1||ci===2||ci===3||ci===9){";
+    j += "var whatMap={1:'be free-wheeled',2:'be sliding',3:'have wheel(s) crashing into a wall',9:'be glitching'};";
+    j += "var cr=document.createElement('div');cr.className='ce-row';";
+    j += "var cl=document.createElement('label');cl.textContent='Required';cr.appendChild(cl);";
+    j += "var ccb=document.createElement('input');ccb.type='checkbox';ccb.checked=cond.display!==0;";
+    j += "ccb.addEventListener('change',function(){var v=this.checked?1:0;ceSave(es,ci,function(cd){cd.display=v;cd.value=v;});";
+    j += "var htEl=fields.querySelector('.ce-hint');if(htEl)htEl.textContent='The car MUST'+(v?' ':' NOT ')+whatMap[ci]+' in the eval timeframe.';});";
+    j += "cr.appendChild(ccb);fields.appendChild(cr);";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "ht.textContent='The car MUST'+(cond.display!==0?' ':' NOT ')+whatMap[ci]+' in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 4: WHEEL_CONTACTS - two range sliders (int 0-4)
+    j += "if(ci===4){";
+    j += "fields.appendChild(ceMkRange('Min',0,4,'1',Math.round(cond.displayMin),function(v){ceSave(es,ci,function(cd){";
+    j += "var mx=Math.round(cd.displayMax);if(v>mx){cd.displayMin=mx;cd.displayMax=v;}else{cd.displayMin=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "fields.appendChild(ceMkRange('Max',0,4,'1',Math.round(cond.displayMax),function(v){ceSave(es,ci,function(cd){";
+    j += "var mn=Math.round(cd.displayMin);if(v<mn){cd.displayMax=mn;cd.displayMin=v;}else{cd.displayMax=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=Math.round(cond.displayMin);var mx=Math.round(cond.displayMax);";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' wheels contacting the ground in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 5: CHECKPOINTS - int input (value = display)
+    j += "if(ci===5){";
+    j += "var fr=document.createElement('div');fr.className='ce-row';";
+    j += "var fl=document.createElement('label');fl.textContent='Checkpoints';fr.appendChild(fl);";
+    j += "var fi=document.createElement('input');fi.type='number';fi.step='1';fi.min='0';fi.value=Math.round(cond.display);";
+    j += "fi.addEventListener('blur',function(){var v=parseInt(this.value,10)||0;ceSave(es,ci,function(cd){cd.display=v;cd.value=v;});});";
+    j += "fr.appendChild(fi);fields.appendChild(fr);";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "ht.textContent='The car MUST have exactly '+Math.round(cond.display)+' checkpoints in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 6: RPM - two float inputs (min/max)
+    j += "if(ci===6){";
+    j += "var mrMin=document.createElement('div');mrMin.className='ce-row';";
+    j += "var mlMin=document.createElement('label');mlMin.textContent='Min RPM';mrMin.appendChild(mlMin);";
+    j += "var miMin=document.createElement('input');miMin.type='number';miMin.step='1';miMin.value=cond.displayMin;";
+    j += "mrMin.appendChild(miMin);fields.appendChild(mrMin);";
+    j += "var mrMax=document.createElement('div');mrMax.className='ce-row';";
+    j += "var mlMax=document.createElement('label');mlMax.textContent='Max RPM';mrMax.appendChild(mlMax);";
+    j += "var miMax=document.createElement('input');miMax.type='number';miMax.step='1';miMax.value=cond.displayMax;";
+    j += "mrMax.appendChild(miMax);fields.appendChild(mrMax);";
+    j += "miMin.addEventListener('blur',function(){var vn=parseFloat(miMin.value)||0;var vx=parseFloat(miMax.value)||0;";
+    j += "var lo=Math.min(vn,vx);var hi=Math.max(vn,vx);miMin.value=lo;miMax.value=hi;";
+    j += "ceSave(es,ci,function(cd){cd.displayMin=lo;cd.displayMax=hi;cd.valueMin=lo;cd.valueMax=hi;});});";
+    j += "miMax.addEventListener('blur',function(){var vn=parseFloat(miMin.value)||0;var vx=parseFloat(miMax.value)||0;";
+    j += "var lo=Math.min(vn,vx);var hi=Math.max(vn,vx);miMin.value=lo;miMax.value=hi;";
+    j += "ceSave(es,ci,function(cd){cd.displayMin=lo;cd.displayMax=hi;cd.valueMin=lo;cd.valueMax=hi;});});";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=cond.displayMin;var mx=cond.displayMax;";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' RPM in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 7: GEAR - two range sliders (int 0-5)
+    j += "if(ci===7){";
+    j += "fields.appendChild(ceMkRange('Min',0,5,'1',Math.round(cond.displayMin),function(v){ceSave(es,ci,function(cd){";
+    j += "var mx=Math.round(cd.displayMax);if(v>mx){cd.displayMin=mx;cd.displayMax=v;}else{cd.displayMin=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "fields.appendChild(ceMkRange('Max',0,5,'1',Math.round(cond.displayMax),function(v){ceSave(es,ci,function(cd){";
+    j += "var mn=Math.round(cd.displayMin);if(v<mn){cd.displayMax=mn;cd.displayMin=v;}else{cd.displayMax=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=Math.round(cond.displayMin);var mx=Math.round(cond.displayMax);";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' gears in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 8: REAR_GEAR - two range sliders (int 0-1)
+    j += "if(ci===8){";
+    j += "fields.appendChild(ceMkRange('Min',0,1,'1',Math.round(cond.displayMin),function(v){ceSave(es,ci,function(cd){";
+    j += "var mx=Math.round(cd.displayMax);if(v>mx){cd.displayMin=mx;cd.displayMax=v;}else{cd.displayMin=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "fields.appendChild(ceMkRange('Max',0,1,'1',Math.round(cond.displayMax),function(v){ceSave(es,ci,function(cd){";
+    j += "var mn=Math.round(cd.displayMin);if(v<mn){cd.displayMax=mn;cd.displayMin=v;}else{cd.displayMax=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=Math.round(cond.displayMin);var mx=Math.round(cond.displayMax);";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' rear gears in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    j += "detail.appendChild(fields);";
+    j += "}"; // end renderConditionEditor
 
     return j;
 }
@@ -813,37 +1160,94 @@ string BfDashJS_Settings()
 
     // finetuner
     j += "if(t==='finetuner'){";
-    j += "c.appendChild(mkFieldRow('Eval From',mkTime('finetuner_eval_from')));";
-    j += "c.appendChild(mkFieldRow('Eval To',mkTime('finetuner_eval_to')));";
-    j += "var chkGrp=mkCheck('finetuner_target_grouped');c.appendChild(mkFieldRow('Target Grouped',chkGrp));";
-    j += "c.appendChild(mkFieldRow('Target Group',mkNum('finetuner_target_group',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Target Scalar',mkNum('finetuner_target_scalar',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Evaluate From',mkTime('finetuner_eval_from')));";
+    j += "c.appendChild(mkFieldRow('Evaluate To',mkTime('finetuner_eval_to')));";
+    j += "var chkGrp=mkCheck('finetuner_target_grouped');c.appendChild(mkFieldRow('Grouped Target?',chkGrp));";
+    j += "var grpOpts=[{value:'0',text:'Position'},{value:'1',text:'Rotation'},{value:'2',text:'Global Speed'},{value:'3',text:'Local Speed'},{value:'4',text:'Front Left Wheel'},{value:'5',text:'Front Right Wheel'},{value:'6',text:'Back Right Wheel'},{value:'7',text:'Back Left Wheel'}];";
+    j += "c.appendChild(mkFieldRow('Target (Group)',mkSelect('finetuner_target_group',grpOpts)));";
+    j += "var sclOpts=[{value:'0',text:'X Position'},{value:'1',text:'Y Position'},{value:'2',text:'Z Position'},{value:'3',text:'Yaw'},{value:'4',text:'Pitch'},{value:'5',text:'Roll'},{value:'6',text:'Global X Speed'},{value:'7',text:'Global Y Speed'},{value:'8',text:'Global Z Speed'},{value:'9',text:'Local X Speed'},{value:'10',text:'Local Y Speed'},{value:'11',text:'Local Z Speed'},{value:'12',text:'X Front Left Wheel'},{value:'13',text:'Y Front Left Wheel'},{value:'14',text:'Z Front Left Wheel'},{value:'15',text:'X Front Right Wheel'},{value:'16',text:'Y Front Right Wheel'},{value:'17',text:'Z Front Right Wheel'},{value:'18',text:'X Back Right Wheel'},{value:'19',text:'Y Back Right Wheel'},{value:'20',text:'Z Back Right Wheel'},{value:'21',text:'X Back Left Wheel'},{value:'22',text:'Y Back Left Wheel'},{value:'23',text:'Z Back Left Wheel'}];";
+    j += "c.appendChild(mkFieldRow('Target (Scalar)',mkSelect('finetuner_target_scalar',sclOpts)));";
     j += "c.appendChild(mkFieldRow('Target Towards',mkRange('finetuner_target_towards',-1,1,1)));";
-    j += "c.appendChild(mkFieldRow('Target Value',mkNum('finetuner_target_value',null,null,0.1)));";
-    j += "c.appendChild(mkFieldRow('Target Vec3',mkVec3('finetuner_target_vec3',true),true));";
-    j += "var chkPrint=mkCheck('finetuner_print_by_component');c.appendChild(mkFieldRow('Print By Component',chkPrint));";
+    j += "c.appendChild(mkFieldRow('Target Value',mkNum('finetuner_target_value_display',null,null,0.1)));";
+    j += "c.appendChild(mkFieldRow('Target Values',mkVec3('finetuner_target_vec3_display',true),true));";
+    j += "var chkPrint=mkCheck('finetuner_print_by_component');c.appendChild(mkFieldRow('Print Group values by component?',chkPrint));";
+
+    // ---- Group Editor DOM ----
+    j += "var geWrap=document.createElement('div');geWrap.className='ge-wrap';";
+    j += "var geTitle=document.createElement('div');geTitle.className='ge-title';geTitle.textContent='Group Editor';";
+    j += "geWrap.appendChild(geTitle);";
+    j += "var geBody=document.createElement('div');geBody.className='ge-body';";
+    j += "geWrap.appendChild(geBody);";
+    j += "c.appendChild(geWrap);";
+
+    // Group selector row
+    j += "var geSelRow=document.createElement('div');geSelRow.className='ge-row';";
+    j += "var geSelLabel=document.createElement('label');geSelLabel.textContent='Group';geSelRow.appendChild(geSelLabel);";
+    j += "var geSel=document.createElement('select');geSel.id='geGroupSel';";
+    j += "var geHideOpt=document.createElement('option');geHideOpt.value='-1';geHideOpt.textContent='<Hide>';geSel.appendChild(geHideOpt);";
+    j += "for(var gi=0;gi<GE_GROUPS.length;gi++){var go=document.createElement('option');go.value=String(gi);go.textContent=GE_GROUPS[gi];geSel.appendChild(go);}";
+    j += "geSelRow.appendChild(geSel);";
+    j += "geBody.appendChild(geSelRow);";
+
+    // Detail container
+    j += "var geDetail=document.createElement('div');geDetail.id='geDetail';geBody.appendChild(geDetail);";
+
+    // Wire up select change and store es ref for polling refresh
+    j += "geLastEs=es;";
+    j += "geSel.addEventListener('change',function(){renderGroupEditor(geLastEs);});";
+
+    // Initial render
+    j += "renderGroupEditor(es);";
+
+    // ---- Condition Editor DOM ----
+    j += "var ceWrap=document.createElement('div');ceWrap.className='ce-wrap';";
+    j += "var ceTitle=document.createElement('div');ceTitle.className='ce-title';ceTitle.textContent='Condition Editor';";
+    j += "ceWrap.appendChild(ceTitle);";
+    j += "var ceBody=document.createElement('div');ceBody.className='ce-body';";
+    j += "ceWrap.appendChild(ceBody);";
+    j += "c.appendChild(ceWrap);";
+
+    // Condition selector row
+    j += "var ceSelRow=document.createElement('div');ceSelRow.className='ce-row';";
+    j += "var ceSelLabel=document.createElement('label');ceSelLabel.textContent='Condition';ceSelRow.appendChild(ceSelLabel);";
+    j += "var ceSel=document.createElement('select');ceSel.id='ceCondSel';";
+    j += "var ceHideOpt=document.createElement('option');ceHideOpt.value='-1';ceHideOpt.textContent='<Hide>';ceSel.appendChild(ceHideOpt);";
+    j += "for(var ci=0;ci<CE_CONDS.length;ci++){var co=document.createElement('option');co.value=String(ci);co.textContent=CE_CONDS[ci];ceSel.appendChild(co);}";
+    j += "ceSelRow.appendChild(ceSel);";
+    j += "ceBody.appendChild(ceSelRow);";
+
+    // Detail container for selected condition
+    j += "var ceDetail=document.createElement('div');ceDetail.id='ceDetail';ceBody.appendChild(ceDetail);";
+
+    // Wire up condition select change and store es ref for polling refresh
+    j += "ceLastEs=es;";
+    j += "ceSel.addEventListener('change',function(){renderConditionEditor(ceLastEs);});";
+
+    // Initial render
+    j += "renderConditionEditor(es);";
+
     j += "return;}";
 
     // nosepos_plus
     j += "if(t==='nosepos_plus'){";
     j += "c.appendChild(mkFieldRow('Eval Time Min',mkTime('shweetz_eval_time_min')));";
     j += "c.appendChild(mkFieldRow('Eval Time Max',mkTime('shweetz_eval_time_max')));";
-    j += "c.appendChild(mkFieldRow('Yaw Degrees',mkNum('shweetz_yaw_deg',null,null,1)));";
-    j += "c.appendChild(mkFieldRow('Pitch Degrees',mkNum('shweetz_pitch_deg',null,null,1)));";
-    j += "c.appendChild(mkFieldRow('Roll Degrees',mkNum('shweetz_roll_deg',null,null,1)));";
-    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180');c.appendChild(mkFieldRow('Allow Yaw 180',chkYaw));";
-    j += "var chkNext=mkCheck('shweetz_next_eval_check');c.appendChild(mkFieldRow('Next Eval Check',chkNext));";
+    j += "c.appendChild(mkFieldRow('Target yaw (\\u00b0) (90 for left gs and uber, -90 for right)',mkNum('shweetz_yaw_deg',null,null,1)));";
+    j += "c.appendChild(mkFieldRow('Target pitch (\\u00b0) (85-90 nosepos, 0 gs, -25 uber)',mkNum('shweetz_pitch_deg',null,null,1)));";
+    j += "c.appendChild(mkFieldRow('Target roll (\\u00b0) (usually 0)',mkNum('shweetz_roll_deg',null,null,1)));";
+    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180');c.appendChild(mkFieldRow('Accept any yaw for nosepos',chkYaw));";
+    j += "var chkNext=mkCheck('shweetz_next_eval_check');c.appendChild(mkFieldRow('Change eval after nosepos is good enough',chkNext));";
     j += "var nextOpts=[{value:'Point',text:'Point'},{value:'Speed',text:'Speed'},{value:'Time',text:'Time'},{value:'Hold',text:'Hold'}];";
     j += "c.appendChild(mkFieldRow('Next Eval Mode',mkSelect('shweetz_next_eval',nextOpts)));";
     j += "c.appendChild(mkFieldRow('Target Point',mkVec3('shweetz_point',true),true));";
-    j += "c.appendChild(mkFieldRow('Min Angle',mkNum('shweetz_angle_min_deg',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Min Speed',mkNum('shweetz_condition_speed',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Min CP',mkNum('shweetz_min_cp',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Min Wheels on Ground',mkRange('shweetz_min_wheels_on_ground',0,4,1)));";
-    j += "c.appendChild(mkFieldRow('Gear',mkNum('shweetz_gear',-1,6,1)));";
-    j += "c.appendChild(mkFieldRow('Trigger Index',mkNum('shweetz_trigger_index',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Anti-Trigger Index',mkNum('shweetz_antitrigger_index',0,null,1)));";
-    j += "c.appendChild(mkFieldRow('Debug Tick',mkNum('shweetz_debug',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Max angle from ideal (\\u00b0)',mkNum('shweetz_angle_min_deg',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Min speed (km/h)',mkRange('shweetz_condition_speed',0,1000,1)));";
+    j += "c.appendChild(mkFieldRow('Min CP collected',mkNum('shweetz_min_cp',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Min wheels on ground',mkRange('shweetz_min_wheels_on_ground',0,4,1)));";
+    j += "c.appendChild(mkFieldRow('Gear (0 to disable)',mkRange('shweetz_gear',-1,6,1)));";
+    j += "c.appendChild(mkFieldRow('Trigger index (0 to disable)',mkNum('shweetz_trigger_index',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Anti-Trigger index (0 to disable)',mkNum('shweetz_antitrigger_index',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Debug tick (0 to disable)',mkTime('shweetz_debug')));";
     j += "return;}";
 
     j += "}";
@@ -868,7 +1272,12 @@ string BfDashJS_Settings()
     // Handle regular fields
     j += "var el=document.querySelector('[data-var=\"'+k+'\"]');";
     j += "if(el){setField(el,val);}";
-    j += "}}";
+    j += "}";
+    // Refresh group editor if present and no group editor element is focused
+    j += "if(document.getElementById('geDetail')){geLastEs=es;if(!document.getElementById('geDetail').contains(document.activeElement)){renderGroupEditor(es);}}";
+    // Refresh condition editor if present and no condition editor element is focused
+    j += "if(document.getElementById('ceDetail')){ceLastEs=es;if(!document.getElementById('ceDetail').contains(document.activeElement)){renderConditionEditor(es);}}";
+    j += "}";
 
     // Build slot UI
     j += "function buildSlots(cfg){";
