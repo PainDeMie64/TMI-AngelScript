@@ -100,6 +100,14 @@ namespace PreciseFinishBf
         }
         else
         {
+            // Reject imprecise times (5+ zeroes after centisecond place)
+            double rounded4 = Math::Round(preciseTime * 10000.0) / 10000.0;
+            if (Math::Abs(preciseTime - rounded4) < 1e-8)
+            {
+                resp.Decision = BFEvaluationDecision::Reject;
+                PreciseFinish::Reset();
+                return resp;
+            }
             if (!baseRunFinished)
             {
                 // First finish found in all-or-nothing mode
