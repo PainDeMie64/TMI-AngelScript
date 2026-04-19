@@ -1356,8 +1356,8 @@ string BfDashJS_Settings()
     j += "c.appendChild(mkFieldRow('Target yaw (\\u00b0) (90 for left gs and uber, -90 for right)',mkNum('shweetz_yaw_deg',null,null,1)));";
     j += "c.appendChild(mkFieldRow('Target pitch (\\u00b0) (85 to 90 for nosepos, 0 for gs, -25 for uber)',mkNum('shweetz_pitch_deg',null,null,1)));";
     j += "c.appendChild(mkFieldRow('Target roll (\\u00b0) (usually 0)',mkNum('shweetz_roll_deg',null,null,1)));";
-    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180');c.appendChild(mkFieldRow('Accept any yaw for nosepos (uncheck for yaw bruteforce)',chkYaw));";
-    j += "var chkNext=mkCheck('shweetz_next_eval_check');c.appendChild(mkFieldRow('Change eval after nosepos is good enough',chkNext));";
+    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180','');c.appendChild(mkFieldRow('Accept any yaw for nosepos (uncheck for yaw bruteforce)',chkYaw));";
+    j += "var chkNext=mkCheck('shweetz_next_eval_check','');c.appendChild(mkFieldRow('Change eval after nosepos is good enough',chkNext));";
     // Conditional block: only shown when next_eval_check is true (matching in-game order: angle first, then combo + point)
     j += "var npCondDiv=document.createElement('div');npCondDiv.id='npCondBlock';c.appendChild(npCondDiv);";
     j += "c.appendChild(mkFieldRow('Min speed (km/h)',mkRange('shweetz_condition_speed',0,1000,0.1)));";

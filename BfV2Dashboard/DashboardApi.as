@@ -468,21 +468,21 @@ string HandleGetAllSettings(const string &in body)
     {
         json += JsonInt("shweetz_eval_time_min", int(GetVariableDouble("shweetz_eval_time_min")));
         json += "," + JsonInt("shweetz_eval_time_max", int(GetVariableDouble("shweetz_eval_time_max")));
-        json += "," + JsonFloat("shweetz_yaw_deg", float(GetVariableDouble("shweetz_yaw_deg")));
-        json += "," + JsonFloat("shweetz_pitch_deg", float(GetVariableDouble("shweetz_pitch_deg")));
-        json += "," + JsonFloat("shweetz_roll_deg", float(GetVariableDouble("shweetz_roll_deg")));
+        json += "," + JsonInt("shweetz_yaw_deg", int(GetVariableDouble("shweetz_yaw_deg")));
+        json += "," + JsonInt("shweetz_pitch_deg", int(GetVariableDouble("shweetz_pitch_deg")));
+        json += "," + JsonInt("shweetz_roll_deg", int(GetVariableDouble("shweetz_roll_deg")));
         json += "," + JsonBool("shweetz_allow_yaw_180", GetVariableBool("shweetz_allow_yaw_180"));
         json += "," + JsonBool("shweetz_next_eval_check", GetVariableBool("shweetz_next_eval_check"));
         json += "," + JsonString("shweetz_next_eval", GetVariableString("shweetz_next_eval"));
         vec3 spPoint = Text::ParseVec3(GetVariableString("shweetz_point"));
         json += "," + JsonVec3("shweetz_point", spPoint);
-        json += "," + JsonFloat("shweetz_angle_min_deg", float(GetVariableDouble("shweetz_angle_min_deg")));
+        json += "," + JsonInt("shweetz_angle_min_deg", int(GetVariableDouble("shweetz_angle_min_deg")));
         json += "," + JsonFloat("shweetz_condition_speed", float(GetVariableDouble("shweetz_condition_speed")));
-        json += "," + JsonFloat("shweetz_min_cp", float(GetVariableDouble("shweetz_min_cp")));
-        json += "," + JsonFloat("shweetz_min_wheels_on_ground", float(GetVariableDouble("shweetz_min_wheels_on_ground")));
-        json += "," + JsonFloat("shweetz_gear", float(GetVariableDouble("shweetz_gear")));
-        json += "," + JsonFloat("shweetz_trigger_index", float(GetVariableDouble("shweetz_trigger_index")));
-        json += "," + JsonFloat("shweetz_antitrigger_index", float(GetVariableDouble("shweetz_antitrigger_index")));
+        json += "," + JsonInt("shweetz_min_cp", int(GetVariableDouble("shweetz_min_cp")));
+        json += "," + JsonInt("shweetz_min_wheels_on_ground", int(GetVariableDouble("shweetz_min_wheels_on_ground")));
+        json += "," + JsonInt("shweetz_gear", int(GetVariableDouble("shweetz_gear")));
+        json += "," + JsonInt("shweetz_trigger_index", int(GetVariableDouble("shweetz_trigger_index")));
+        json += "," + JsonInt("shweetz_antitrigger_index", int(GetVariableDouble("shweetz_antitrigger_index")));
         json += "," + JsonInt("shweetz_debug", int(GetVariableDouble("shweetz_debug")));
     }
     json += "}";
