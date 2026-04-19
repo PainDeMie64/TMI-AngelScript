@@ -259,6 +259,7 @@ string HandleGetAllSettings(const string &in body)
     json += JsonString("resultFilename", GetVariableString("bf_result_filename"));
     json += "," + JsonInt("iterationsBeforeRestart", int(GetVariableDouble("bf_iterations_before_restart")));
     json += "," + JsonString("resultFolder", GetVariableString("bf_result_folder"));
+    json += "," + JsonBool("persistLogs", GetVariableBool("bf_dashboard_persist_logs"));
     json += "," + JsonString("restartConditionScript", GetVariableString("bf_restart_condition_script"));
     json += "}";
 

@@ -74,6 +74,9 @@ void BruteforceV2Settings()
         toolTip(300, {"Folder where the result files will be saved. Leave empty to use the root folder. Example:",
                       "'results' will save files in " + GetVariableString("scripts_folder") + "\\results\\"});
         UI::Dummy(vec2(0, 2));
+        UI::CheckboxVar("Persist dashboard logs to file", "bf_dashboard_persist_logs");
+        toolTip(300, {"When enabled, dashboard improvements and log entries are written to files in the Scripts/BfV2Dashboard/ folder, allowing them to persist across game restarts and appear in Past Sessions."});
+        UI::Dummy(vec2(0, 2));
         string lines = Replace(GetVariableString("bf_restart_condition_script"), ":", "\n");
         int currentHeight = int(GetVariableDouble("bf_restart_condition_script_height"));
         string t;

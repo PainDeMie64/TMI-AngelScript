@@ -64,6 +64,7 @@ string HandleBfDashboard(const string &in body)
     h += "<div class='field-row'><label>Result Filename</label><input type='text' id='behFile' data-var='bf_result_filename'></div>";
     h += "<div class='field-row'><label>Iterations Before Restart</label><input type='number' id='behIter' data-var='bf_iterations_before_restart' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Result Folder</label><input type='text' id='behFolder' data-var='bf_result_folder'></div>";
+    h += "<div class='chk-row'><input type='checkbox' id='behPersist' data-var='bf_dashboard_persist_logs'><label for='behPersist'>Persist dashboard logs to file</label></div>";
     h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' data-script='1' rows='3'></textarea></div>";
     h += "</div></details>";
 
@@ -1054,7 +1055,8 @@ string BfDashJS_Settings()
     j += "serverSnapshot['bf_result_filename']=String(cfg.behavior.resultFilename);";
     j += "serverSnapshot['bf_iterations_before_restart']=String(cfg.behavior.iterationsBeforeRestart);";
     j += "serverSnapshot['bf_result_folder']=String(cfg.behavior.resultFolder);";
-    j += "serverSnapshot['bf_restart_condition_script']=String(cfg.behavior.restartConditionScript);}";
+    j += "serverSnapshot['bf_restart_condition_script']=String(cfg.behavior.restartConditionScript);";
+    j += "serverSnapshot['bf_dashboard_persist_logs']=String(cfg.behavior.persistLogs);}";
     j += "if(cfg.conditions){";
     j += "serverSnapshot['bf_condition_speed']=String(cfg.conditions.speed);";
     j += "serverSnapshot['bf_condition_cps']=String(cfg.conditions.cps);";
@@ -1101,6 +1103,7 @@ string BfDashJS_Settings()
     j += "setField(document.getElementById('behFile'),cfg.behavior.resultFilename);";
     j += "setField(document.getElementById('behIter'),cfg.behavior.iterationsBeforeRestart);";
     j += "setField(document.getElementById('behFolder'),cfg.behavior.resultFolder);";
+    j += "setField(document.getElementById('behPersist'),cfg.behavior.persistLogs);";
     j += "var behScript=document.getElementById('behRestartScript');";
     j += "if(!isFocused(behScript))behScript.value=scriptToDisplay(cfg.behavior.restartConditionScript);";
 
@@ -1134,6 +1137,7 @@ string BfDashJS_Settings()
     j += "document.getElementById('behFile').addEventListener('blur',function(){setVar('bf_result_filename',this.value);});";
     j += "document.getElementById('behIter').addEventListener('blur',function(){setVar('bf_iterations_before_restart',this.value);});";
     j += "document.getElementById('behFolder').addEventListener('blur',function(){setVar('bf_result_folder',this.value);});";
+    j += "document.getElementById('behPersist').addEventListener('change',function(){setVar('bf_dashboard_persist_logs',this.checked?'true':'false');});";
     j += "document.getElementById('behRestartScript').addEventListener('blur',function(){setVar('bf_restart_condition_script',displayToScript(this.value));});";
     j += "document.getElementById('condSpeed').addEventListener('blur',function(){setVar('bf_condition_speed',this.value);});";
     j += "document.getElementById('condCps').addEventListener('blur',function(){setVar('bf_condition_cps',this.value);});";

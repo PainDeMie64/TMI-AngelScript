@@ -42,6 +42,7 @@ void Main()
     RegisterValidationHandler("bfv2", "Bruteforce V2", BruteforceV2Settings);
     RegisterVariable("bf_iterations_before_restart", 0);
     RegisterVariable("bf_result_folder", "");
+    RegisterVariable("bf_dashboard_persist_logs", false);
     RegisterVariable("bf_condition_script", "");
     RegisterVariable("bf_condition_script_height", 26);
     RegisterVariable("bf_restart_condition_script", "");

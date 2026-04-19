@@ -50,7 +50,8 @@ void StartSession()
     if (ch !is null) mapName = ch.Name;
 
     string sessionLine = Text::FormatInt(currentSessionId) + "|" + currentTarget + "|" + Text::FormatUInt(Time::Now) + "|" + mapName;
-    FileAppendLine(DATA_FOLDER + "/sessions.txt", sessionLine);
+    if (GetVariableBool("bf_dashboard_persist_logs"))
+        FileAppendLine(DATA_FOLDER + "/sessions.txt", sessionLine);
 
     logBuffer.Resize(0);
     improvementLog.Resize(0);
@@ -68,7 +69,7 @@ void DashboardLog(const string &in message)
     logBuffer.Add(entry);
     if (logBuffer.Length > MAX_LOG_ENTRIES)
         logBuffer.RemoveAt(0);
-    if (currentSessionId > 0)
+    if (currentSessionId > 0 && GetVariableBool("bf_dashboard_persist_logs"))
         FileAppendLine(SessionPath("log.txt"), entry);
 }
 
@@ -87,7 +88,7 @@ void DashboardImprovement(const string &in evalName, const string &in details)
     improvementLog.Add(entry);
     if (improvementLog.Length > MAX_IMPROVEMENTS)
         improvementLog.RemoveAt(0);
-    if (currentSessionId > 0)
+    if (currentSessionId > 0 && GetVariableBool("bf_dashboard_persist_logs"))
         FileAppendLine(SessionPath("improvements.txt"), entry);
 }
 
