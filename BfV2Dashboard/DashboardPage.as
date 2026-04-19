@@ -71,7 +71,7 @@ string HandleBfDashboard(const string &in body)
     h += "<details id='secOptimization'>";
     h += "<summary>Optimization <button class='propagate-btn' data-section='secOptimization' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
-    h += "<div class='field-row'><label>Target</label><select id='optTarget' data-var='bf_target'></select></div>";
+    h += "<div class='field-row full'><label>Target</label><select id='optTarget' data-var='bf_target'></select></div>";
     h += "<div id='evalFields'></div>";
     h += "</div></details>";
 
@@ -106,14 +106,20 @@ string HandleBfDashboard(const string &in body)
     h += "<div id='historyContent' class='history-content'></div>";
     h += "</section>";
 
-    // Base Run Inputs panel (wide)
+    // Base Run Inputs panel (wide, disabled overlay when BF not running)
     h += "<section class='panel wide' id='baseInputs'>";
     h += "<h2>Base Run Inputs</h2>";
-    h += "<p class='hint'>Paste input commands to replace the current base run. Click Apply to restart bruteforce with these inputs.</p>";
+    h += "<div id='baseDisabledOverlay' class='disabled-overlay'>";
+    h += "<span>Bruteforce must be running to use this feature</span>";
+    h += "</div>";
+    h += "<div id='baseContent'>";
+    h += "<p class='hint'>Paste input commands to replace the current base run and restart bruteforce with these inputs.</p>";
     h += "<textarea id='inputScript' rows='8' class='code-input' placeholder='0 press up&#10;0.1 steer 13107&#10;0.5 steer -65536&#10;5 press down&#10;...'></textarea>";
     h += "<div class='base-actions'>";
     h += "<button id='btnApplyInputs' class='btn-action btn-apply'>Apply &amp; Restart Bruteforce</button>";
+    h += "<button id='btnApplyAll' class='btn-action btn-apply'>Apply to All &amp; Restart All Bruteforces</button>";
     h += "<span id='inputResult' class='input-result'></span>";
+    h += "</div>";
     h += "</div>";
     h += "</section>";
 
@@ -268,7 +274,10 @@ string BfDashCSS()
     // Base Run Inputs
     c += ".code-input { width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:0.5rem; font-family:monospace; font-size:0.8rem; resize:vertical; }";
     c += ".hint { color:#8b949e; font-size:0.75rem; margin-bottom:0.5rem; }";
-    c += ".base-actions { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; }";
+    c += ".base-actions { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap; }";
+    c += "#baseInputs{position:relative}";
+    c += ".disabled-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(13,17,23,0.85);z-index:10;display:flex;align-items:center;justify-content:center;border-radius:8px}";
+    c += ".disabled-overlay span{color:#8b949e;font-size:0.9rem;padding:1rem;text-align:center}";
     c += ".input-result { font-size:0.8rem; font-family:monospace; }";
 
     c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
@@ -1358,6 +1367,33 @@ string BfDashJS_Sessions()
     j += "res.style.color = '#f85149';";
     j += "});";
     j += "});";
+
+    // Apply to All instances
+    j += "document.getElementById('btnApplyAll').addEventListener('click',function(){";
+    j += "var script=document.getElementById('inputScript').value;";
+    j += "if(!script.trim())return;";
+    j += "var res=document.getElementById('inputResult');";
+    j += "res.textContent='Sending to all instances...';res.style.color='#8b949e';";
+    j += "var sent=0,ok=0,fail=0;";
+    j += "for(var i=0;i<instances.length;i++){";
+    j += "(function(port){";
+    j += "sent++;";
+    j += "fetch('http://localhost:'+port+'/api/bf/apply-inputs',{method:'POST',body:script})";
+    j += ".then(function(r){return r.json();})";
+    j += ".then(function(d){if(d.ok)ok++;else fail++;})";
+    j += ".catch(function(){fail++;})";
+    j += ".finally(function(){if(ok+fail===sent){";
+    j += "res.textContent='Applied to '+ok+'/'+sent+' instances'+(fail>0?' ('+fail+' failed)':'');";
+    j += "res.style.color=fail===0?'#3fb950':'#d29922';}});";
+    j += "})(instances[i].port);}";
+    j += "});";
+
+    // Toggle base inputs overlay based on BF running state
+    j += "function updateBaseOverlay(){";
+    j += "var overlay=document.getElementById('baseDisabledOverlay');";
+    j += "if(!overlay)return;";
+    j += "overlay.style.display=bfIsRunning?'none':'flex';}";
+    j += "setInterval(updateBaseOverlay,500);updateBaseOverlay();";
 
     // Initial load
     j += "setTimeout(loadSessionData,500);";

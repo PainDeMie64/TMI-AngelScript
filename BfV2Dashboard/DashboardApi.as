@@ -709,6 +709,8 @@ string HandleApplyInputs(const string &in body)
     sim.RewindToState(rewindState);
     RestoreBestInputs(sim);
 
+    // Start a fresh session (old log/improvements go to past)
+    StartSession();
     DashboardLog("Base inputs replaced (" + Text::FormatUInt(cmds.Length) + " commands), BF restarted");
     return "{\"ok\":true,\"commands\":" + Text::FormatUInt(cmds.Length) + "}";
 }
