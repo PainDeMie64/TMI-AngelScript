@@ -170,8 +170,70 @@ string HandleGetSessionImp(const string &in body)
 
 // --- New API handlers ---
 
+void EnsureSlotVariablesRegistered(int slotCount)
+{
+    for (int s = 1; s < slotCount; s++)
+    {
+        string vs = GetInputModVarSuffix(uint(s));
+        RegisterVariable("bf_modify_count" + vs, 0);
+        RegisterVariable("bf_inputs_min_time" + vs, 0);
+        RegisterVariable("bf_inputs_max_time" + vs, 0);
+        RegisterVariable("bf_max_steer_diff" + vs, 0);
+        RegisterVariable("bf_max_time_diff" + vs, 0);
+        RegisterVariable("bf_inputs_fill_steer" + vs, false);
+        RegisterVariable("bf_input_mod_enabled" + vs, true);
+        RegisterVariable("bf_input_mod_algorithm" + vs, "basic");
+        RegisterVariable("bf_range_min_input_count" + vs, 1);
+        RegisterVariable("bf_range_max_input_count" + vs, 1);
+        RegisterVariable("bf_range_min_steer" + vs, -65536);
+        RegisterVariable("bf_range_max_steer" + vs, 65536);
+        RegisterVariable("bf_range_min_time_diff" + vs, 0);
+        RegisterVariable("bf_range_max_time_diff" + vs, 0);
+        RegisterVariable("bf_range_fill_steer" + vs, false);
+        RegisterVariable("bf_adv_steer_modify_count" + vs, 0);
+        RegisterVariable("bf_adv_steer_min_time" + vs, 0);
+        RegisterVariable("bf_adv_steer_max_time" + vs, 0);
+        RegisterVariable("bf_adv_steer_max_diff" + vs, 0);
+        RegisterVariable("bf_adv_steer_max_time_diff" + vs, 0);
+        RegisterVariable("bf_adv_steer_fill" + vs, false);
+        RegisterVariable("bf_adv_accel_modify_count" + vs, 0);
+        RegisterVariable("bf_adv_accel_min_time" + vs, 0);
+        RegisterVariable("bf_adv_accel_max_time" + vs, 0);
+        RegisterVariable("bf_adv_accel_max_time_diff" + vs, 0);
+        RegisterVariable("bf_adv_brake_modify_count" + vs, 0);
+        RegisterVariable("bf_adv_brake_min_time" + vs, 0);
+        RegisterVariable("bf_adv_brake_max_time" + vs, 0);
+        RegisterVariable("bf_adv_brake_max_time_diff" + vs, 0);
+        RegisterVariable("bf_advr_steer_min_input_count" + vs, 1);
+        RegisterVariable("bf_advr_steer_max_input_count" + vs, 1);
+        RegisterVariable("bf_advr_steer_min_time" + vs, 0);
+        RegisterVariable("bf_advr_steer_max_time" + vs, 0);
+        RegisterVariable("bf_advr_steer_min_steer" + vs, -65536);
+        RegisterVariable("bf_advr_steer_max_steer" + vs, 65536);
+        RegisterVariable("bf_advr_steer_min_time_diff" + vs, 0);
+        RegisterVariable("bf_advr_steer_max_time_diff" + vs, 0);
+        RegisterVariable("bf_advr_steer_fill" + vs, false);
+        RegisterVariable("bf_advr_accel_min_input_count" + vs, 1);
+        RegisterVariable("bf_advr_accel_max_input_count" + vs, 1);
+        RegisterVariable("bf_advr_accel_min_time" + vs, 0);
+        RegisterVariable("bf_advr_accel_max_time" + vs, 0);
+        RegisterVariable("bf_advr_accel_min_time_diff" + vs, 0);
+        RegisterVariable("bf_advr_accel_max_time_diff" + vs, 0);
+        RegisterVariable("bf_advr_brake_min_input_count" + vs, 1);
+        RegisterVariable("bf_advr_brake_max_input_count" + vs, 1);
+        RegisterVariable("bf_advr_brake_min_time" + vs, 0);
+        RegisterVariable("bf_advr_brake_max_time" + vs, 0);
+        RegisterVariable("bf_advr_brake_min_time_diff" + vs, 0);
+        RegisterVariable("bf_advr_brake_max_time_diff" + vs, 0);
+    }
+}
+
 string HandleGetAllSettings(const string &in body)
 {
+    int slotCount = int(GetVariableDouble("bf_input_mod_count"));
+    if (slotCount < 1) slotCount = 1;
+    EnsureSlotVariablesRegistered(slotCount);
+
     string json = "{";
 
     // Controller active: check if the bfv2 controller is selected
@@ -199,9 +261,7 @@ string HandleGetAllSettings(const string &in body)
     json += "," + JsonString("conditionScript", GetVariableString("bf_condition_script"));
     json += "}";
 
-    // Slots
-    int slotCount = int(GetVariableDouble("bf_input_mod_count"));
-    if (slotCount < 1) slotCount = 1;
+    // Slots (slotCount already set above)
     json += "," + JsonInt("slotCount", slotCount);
 
     string slots = "[";
@@ -468,6 +528,8 @@ string HandlePostSetVar(const string &in body)
 
 string HandlePostAddSlot(const string &in body)
 {
+    int newCount = int(GetVariableDouble("bf_input_mod_count")) + 1;
+    EnsureSlotVariablesRegistered(newCount);
     AddInputModificationSettings();
     return "{\"ok\":true}";
 }

@@ -132,13 +132,13 @@ string BfDashCSS()
     c += "summary::before{content:'\\25B6';display:inline-block;margin-right:0.5rem;font-size:0.65rem;transition:transform 0.15s}";
     c += "details[open]>summary::before{transform:rotate(90deg)}";
     c += "summary:hover{background:#161b22}";
-    c += ".sec-body{padding:0.7rem;display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem}";
+    c += ".sec-body{padding:0.7rem;display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem;overflow:hidden}";
 
     // Field rows
-    c += ".field-row{display:flex;flex-direction:column;gap:0.15rem}";
+    c += ".field-row{display:flex;flex-direction:column;gap:0.15rem;min-width:0}";
     c += ".field-row.full{grid-column:1/-1}";
     c += ".field-row label{color:#8b949e;font-size:0.7rem;text-transform:uppercase}";
-    c += ".field-row input,.field-row select,.field-row textarea{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;font-family:inherit}";
+    c += ".field-row input,.field-row select,.field-row textarea{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;font-family:inherit;width:100%;max-width:100%;min-width:0}";
     c += ".field-row input:focus,.field-row select:focus,.field-row textarea:focus{outline:none;border-color:#f0883e}";
     c += ".field-row textarea{font-family:monospace;resize:vertical;min-height:2.5rem}";
     c += ".field-row input[type=number]{-moz-appearance:textfield}";
@@ -178,8 +178,8 @@ string BfDashCSS()
     c += ".btn-sm:hover{background:#30363d}";
 
     // Range display
-    c += ".range-wrap{display:flex;align-items:center;gap:0.4rem}";
-    c += ".range-wrap input[type=range]{flex:1}";
+    c += ".range-wrap{display:flex;align-items:center;gap:0.4rem;min-width:0}";
+    c += ".range-wrap input[type=range]{flex:1;min-width:0}";
     c += ".range-wrap .range-val{font-size:0.8rem;color:#c9d1d9;min-width:3rem;text-align:right;font-family:monospace}";
 
     // Session tabs
@@ -199,6 +199,8 @@ string BfDashCSS()
     c += ".log-entry{padding:0.15rem 0;font-family:monospace;font-size:0.8rem;line-height:1.5}";
     c += ".log-entry .lt{color:#8b949e;margin-right:0.5rem}";
     c += ".log-entry .lm{color:#c9d1d9}";
+
+    c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
 
     return c;
 }
@@ -840,7 +842,8 @@ string BfDashJS_Sessions()
 
     // Load data for selected session+tab
     j += "function loadSessionData(){";
-    j += "lastLogLen=0;lastImpLen=0;";
+    j += "lastLogLen=-1;lastImpLen=-1;";
+    j += "var hc=document.getElementById('historyContent');while(hc&&hc.firstChild)hc.removeChild(hc.firstChild);";
     j += "if(activeSession==='current'){";
     j += "if(activeSubTab==='log'){pollCurrentLog();}else{pollCurrentImp();}return;}";
     j += "var type=activeSubTab==='log'?'session-log':'session-imp';";
