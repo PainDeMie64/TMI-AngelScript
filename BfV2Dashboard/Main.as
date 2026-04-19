@@ -6,7 +6,9 @@ bool isMaster = false;
 uint16 localPort = 0;
 uint instancePid = 0;
 uint64 lastHeartbeatTime = 0;
-const uint HEARTBEAT_INTERVAL_MS = 3000;
+uint consecutiveHeartbeatFailures = 0;
+const uint HEARTBEAT_INTERVAL_MS = 5000;
+const uint MAX_HEARTBEAT_FAILURES = 3;
 
 PluginInfo @GetPluginInfo()
 {
@@ -40,11 +42,9 @@ void RegisterCommonRoutes()
 void RegisterMasterRoutes()
 {
     RegisterRoute("GET", "/api/instances", HandleGetInstances);
+    RegisterRoute("POST", "/api/internal/register", HandleInternalRegister);
     RegisterRoute("GET", "/", HandleBfDashboard);
 }
-
-uint64 lastDiscoverTime = 0;
-const uint DISCOVER_INTERVAL_MS = 2000;
 
 void RegisterWorkerRoutes()
 {
@@ -119,7 +119,6 @@ void Main()
     RegisterSettingsPage("Scripting Docs", ScriptingReference::Render);
 
     instancePid = IO::GetCurrentProcessId();
-
     SetupAsRole();
 }
 
@@ -128,7 +127,6 @@ void SetupAsRole()
     routes.Resize(0);
     isMaster = false;
 
-    // Try master
     RegisterCommonRoutes();
     RegisterMasterRoutes();
     StartServer("127.0.0.1", MASTER_PORT);
@@ -141,7 +139,6 @@ void SetupAsRole()
         return;
     }
 
-    // Worker
     routes.Resize(0);
     RegisterCommonRoutes();
     RegisterWorkerRoutes();
@@ -158,41 +155,59 @@ void SetupAsRole()
     log("BfV2Dashboard: No free port found (8489-" + Text::FormatUInt(WORKER_PORT_END) + " all taken)");
 }
 
-uint heartbeatCounter = 0;
-
-void WriteHeartbeatFile()
+void SendHeartbeat()
 {
-    heartbeatCounter++;
-    string path = DATA_FOLDER + "/heartbeats/" + Text::FormatUInt(localPort) + ".txt";
-    string content = Text::FormatUInt(instancePid) + "|" + Text::FormatUInt(localPort) + "|" + Text::FormatUInt(heartbeatCounter);
-    FileWrite(path, content);
+    Net::Socket@ sock = Net::Socket();
+    if (sock.Connect("127.0.0.1", MASTER_PORT, 2000))
+    {
+        string body = "pid=" + Text::FormatUInt(instancePid) + "&port=" + Text::FormatUInt(localPort);
+        string req = "POST /api/internal/register HTTP/1.1\r\n";
+        req += "Host: 127.0.0.1\r\n";
+        req += "Content-Length: " + Text::FormatUInt(body.Length) + "\r\n";
+        req += "Connection: close\r\n\r\n";
+        req += body;
+        if (sock.Write(req))
+        {
+            consecutiveHeartbeatFailures = 0;
+            log("BfV2Dashboard: Heartbeat sent to master");
+        }
+        else
+        {
+            consecutiveHeartbeatFailures++;
+            log("BfV2Dashboard: Heartbeat write failed (" + Text::FormatUInt(consecutiveHeartbeatFailures) + "/" + Text::FormatUInt(MAX_HEARTBEAT_FAILURES) + ")");
+        }
+    }
+    else
+    {
+        consecutiveHeartbeatFailures++;
+        log("BfV2Dashboard: Heartbeat connect failed (" + Text::FormatUInt(consecutiveHeartbeatFailures) + "/" + Text::FormatUInt(MAX_HEARTBEAT_FAILURES) + ")");
+    }
+
+    if (consecutiveHeartbeatFailures >= MAX_HEARTBEAT_FAILURES)
+    {
+        log("BfV2Dashboard: Master unreachable, attempting promotion...");
+        StopServer();
+        SetupAsRole();
+        consecutiveHeartbeatFailures = 0;
+    }
 }
 
 void Render()
 {
     PollServer();
 
-    // All instances write heartbeat files periodically
-    if (localPort > 0)
+    if (!isMaster && localPort > 0)
     {
         uint64 now = Time::Now;
         if (now - lastHeartbeatTime >= HEARTBEAT_INTERVAL_MS)
         {
             lastHeartbeatTime = now;
-            WriteHeartbeatFile();
+            SendHeartbeat();
         }
     }
 
-    // Master: discover instances from heartbeat files periodically
     if (isMaster)
-    {
-        uint64 discNow = Time::Now;
-        if (discNow - lastDiscoverTime >= DISCOVER_INTERVAL_MS)
-        {
-            lastDiscoverTime = discNow;
-            DiscoverInstances();
-        }
-    }
+        CleanStaleInstances();
 
     if (current !is null && current.onRender !is null)
         current.onRender();

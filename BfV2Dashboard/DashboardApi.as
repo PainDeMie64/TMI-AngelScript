@@ -4,8 +4,7 @@ class InstanceInfo
 {
     uint pid;
     uint16 port;
-    uint lastCounter;
-    uint64 lastSeen;
+    uint64 lastHeartbeat;
 }
 
 array<InstanceInfo@> registeredInstances;
@@ -18,72 +17,41 @@ void RegisterInstance(uint pid, uint16 port)
         if (registeredInstances[i].port == port)
         {
             registeredInstances[i].pid = pid;
-            registeredInstances[i].lastSeen = Time::Now;
+            registeredInstances[i].lastHeartbeat = Time::Now;
             return;
         }
     }
     InstanceInfo@ info = InstanceInfo();
     info.pid = pid;
     info.port = port;
-    info.lastCounter = 0;
-    info.lastSeen = Time::Now;
+    info.lastHeartbeat = Time::Now;
     registeredInstances.Add(info);
 }
 
-void DiscoverInstances()
+void CleanStaleInstances()
 {
     uint64 now = Time::Now;
-    for (uint16 p = MASTER_PORT; p <= WORKER_PORT_END; p++)
-    {
-        string path = DATA_FOLDER + "/heartbeats/" + Text::FormatUInt(p) + ".txt";
-        string content = FileRead(path);
-        if (content.Length == 0) continue;
-
-        array<string>@ parts = content.Split("|");
-        if (parts.Length < 3) continue;
-
-        uint pid = uint(Text::ParseUInt(parts[0]));
-        uint16 port = uint16(Text::ParseUInt(parts[1]));
-        uint counter = uint(Text::ParseUInt(parts[2]));
-
-        if (port == 0) continue;
-
-        // Find or create entry
-        bool found = false;
-        for (uint i = 0; i < registeredInstances.Length; i++)
-        {
-            if (registeredInstances[i].port == port)
-            {
-                if (counter != registeredInstances[i].lastCounter)
-                {
-                    registeredInstances[i].pid = pid;
-                    registeredInstances[i].lastCounter = counter;
-                    registeredInstances[i].lastSeen = now;
-                }
-                found = true;
-                break;
-            }
-        }
-        if (!found)
-        {
-            InstanceInfo@ info = InstanceInfo();
-            info.pid = pid;
-            info.port = port;
-            info.lastCounter = counter;
-            info.lastSeen = now;
-            registeredInstances.Add(info);
-        }
-    }
-
-    // Remove stale instances (counter hasn't changed in 15s)
     for (int i = int(registeredInstances.Length) - 1; i >= 0; i--)
     {
         if (registeredInstances[i].port == localPort) continue;
-        if (now - registeredInstances[i].lastSeen > STALE_THRESHOLD_MS)
+        if (now - registeredInstances[i].lastHeartbeat > STALE_THRESHOLD_MS)
         {
             registeredInstances.RemoveAt(uint(i));
         }
     }
+}
+
+string HandleInternalRegister(const string &in body)
+{
+    string pidStr = GetFormValue(body, "pid");
+    string portStr = GetFormValue(body, "port");
+    if (pidStr.Length == 0 || portStr.Length == 0)
+        return "{\"ok\":false}";
+    uint pid = uint(Text::ParseUInt(pidStr));
+    uint16 port = uint16(Text::ParseUInt(portStr));
+    if (port == 0) return "{\"ok\":false}";
+    RegisterInstance(pid, port);
+    return "{\"ok\":true}";
 }
 
 string HandleGetInstances(const string &in body)
