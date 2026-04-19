@@ -460,8 +460,8 @@ string HandleGetAllSettings(const string &in body)
     }
     else if (targetId == "nosepos_plus")
     {
-        json += JsonFloat("shweetz_eval_time_min", float(GetVariableDouble("shweetz_eval_time_min")));
-        json += "," + JsonFloat("shweetz_eval_time_max", float(GetVariableDouble("shweetz_eval_time_max")));
+        json += JsonInt("shweetz_eval_time_min", int(GetVariableDouble("shweetz_eval_time_min")));
+        json += "," + JsonInt("shweetz_eval_time_max", int(GetVariableDouble("shweetz_eval_time_max")));
         json += "," + JsonFloat("shweetz_yaw_deg", float(GetVariableDouble("shweetz_yaw_deg")));
         json += "," + JsonFloat("shweetz_pitch_deg", float(GetVariableDouble("shweetz_pitch_deg")));
         json += "," + JsonFloat("shweetz_roll_deg", float(GetVariableDouble("shweetz_roll_deg")));
