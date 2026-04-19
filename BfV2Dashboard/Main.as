@@ -102,6 +102,8 @@ void Main()
     CarLocationBf::Main();
     TimeBf::Main();
     CustomTargetBf::Main();
+    FinetunerBf::Main();
+    NoseposPlusBf::Main();
     RegisterSettingsPage("Scripting Docs", ScriptingReference::Render);
 
     instancePid = IO::GetCurrentProcessId();
