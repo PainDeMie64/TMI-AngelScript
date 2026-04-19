@@ -82,10 +82,11 @@ string HandleBfDashboard(const string &in body)
 
     h += "</section>";
 
-    // Live Bruteforce panel (wide, hidden by default)
-    h += "<section class='panel wide' id='liveBf' style='display:none'>";
+    // Live Bruteforce panel (wide, always visible)
+    h += "<section class='panel wide' id='liveBf'>";
     h += "<h2>Live Bruteforce</h2>";
     h += "<div id='liveCards' class='live-cards'></div>";
+    h += "<p id='liveEmpty' class='hint' style='color:#8b949e;padding:0.5rem 0;'>No instances currently running bruteforce.</p>";
     h += "</section>";
 
     // Past Sessions panel (wide)
@@ -543,7 +544,7 @@ string BfDashJS_Status()
     j += "}).catch(function(){";
     j += "if(pollOk){pollOk=false;var cn=document.getElementById('conn');cn.textContent='Disconnected';cn.style.background='#f8514930';cn.style.color='#f85149';}";
     j += "});}";
-    j += "setInterval(pollStatus,500);pollStatus();";
+    j += "setInterval(pollStatus,1000);pollStatus();";
 
     // Map
     j += "function loadMap(){";
@@ -554,22 +555,59 @@ string BfDashJS_Status()
     j += "}).catch(function(){});}";
     j += "loadMap();setInterval(loadMap,10000);";
 
-    // Multi-instance: browser probes all ports to discover instances
+    // Multi-instance: resilient scanning with last-seen tracking
     j += "var SCAN_START=8489,SCAN_END=8520;";
+    j += "var SCAN_TIMEOUT=2000;";  // 2s timeout for BF-busy servers
+    j += "var MISS_THRESHOLD=3;";   // remove after 3 consecutive misses (~9s)
+    j += "var DISCOVERY_INTERVAL=15000;";  // full port scan every 15s
+    j += "var KNOWN_INTERVAL=3000;";       // probe known instances every 3s
+    j += "var instanceLastSeen={};";  // port -> {data, missCount, lastSuccess}
+    j += "var lastFullScanTime=0;";
 
-    j += "function scanInstances(){";
-    j += "var found=[];var pending=SCAN_END-SCAN_START+1;";
-    j += "for(var p=SCAN_START;p<=SCAN_END;p++){";
-    j += "(function(port){";
-    j += "var ctrl=new AbortController();var t=setTimeout(function(){ctrl.abort();},500);";
+    // Probe a single port, returns a Promise
+    j += "function probePort(port){";
+    j += "return new Promise(function(resolve){";
+    j += "var ctrl=new AbortController();var t=setTimeout(function(){ctrl.abort();},SCAN_TIMEOUT);";
     j += "fetch('http://localhost:'+port+'/api/bf/status',{signal:ctrl.signal})";
     j += ".then(function(r){clearTimeout(t);return r.json();})";
-    j += ".then(function(d){found.push({port:port,target:d.target||'-',running:d.running});})";
-    j += ".catch(function(){clearTimeout(t);})";
-    j += ".finally(function(){pending--;if(pending===0)onScanDone(found);});";
-    j += "})(p);}}";
+    j += ".then(function(d){resolve({port:port,target:d.target||'-',running:d.running,ok:true});})";
+    j += ".catch(function(){clearTimeout(t);resolve({port:port,ok:false});});";
+    j += "});}";
 
-    j += "function onScanDone(found){";
+    // Scan known instances (fast, every 3s)
+    j += "function scanKnownInstances(){";
+    j += "var knownPorts=Object.keys(instanceLastSeen);";
+    j += "if(knownPorts.length===0)return Promise.resolve();";
+    j += "var probes=[];";
+    j += "for(var i=0;i<knownPorts.length;i++){probes.push(probePort(parseInt(knownPorts[i])));}";
+    j += "return Promise.all(probes).then(function(results){";
+    j += "for(var i=0;i<results.length;i++){var r=results[i];var pk=String(r.port);";
+    j += "if(r.ok){instanceLastSeen[pk]={data:{port:r.port,target:r.target,running:r.running},missCount:0,lastSuccess:Date.now()};}";
+    j += "else{if(instanceLastSeen[pk]){instanceLastSeen[pk].missCount++;";
+    j += "if(instanceLastSeen[pk].missCount>=MISS_THRESHOLD){delete instanceLastSeen[pk];}}}}";
+    j += "onScanDone();});}";
+
+    // Full discovery scan (slow, every 15s) - probes all ports
+    j += "function scanDiscovery(){";
+    j += "lastFullScanTime=Date.now();";
+    j += "var probes=[];";
+    j += "for(var p=SCAN_START;p<=SCAN_END;p++){probes.push(probePort(p));}";
+    j += "return Promise.all(probes).then(function(results){";
+    j += "for(var i=0;i<results.length;i++){var r=results[i];var pk=String(r.port);";
+    j += "if(r.ok){instanceLastSeen[pk]={data:{port:r.port,target:r.target,running:r.running},missCount:0,lastSuccess:Date.now()};}";
+    j += "else{if(instanceLastSeen[pk]){instanceLastSeen[pk].missCount++;";
+    j += "if(instanceLastSeen[pk].missCount>=MISS_THRESHOLD){delete instanceLastSeen[pk];}}}}";
+    j += "onScanDone();});}";
+
+    // Main scan dispatcher
+    j += "function scanInstances(){";
+    j += "var now=Date.now();";
+    j += "if(now-lastFullScanTime>=DISCOVERY_INTERVAL||Object.keys(instanceLastSeen).length===0){scanDiscovery();}";
+    j += "else{scanKnownInstances();}}";
+
+    j += "function onScanDone(){";
+    j += "var found=[];var keys=Object.keys(instanceLastSeen);";
+    j += "for(var i=0;i<keys.length;i++){found.push(instanceLastSeen[keys[i]].data);}";
     j += "found.sort(function(a,b){return a.port-b.port;});";
     j += "instances=found;";
     j += "if(activeInstancePort===0&&found.length>0){";
@@ -646,7 +684,7 @@ string BfDashJS_Status()
     j += "loadSessionData();";
     j += "loadMap();}";
 
-    j += "setInterval(scanInstances,3000);scanInstances();";
+    j += "setInterval(scanInstances,KNOWN_INTERVAL);scanInstances();";
 
     return j;
 }
@@ -1071,7 +1109,7 @@ string BfDashJS_Settings()
     j += "updateSlotValues(cfg);";
 
     j += "}).catch(function(){});}";
-    j += "setInterval(pollSettings,500);pollSettings();";
+    j += "setInterval(pollSettings,2000);pollSettings();";
 
     // Wire up static settings change events
     j += "document.getElementById('optTarget').addEventListener('change',function(){setVar('bf_target',this.value);prevTarget='';});";
@@ -1203,11 +1241,12 @@ string BfDashJS_Sessions()
 
     j += "function updateLiveCards(found){";
     j += "var running=found.filter(function(i){return i.running;});";
-    j += "var liveSec=document.getElementById('liveBf');";
-    j += "if(running.length===0){liveSec.style.display='none';";
+    j += "var emptyMsg=document.getElementById('liveEmpty');";
+    j += "if(running.length===0){";
+    j += "if(emptyMsg)emptyMsg.style.display='';";
     j += "var keys=Object.keys(liveCards);for(var k=0;k<keys.length;k++){clearInterval(liveCards[keys[k]].logTimer);clearInterval(liveCards[keys[k]].impTimer);liveCards[keys[k]].contentEl.parentNode.removeChild(liveCards[keys[k]].contentEl.parentNode);}";
     j += "liveCards={};return;}";
-    j += "liveSec.style.display='';";
+    j += "if(emptyMsg)emptyMsg.style.display='none';";
 
     // Remove cards for instances no longer running
     j += "var existingPorts=Object.keys(liveCards);";
