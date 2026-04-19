@@ -59,7 +59,7 @@ string HandleBfDashboard(const string &in body)
     h += "<div class='field-row'><label>Result Filename</label><input type='text' id='behFile' data-var='bf_result_filename'></div>";
     h += "<div class='field-row'><label>Iterations Before Restart</label><input type='number' id='behIter' data-var='bf_iterations_before_restart' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Result Folder</label><input type='text' id='behFolder' data-var='bf_result_folder'></div>";
-    h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' rows='3'></textarea></div>";
+    h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' data-script='1' rows='3'></textarea></div>";
     h += "</div></details>";
 
     // Conditions section
@@ -69,7 +69,7 @@ string HandleBfDashboard(const string &in body)
     h += "<div class='field-row'><label>Min Speed</label><input type='number' id='condSpeed' data-var='bf_condition_speed' min='0' step='0.1'></div>";
     h += "<div class='field-row'><label>Min CPs</label><input type='number' id='condCps' data-var='bf_condition_cps' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Trigger</label><select id='condTrigger' data-var='bf_condition_trigger'></select></div>";
-    h += "<div class='field-row full'><label>Condition Script</label><textarea id='condScript' data-var='bf_condition_script' rows='3'></textarea></div>";
+    h += "<div class='field-row full'><label>Condition Script</label><textarea id='condScript' data-var='bf_condition_script' data-script='1' rows='3'></textarea></div>";
     h += "</div></details>";
 
     // Input Modification section
