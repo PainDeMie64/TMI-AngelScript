@@ -502,7 +502,7 @@ string BfDashJS_Status()
     j += "function renderInstances(){";
     j += "var bar=document.getElementById('instanceBar');";
     j += "while(bar.firstChild)bar.removeChild(bar.firstChild);";
-    j += "if(instances.length<=1){bar.className='instance-bar inst-single';return;}";
+    j += "if(instances.length===0)return;";
     j += "bar.className='instance-bar';";
     j += "for(var i=0;i<instances.length;i++){";
     j += "(function(inst,idx){";
@@ -522,7 +522,10 @@ string BfDashJS_Status()
     j += "lastLogLen:lastLogLen,";
     j += "lastImpLen:lastImpLen,";
     j += "activeSession:activeSession,";
-    j += "activeSubTab:activeSubTab};}";
+    j += "activeSubTab:activeSubTab,";
+    j += "prevTarget:prevTarget,";
+    j += "prevSlotAlgos:prevSlotAlgos,";
+    j += "lastSlotCount:lastSlotCount};}";
     j += "activeInstancePort=port;";
     j += "apiBase=(port===instances[0].port&&instances[0].isSelf)?'':'http://localhost:'+port;";
     j += "var saved=perInstanceState[port];";
@@ -534,6 +537,9 @@ string BfDashJS_Status()
     j += "lastImpLen=saved.lastImpLen;";
     j += "activeSession=saved.activeSession;";
     j += "activeSubTab=saved.activeSubTab;";
+    j += "prevTarget=saved.prevTarget;";
+    j += "prevSlotAlgos=saved.prevSlotAlgos;";
+    j += "lastSlotCount=saved.lastSlotCount;";
     j += "}else{";
     j += "dirtyVars={};";
     j += "serverSnapshot={};";
@@ -541,7 +547,10 @@ string BfDashJS_Status()
     j += "lastLogLen=-1;";
     j += "lastImpLen=-1;";
     j += "activeSession='current';";
-    j += "activeSubTab='imp';}";
+    j += "activeSubTab='imp';";
+    j += "prevTarget='';";
+    j += "prevSlotAlgos='';";
+    j += "lastSlotCount=-1;}";
     j += "markAllClean();";
     j += "updateApplyBar();";
     j += "renderInstances();";
@@ -551,7 +560,7 @@ string BfDashJS_Status()
     j += "loadSessionData();";
     j += "loadMap();}";
 
-    j += "setInterval(pollInstances,5000);pollInstances();";
+    j += "setInterval(pollInstances,2000);pollInstances();";
 
     return j;
 }

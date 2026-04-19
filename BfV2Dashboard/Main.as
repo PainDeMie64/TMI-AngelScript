@@ -7,7 +7,7 @@ uint16 localPort = 0;
 uint instancePid = 0;
 uint64 lastHeartbeatTime = 0;
 uint consecutiveHeartbeatFailures = 0;
-const uint HEARTBEAT_INTERVAL_MS = 10000;
+const uint HEARTBEAT_INTERVAL_MS = 3000;
 const uint MAX_HEARTBEAT_FAILURES = 3;
 
 PluginInfo @GetPluginInfo()
@@ -157,7 +157,7 @@ void SetupAsRole(bool tryMaster)
             return;
         }
     }
-    log("BfV2Dashboard: No free port found (8489-8499 all taken)");
+    log("BfV2Dashboard: No free port found (8489-" + Text::FormatUInt(WORKER_PORT_END) + " all taken)");
 }
 
 void SendHeartbeat()
