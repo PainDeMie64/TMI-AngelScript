@@ -445,6 +445,40 @@ string HandleGetAllSettings(const string &in body)
         json += "," + JsonInt("bf_customtarget_eval_min_time", int(GetVariableDouble("bf_customtarget_eval_min_time")));
         json += "," + JsonInt("bf_customtarget_eval_max_time", int(GetVariableDouble("bf_customtarget_eval_max_time")));
     }
+    else if (targetId == "finetuner")
+    {
+        json += JsonInt("finetuner_eval_from", int(GetVariableDouble("finetuner_eval_from")));
+        json += "," + JsonInt("finetuner_eval_to", int(GetVariableDouble("finetuner_eval_to")));
+        json += "," + JsonBool("finetuner_target_grouped", GetVariableBool("finetuner_target_grouped"));
+        json += "," + JsonInt("finetuner_target_scalar", int(GetVariableDouble("finetuner_target_scalar")));
+        json += "," + JsonInt("finetuner_target_group", int(GetVariableDouble("finetuner_target_group")));
+        json += "," + JsonInt("finetuner_target_towards", int(GetVariableDouble("finetuner_target_towards")));
+        json += "," + JsonFloat("finetuner_target_value", float(GetVariableDouble("finetuner_target_value")));
+        vec3 ftVec = Text::ParseVec3(GetVariableString("finetuner_target_vec3"));
+        json += "," + JsonVec3("finetuner_target_vec3", ftVec);
+        json += "," + JsonBool("finetuner_print_by_component", GetVariableBool("finetuner_print_by_component"));
+    }
+    else if (targetId == "nosepos_plus")
+    {
+        json += JsonFloat("shweetz_eval_time_min", float(GetVariableDouble("shweetz_eval_time_min")));
+        json += "," + JsonFloat("shweetz_eval_time_max", float(GetVariableDouble("shweetz_eval_time_max")));
+        json += "," + JsonFloat("shweetz_yaw_deg", float(GetVariableDouble("shweetz_yaw_deg")));
+        json += "," + JsonFloat("shweetz_pitch_deg", float(GetVariableDouble("shweetz_pitch_deg")));
+        json += "," + JsonFloat("shweetz_roll_deg", float(GetVariableDouble("shweetz_roll_deg")));
+        json += "," + JsonBool("shweetz_allow_yaw_180", GetVariableBool("shweetz_allow_yaw_180"));
+        json += "," + JsonBool("shweetz_next_eval_check", GetVariableBool("shweetz_next_eval_check"));
+        json += "," + JsonString("shweetz_next_eval", GetVariableString("shweetz_next_eval"));
+        vec3 spPoint = Text::ParseVec3(GetVariableString("shweetz_point"));
+        json += "," + JsonVec3("shweetz_point", spPoint);
+        json += "," + JsonFloat("shweetz_angle_min_deg", float(GetVariableDouble("shweetz_angle_min_deg")));
+        json += "," + JsonFloat("shweetz_condition_speed", float(GetVariableDouble("shweetz_condition_speed")));
+        json += "," + JsonFloat("shweetz_min_cp", float(GetVariableDouble("shweetz_min_cp")));
+        json += "," + JsonFloat("shweetz_min_wheels_on_ground", float(GetVariableDouble("shweetz_min_wheels_on_ground")));
+        json += "," + JsonFloat("shweetz_gear", float(GetVariableDouble("shweetz_gear")));
+        json += "," + JsonFloat("shweetz_trigger_index", float(GetVariableDouble("shweetz_trigger_index")));
+        json += "," + JsonFloat("shweetz_antitrigger_index", float(GetVariableDouble("shweetz_antitrigger_index")));
+        json += "," + JsonFloat("shweetz_debug", float(GetVariableDouble("shweetz_debug")));
+    }
     json += "}";
 
     // Available evaluations
