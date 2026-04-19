@@ -46,7 +46,7 @@ string HandleBfDashboard(const string &in body)
 
     // Optimization section
     h += "<details id='secOptimization' open>";
-    h += "<summary>Optimization</summary>";
+    h += "<summary>Optimization <button class='propagate-btn' data-section='secOptimization' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div class='field-row'><label>Target</label><select id='optTarget' data-var='bf_target'></select></div>";
     h += "<div id='evalFields'></div>";
@@ -54,7 +54,7 @@ string HandleBfDashboard(const string &in body)
 
     // Behavior section
     h += "<details id='secBehavior'>";
-    h += "<summary>Behavior</summary>";
+    h += "<summary>Behavior <button class='propagate-btn' data-section='secBehavior' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div class='field-row'><label>Result Filename</label><input type='text' id='behFile' data-var='bf_result_filename'></div>";
     h += "<div class='field-row'><label>Iterations Before Restart</label><input type='number' id='behIter' data-var='bf_iterations_before_restart' min='0' step='1'></div>";
@@ -64,7 +64,7 @@ string HandleBfDashboard(const string &in body)
 
     // Conditions section
     h += "<details id='secConditions'>";
-    h += "<summary>Conditions</summary>";
+    h += "<summary>Conditions <button class='propagate-btn' data-section='secConditions' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div class='field-row'><label>Min Speed</label><input type='number' id='condSpeed' data-var='bf_condition_speed' min='0' step='0.1'></div>";
     h += "<div class='field-row'><label>Min CPs</label><input type='number' id='condCps' data-var='bf_condition_cps' min='0' step='1'></div>";
@@ -74,7 +74,7 @@ string HandleBfDashboard(const string &in body)
 
     // Input Modification section
     h += "<details id='secInputMod'>";
-    h += "<summary>Input Modification</summary>";
+    h += "<summary>Input Modification <button class='propagate-btn' data-section='secInputMod' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div id='slotsContainer'></div>";
     h += "<button id='btnAddSlot' class='btn-action'>+ Add Slot</button>";
@@ -139,6 +139,8 @@ string BfDashCSS()
     c += "summary::before{content:'\\25B6';display:inline-block;margin-right:0.5rem;font-size:0.65rem;transition:transform 0.15s}";
     c += "details[open]>summary::before{transform:rotate(90deg)}";
     c += "summary:hover{background:#161b22}";
+    c += ".propagate-btn{float:right;background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.7rem;cursor:pointer}";
+    c += ".propagate-btn:hover{background:#58a6ff30;color:#58a6ff;border-color:#58a6ff40}";
     c += ".sec-body{padding:0.7rem;display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem;overflow:hidden}";
 
     // Field rows
@@ -359,6 +361,34 @@ string BfDashJS_Helpers()
     j += "document.body.appendChild(t);";
     j += "setTimeout(function(){ t.classList.add('show'); }, 10);";
     j += "setTimeout(function(){ t.classList.remove('show'); setTimeout(function(){ t.remove(); }, 300); }, 3000);}";
+
+    // Propagate a section's settings to all other instances
+    j += "function propagateSection(sectionId){";
+    j += "var sec=document.getElementById(sectionId);if(!sec)return;";
+    j += "var els=sec.querySelectorAll('[data-var]');";
+    j += "var pairs={};";
+    j += "for(var i=0;i<els.length;i++){";
+    j += "var vn=els[i].getAttribute('data-var');if(!vn)continue;";
+    j += "var val;";
+    j += "if(els[i].type==='checkbox')val=els[i].checked?'true':'false';";
+    j += "else if(els[i].getAttribute('data-script'))val=displayToScript(els[i].value);";
+    j += "else if(els[i].getAttribute('data-time'))val=String(parseTime(els[i].value));";
+    j += "else if(els[i].getAttribute('data-vec3-idx')){";
+    j += "var vidx=els[i].getAttribute('data-vec3-idx');";
+    j += "if(vidx!=='0')continue;";
+    j += "var row=els[i].closest('.vec3-row');if(!row)continue;";
+    j += "var inps=row.querySelectorAll('input[type=number]');";
+    j += "val=inps[0].value+' '+inps[1].value+' '+inps[2].value;";
+    j += "}else val=els[i].value;";
+    j += "pairs[vn]=val;}";
+    j += "var body='';var keys=Object.keys(pairs);";
+    j += "for(var k=0;k<keys.length;k++){if(k>0)body+='\\n';body+=keys[k]+'='+pairs[keys[k]];}";
+    j += "var sent=0;";
+    j += "for(var ii=0;ii<instances.length;ii++){";
+    j += "if(instances[ii].port===activeInstancePort)continue;";
+    j += "sent++;";
+    j += "fetch('http://localhost:'+instances[ii].port+'/api/bf/set-batch',{method:'POST',body:body}).catch(function(){});}";
+    j += "showToast('Propagated '+keys.length+' settings to '+sent+' instance'+(sent!==1?'s':''));}";
 
     // Create a field-row div
     j += "function mkFieldRow(labelText,inputEl,full){";
