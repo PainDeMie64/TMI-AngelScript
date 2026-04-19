@@ -274,10 +274,6 @@ string BfDashJS_Helpers()
     j += "function setVar(name, value) {";
     j += "var sv = String(value);";
     j += "if (bfIsRunning === null) return;";
-    j += "if (name === 'bf_target') {";
-    j += "fetch('/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
-    j += "body:'name='+encodeURIComponent(name)+'&value='+encodeURIComponent(sv)});";
-    j += "return;}";
     j += "if (!bfIsRunning) {";
     j += "fetch('/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
     j += "body:'name='+encodeURIComponent(name)+'&value='+encodeURIComponent(sv)});";
@@ -869,7 +865,8 @@ string BfDashJS_Settings()
     j += "setField(tSel,cfg.target);";
 
     // Rebuild eval fields if target changed
-    j += "if(cfg.target!==prevTarget){prevTarget=cfg.target;buildEvalFields(cfg);}";
+    j += "var displayTarget=('bf_target' in dirtyVars)?dirtyVars['bf_target']:cfg.target;";
+    j += "if(displayTarget!==prevTarget){prevTarget=displayTarget;buildEvalFields({target:displayTarget,evalSettings:cfg.evalSettings,triggers:cfg.triggers});}";
     j += "updateEvalValues(cfg);";
 
     // Update behavior fields
