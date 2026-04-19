@@ -86,6 +86,8 @@ void Main()
     RegisterRoute("POST", "/api/bf/add-slot", HandlePostAddSlot);
     RegisterRoute("POST", "/api/bf/remove-slot", HandlePostRemoveSlot);
     RegisterRoute("POST", "/api/bf/copy-position", HandleCopyPosition);
+    RegisterRoute("POST", "/api/bf/delete-session", HandleDeleteSession);
+    RegisterRoute("POST", "/api/bf/set-batch", HandlePostSetBatch);
     RegisterRoute("GET", "/api/map", HandleGetMap);
     RegisterRoute("GET", "/", HandleBfDashboard);
     StartServer("127.0.0.1", 8081);

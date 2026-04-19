@@ -28,16 +28,22 @@ string SessionPath(const string &in filename)
 void StartSession()
 {
     string sessionsContent = FileRead(DATA_FOLDER + "/sessions.txt");
-    int sessionCount = 0;
+    int maxId = 0;
     if (sessionsContent.Length > 0)
     {
         array<string>@ lines = sessionsContent.Split("\n");
         for (uint i = 0; i < lines.Length; i++)
         {
-            if (lines[i].Length > 0) sessionCount++;
+            if (lines[i].Length == 0) continue;
+            array<string>@ parts = lines[i].Split("|");
+            if (parts.Length >= 1)
+            {
+                int id = int(Text::ParseInt(parts[0]));
+                if (id > maxId) maxId = id;
+            }
         }
     }
-    currentSessionId = sessionCount + 1;
+    currentSessionId = maxId + 1;
 
     string mapName = "";
     TM::GameCtnChallenge@ ch = GetCurrentChallenge();

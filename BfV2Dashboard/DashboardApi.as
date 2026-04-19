@@ -566,3 +566,89 @@ string HandleCopyPosition(const string &in body)
     json += "}";
     return json;
 }
+
+string HandleDeleteSession(const string &in body)
+{
+    string id = GetFormValue(body, "id");
+    if (id.Length == 0)
+        return "{\"ok\":false,\"error\":\"missing id\"}";
+
+    int idNum = int(Text::ParseInt(id));
+    if (idNum <= 0)
+        return "{\"ok\":false,\"error\":\"invalid id\"}";
+
+    if (idNum == currentSessionId)
+        return "{\"ok\":false,\"error\":\"cannot delete active session\"}";
+
+    string content = FileRead(DATA_FOLDER + "/sessions.txt");
+    if (content.Length == 0)
+        return "{\"ok\":false,\"error\":\"no sessions\"}";
+
+    array<string>@ lines = content.Split("\n");
+    string newContent = "";
+    bool found = false;
+    for (uint i = 0; i < lines.Length; i++)
+    {
+        if (lines[i].Length == 0) continue;
+        array<string>@ parts = lines[i].Split("|");
+        if (parts.Length >= 1 && parts[0] == id)
+        {
+            found = true;
+            continue;
+        }
+        if (newContent.Length > 0) newContent += "\n";
+        newContent += lines[i];
+    }
+
+    if (!found)
+        return "{\"ok\":false,\"error\":\"not found\"}";
+
+    if (newContent.Length > 0) newContent += "\n";
+    FileWrite(DATA_FOLDER + "/sessions.txt", newContent);
+
+    FileWrite(DATA_FOLDER + "/sessions/" + id + "/log.txt", "");
+    FileWrite(DATA_FOLDER + "/sessions/" + id + "/improvements.txt", "");
+
+    return "{\"ok\":true}";
+}
+
+string HandlePostSetBatch(const string &in body)
+{
+    array<VariableInfo>@ vars = ListVariables();
+    array<string>@ lines = body.Split("\n");
+    int setCount = 0;
+    for (uint i = 0; i < lines.Length; i++)
+    {
+        string line = lines[i];
+        if (line.Length == 0) continue;
+        int eq = line.FindFirst("=");
+        if (eq <= 0) continue;
+        string name = line.Substr(0, eq);
+        string value = line.Substr(uint(eq + 1));
+
+        VariableType varType = VariableType::String;
+        bool found = false;
+        if (vars !is null)
+        {
+            for (uint v = 0; v < vars.Length; v++)
+            {
+                if (vars[v].Name == name)
+                {
+                    varType = vars[v].Type;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) continue;
+
+        if (varType == VariableType::Double)
+            SetVariable(name, double(Text::ParseFloat(value)));
+        else if (varType == VariableType::Boolean)
+            SetVariable(name, value == "true" || value == "1");
+        else
+            SetVariable(name, value);
+        setCount++;
+    }
+    return "{\"ok\":true,\"count\":" + Text::FormatInt(setCount) + "}";
+}

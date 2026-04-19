@@ -36,6 +36,12 @@ string HandleBfDashboard(const string &in body)
     h += "<section class='panel wide' id='settings'>";
     h += "<h2>Settings</h2>";
     h += "<div id='ctrlBadge'></div>";
+    h += "<div id='applyBar' class='apply-bar' style='display:none'>";
+    h += "<span class='desynced-badge'>Desynchronized</span>";
+    h += "<span id='dirtyCount' class='dirty-count'>No pending changes</span>";
+    h += "<button id='btnDiscard' class='btn-action' disabled>Discard</button>";
+    h += "<button id='btnApply' class='btn-action btn-apply' disabled>Apply All</button>";
+    h += "</div>";
 
     // Optimization section
     h += "<details id='secOptimization' open>";
@@ -200,6 +206,18 @@ string BfDashCSS()
     c += ".log-entry .lt{color:#8b949e;margin-right:0.5rem}";
     c += ".log-entry .lm{color:#c9d1d9}";
 
+    c += ".dirty { border-left: 3px solid #d29922 !important; padding-left: 0.3rem; }";
+    c += ".apply-bar { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.7rem; margin-bottom:0.6rem; background:#d2992215; border:1px solid #d2992240; border-radius:6px; }";
+    c += ".desynced-badge { background:#d2992230; color:#d29922; padding:0.15rem 0.5rem; border-radius:4px; font-size:0.8rem; font-weight:600; }";
+    c += ".dirty-count { color:#8b949e; font-size:0.8rem; flex:1; }";
+    c += ".btn-apply { background:#d2992230; color:#d29922; border-color:#d2992240; }";
+    c += ".btn-apply:hover:not(:disabled) { background:#d2992250; }";
+    c += ".btn-action:disabled { opacity:0.4; cursor:default; }";
+    c += ".toast { position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%) translateY(20px); background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:0.5rem 1rem; font-size:0.85rem; opacity:0; transition:opacity 0.3s,transform 0.3s; z-index:1000; pointer-events:none; }";
+    c += ".toast.show { opacity:1; transform:translateX(-50%) translateY(0); }";
+    c += ".tab-del { background:none; border:none; color:#8b949e; font-size:0.7rem; cursor:pointer; margin-left:0.3rem; padding:0 0.2rem; line-height:1; }";
+    c += ".tab-del:hover { color:#f85149; }";
+
     c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
 
     return c;
@@ -212,6 +230,11 @@ string BfDashCSS()
 string BfDashJS_Helpers()
 {
     string j = "";
+
+    // State variables for buffered mode
+    j += "var bfIsRunning = null;";
+    j += "var dirtyVars = {};";
+    j += "var serverSnapshot = {};";
 
     // Format milliseconds to m:ss.cc
     j += "function fmtTime(ms){";
@@ -247,14 +270,39 @@ string BfDashJS_Helpers()
     j += "function scriptToDisplay(s){if(!s)return '';return s.split(':').join('\\n');}";
     j += "function displayToScript(s){if(!s)return '';return s.split('\\n').join(':');}";
 
-    // POST /api/bf/set helper
-    j += "function setVar(name,value){";
-    j += "fetch('/api/bf/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},";
-    j += "body:'name='+encodeURIComponent(name)+'&value='+encodeURIComponent(String(value))});}";
+    // POST /api/bf/set helper (mode-aware: buffers during BF, immediate otherwise)
+    j += "function setVar(name, value) {";
+    j += "var sv = String(value);";
+    j += "if (bfIsRunning === null) return;";
+    j += "if (name === 'bf_target') {";
+    j += "fetch('/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
+    j += "body:'name='+encodeURIComponent(name)+'&value='+encodeURIComponent(sv)});";
+    j += "return;}";
+    j += "if (!bfIsRunning) {";
+    j += "fetch('/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
+    j += "body:'name='+encodeURIComponent(name)+'&value='+encodeURIComponent(sv)});";
+    j += "return;}";
+    j += "if (serverSnapshot[name] !== undefined && serverSnapshot[name] === sv) {";
+    j += "delete dirtyVars[name];";
+    j += "} else {";
+    j += "dirtyVars[name] = sv;}";
+    j += "markFieldDirty(name, name in dirtyVars);";
+    j += "updateApplyBar();}";
 
-    // POST helper for add-slot / remove-slot
-    j += "function postAction(url,bodyStr){";
-    j += "fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:bodyStr||''});}";
+    // POST helper for add-slot / remove-slot (clears slot-related dirty vars on structural changes)
+    j += "function postAction(url, bodyStr) {";
+    j += "fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:bodyStr||''});";
+    j += "if (bfIsRunning && (url.indexOf('add-slot') !== -1 || url.indexOf('remove-slot') !== -1)) {";
+    j += "var keys = Object.keys(dirtyVars);";
+    j += "for (var i=0; i<keys.length; i++) {";
+    j += "if (keys[i].indexOf('bf_modify') === 0 || keys[i].indexOf('bf_inputs') === 0 ||";
+    j += "keys[i].indexOf('bf_max_') === 0 || keys[i].indexOf('bf_range') === 0 ||";
+    j += "keys[i].indexOf('bf_adv') === 0 || keys[i].indexOf('bf_input_mod') === 0) {";
+    j += "var row = document.querySelector('[data-var=\"'+keys[i]+'\"]');";
+    j += "if (row) { var r2 = row.closest('.field-row')||row.closest('.chk-row'); if(r2) r2.classList.remove('dirty'); }";
+    j += "delete dirtyVars[keys[i]];}}";
+    j += "updateApplyBar();";
+    j += "showToast('Slot changed. Slot-related pending edits cleared.');}}";
 
     // Safe set textContent
     j += "function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}";
@@ -262,12 +310,47 @@ string BfDashJS_Helpers()
     // Check if element is focused
     j += "function isFocused(el){return document.activeElement===el;}";
 
-    // Set field value only if not focused
-    j += "function setField(el,val){if(!el||isFocused(el))return;";
-    j += "if(el.tagName==='SELECT'){el.value=String(val);}";
-    j += "else if(el.type==='checkbox'){el.checked=!!val;}";
-    j += "else{el.value=String(val);";
-    j += "if(el.type==='range'){var ev=el.closest('.range-wrap');if(ev){var sp=ev.querySelector('.range-val');if(sp)sp.textContent=String(val);}}}}";
+    // Set field value only if not focused (dirty-aware: skips fields with local dirty edits during BF)
+    j += "function setField(el, val) {";
+    j += "if (!el || isFocused(el)) return;";
+    j += "var vn = el.getAttribute('data-var');";
+    j += "if (bfIsRunning && vn && (vn in dirtyVars)) return;";
+    j += "if (el.tagName === 'SELECT') el.value = String(val);";
+    j += "else if (el.type === 'checkbox') el.checked = !!val;";
+    j += "else {";
+    j += "el.value = String(val);";
+    j += "if (el.type === 'range') {";
+    j += "var ev = el.closest('.range-wrap');";
+    j += "if (ev) { var sp = ev.querySelector('.range-val'); if (sp) sp.textContent = String(val); }}}}";
+
+    // Dirty field marking helpers
+    j += "function markFieldDirty(varName, isDirty) {";
+    j += "var els = document.querySelectorAll('[data-var=\"'+varName+'\"]');";
+    j += "for (var i=0; i<els.length; i++) {";
+    j += "var row = els[i].closest('.field-row') || els[i].closest('.chk-row') || els[i].closest('.vec3-row') || els[i].closest('.range-wrap');";
+    j += "if (row) { if (isDirty) row.classList.add('dirty'); else row.classList.remove('dirty'); }}}";
+
+    j += "function markAllClean() {";
+    j += "var els = document.querySelectorAll('.dirty');";
+    j += "for (var i=0; i<els.length; i++) els[i].classList.remove('dirty');}";
+
+    j += "function updateApplyBar() {";
+    j += "var bar = document.getElementById('applyBar');";
+    j += "if (!bar) return;";
+    j += "var count = Object.keys(dirtyVars).length;";
+    j += "if (!bfIsRunning) { bar.style.display = 'none'; return; }";
+    j += "bar.style.display = 'flex';";
+    j += "document.getElementById('dirtyCount').textContent = count > 0 ? count + ' pending change' + (count > 1 ? 's' : '') : 'No pending changes';";
+    j += "document.getElementById('btnApply').disabled = (count === 0);";
+    j += "document.getElementById('btnDiscard').disabled = (count === 0);}";
+
+    j += "function showToast(msg) {";
+    j += "var t = document.createElement('div');";
+    j += "t.className = 'toast';";
+    j += "t.textContent = msg;";
+    j += "document.body.appendChild(t);";
+    j += "setTimeout(function(){ t.classList.add('show'); }, 10);";
+    j += "setTimeout(function(){ t.classList.remove('show'); setTimeout(function(){ t.remove(); }, 300); }, 3000);}";
 
     // Create a field-row div
     j += "function mkFieldRow(labelText,inputEl,full){";
@@ -369,6 +452,20 @@ string BfDashJS_Status()
     j += "setText('bfIter',fmtNum(d.iterations||0));";
     j += "setText('bfIterSec',(d.iterationsPerSec||0).toFixed(1));";
     j += "setText('bfRestarts',d.restarts||0);";
+    // Track bfIsRunning transitions
+    j += "var wasRunning = bfIsRunning;";
+    j += "bfIsRunning = d.running;";
+    j += "if (wasRunning === null) { updateApplyBar(); }";
+    j += "if (wasRunning && !bfIsRunning) {";
+    j += "var count = Object.keys(dirtyVars).length;";
+    j += "if (count > 0) {";
+    j += "applyAllDirty();";
+    j += "showToast('BF ended. ' + count + ' pending change(s) applied.');}";
+    j += "updateApplyBar();}";
+    j += "if (!wasRunning && bfIsRunning) {";
+    j += "dirtyVars = {};";
+    j += "markAllClean();";
+    j += "updateApplyBar();}";
     j += "}).catch(function(){";
     j += "if(pollOk){pollOk=false;var cn=document.getElementById('conn');cn.textContent='Disconnected';cn.style.background='#f8514930';cn.style.color='#f85149';}";
     j += "});}";
@@ -726,6 +823,38 @@ string BfDashJS_Settings()
     j += "fetch('/api/bf/all-settings').then(function(r){return r.json();}).then(function(cfg){";
     j += "allCfg=cfg;";
 
+    // Build serverSnapshot from polled config
+    j += "serverSnapshot={};";
+    j += "serverSnapshot['bf_target']=String(cfg.target);";
+    j += "if(cfg.behavior){";
+    j += "serverSnapshot['bf_result_filename']=String(cfg.behavior.resultFilename);";
+    j += "serverSnapshot['bf_iterations_before_restart']=String(cfg.behavior.iterationsBeforeRestart);";
+    j += "serverSnapshot['bf_result_folder']=String(cfg.behavior.resultFolder);";
+    j += "serverSnapshot['bf_restart_condition_script']=String(cfg.behavior.restartConditionScript);}";
+    j += "if(cfg.conditions){";
+    j += "serverSnapshot['bf_condition_speed']=String(cfg.conditions.speed);";
+    j += "serverSnapshot['bf_condition_cps']=String(cfg.conditions.cps);";
+    j += "serverSnapshot['bf_condition_trigger']=String(cfg.conditions.trigger);";
+    j += "serverSnapshot['bf_condition_script']=String(cfg.conditions.conditionScript);}";
+    j += "if(cfg.evalSettings){var ek=Object.keys(cfg.evalSettings);for(var ei=0;ei<ek.length;ei++){";
+    j += "var ev=cfg.evalSettings[ek[ei]];";
+    j += "if(ev!==null&&typeof ev==='object'&&'x' in ev)serverSnapshot[ek[ei]]=ev.x.toFixed(3)+' '+ev.y.toFixed(3)+' '+ev.z.toFixed(3);";
+    j += "else serverSnapshot[ek[ei]]=String(ev);}}";
+    j += "if(cfg.slots){for(var si=0;si<cfg.slots.length;si++){var sl=cfg.slots[si];var vs=si===0?'':'_'+si;";
+    j += "serverSnapshot['bf_input_mod_algorithm'+vs]=sl.algorithm;";
+    j += "if(si>0)serverSnapshot['bf_input_mod_enabled'+vs]=String(sl.enabled);";
+    j += "var algos=['basic','range','advanced_basic','advanced_range'];";
+    j += "for(var ai=0;ai<algos.length;ai++){var ao=sl[algos[ai]];if(!ao)continue;var ak=Object.keys(ao);";
+    j += "for(var aki=0;aki<ak.length;aki++){var varN=findVarName(algos[ai],ak[aki],vs);if(varN)serverSnapshot[varN]=String(ao[ak[aki]]);}}}}";
+
+    // Helper to map JSON key back to variable name
+    j += "function findVarName(algo,key,vs){";
+    j += "var m={'basic':{'modifyCount':'bf_modify_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time','maxSteerDiff':'bf_max_steer_diff','maxTimeDiff':'bf_max_time_diff','fillSteer':'bf_inputs_fill_steer'},";
+    j += "'range':{'minInputCount':'bf_range_min_input_count','maxInputCount':'bf_range_max_input_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time','minSteer':'bf_range_min_steer','maxSteer':'bf_range_max_steer','minTimeDiff':'bf_range_min_time_diff','maxTimeDiff':'bf_range_max_time_diff','fillSteer':'bf_range_fill_steer'},";
+    j += "'advanced_basic':{'steerModifyCount':'bf_adv_steer_modify_count','steerMinTime':'bf_adv_steer_min_time','steerMaxTime':'bf_adv_steer_max_time','steerMaxDiff':'bf_adv_steer_max_diff','steerMaxTimeDiff':'bf_adv_steer_max_time_diff','steerFill':'bf_adv_steer_fill','accelModifyCount':'bf_adv_accel_modify_count','accelMinTime':'bf_adv_accel_min_time','accelMaxTime':'bf_adv_accel_max_time','accelMaxTimeDiff':'bf_adv_accel_max_time_diff','brakeModifyCount':'bf_adv_brake_modify_count','brakeMinTime':'bf_adv_brake_min_time','brakeMaxTime':'bf_adv_brake_max_time','brakeMaxTimeDiff':'bf_adv_brake_max_time_diff'},";
+    j += "'advanced_range':{'steerMinInputCount':'bf_advr_steer_min_input_count','steerMaxInputCount':'bf_advr_steer_max_input_count','steerMinTime':'bf_advr_steer_min_time','steerMaxTime':'bf_advr_steer_max_time','steerMinSteer':'bf_advr_steer_min_steer','steerMaxSteer':'bf_advr_steer_max_steer','steerMinTimeDiff':'bf_advr_steer_min_time_diff','steerMaxTimeDiff':'bf_advr_steer_max_time_diff','steerFill':'bf_advr_steer_fill','accelMinInputCount':'bf_advr_accel_min_input_count','accelMaxInputCount':'bf_advr_accel_max_input_count','accelMinTime':'bf_advr_accel_min_time','accelMaxTime':'bf_advr_accel_max_time','accelMinTimeDiff':'bf_advr_accel_min_time_diff','accelMaxTimeDiff':'bf_advr_accel_max_time_diff','brakeMinInputCount':'bf_advr_brake_min_input_count','brakeMaxInputCount':'bf_advr_brake_max_input_count','brakeMinTime':'bf_advr_brake_min_time','brakeMaxTime':'bf_advr_brake_max_time','brakeMinTimeDiff':'bf_advr_brake_min_time_diff','brakeMaxTimeDiff':'bf_advr_brake_max_time_diff'}};";
+    j += "var map=m[algo];if(!map||!map[key])return null;return map[key]+vs;}";
+
     // Controller badge
     j += "var cb=document.getElementById('ctrlBadge');";
     j += "if(!cfg.controllerActive){";
@@ -789,6 +918,25 @@ string BfDashJS_Settings()
     // Add Slot button
     j += "document.getElementById('btnAddSlot').addEventListener('click',function(){postAction('/api/bf/add-slot','');});";
 
+    // Apply/Discard button handlers
+    j += "function applyAllDirty() {";
+    j += "var keys = Object.keys(dirtyVars);";
+    j += "if (keys.length === 0) return;";
+    j += "var body = '';";
+    j += "for (var i=0; i<keys.length; i++) {";
+    j += "if (i > 0) body += '\\n';";
+    j += "body += keys[i] + '=' + dirtyVars[keys[i]];}";
+    j += "fetch('/api/bf/set-batch', {method:'POST', body:body}).then(function(r){return r.json();}).then(function(d){";
+    j += "if (d.ok) { dirtyVars = {}; markAllClean(); updateApplyBar(); }";
+    j += "}).catch(function(){});}";
+
+    j += "document.getElementById('btnApply').addEventListener('click', function() { applyAllDirty(); });";
+    j += "document.getElementById('btnDiscard').addEventListener('click', function() {";
+    j += "dirtyVars = {};";
+    j += "markAllClean();";
+    j += "updateApplyBar();";
+    j += "pollSettings();});";
+
     return j;
 }
 
@@ -823,15 +971,35 @@ string BfDashJS_Sessions()
     j += "fetch('/api/bf/sessions').then(function(r){return r.json();}).then(function(arr){sessions=arr;renderSessionTabs();}).catch(function(){});}";
     j += "setInterval(pollSessions,5000);pollSessions();";
 
-    // Render session tabs
+    // Render session tabs (with X delete buttons on past sessions)
     j += "function renderSessionTabs(){";
     j += "var bar=document.getElementById('sessionTabs');while(bar.firstChild)bar.removeChild(bar.firstChild);";
     j += "var cur=document.createElement('button');cur.className='tab-btn'+(activeSession==='current'?' active':'');cur.textContent='Current';";
     j += "cur.addEventListener('click',function(){activeSession='current';renderSessionTabs();loadSessionData();});bar.appendChild(cur);";
-    j += "for(var i=sessions.length-1;i>=0;i--){var s=sessions[i];";
+    j += "for(var i=sessions.length-1;i>=0;i--){";
+    j += "(function(s){";
     j += "var btn=document.createElement('button');btn.className='tab-btn'+(activeSession===s.id?' active':'');";
-    j += "btn.textContent='#'+s.id+': '+(s.target||'?').substring(0,15);btn.title=s.map||'';";
-    j += "(function(sid){btn.addEventListener('click',function(){activeSession=sid;renderSessionTabs();loadSessionData();});})(s.id);bar.appendChild(btn);}";
+    j += "btn.title=s.map||'';";
+    j += "var lbl=document.createElement('span');";
+    j += "lbl.textContent='#'+s.id+': '+(s.target||'?').substring(0,15);";
+    j += "btn.appendChild(lbl);";
+    j += "var del=document.createElement('span');";
+    j += "del.className='tab-del';";
+    j += "del.textContent='\\u00D7';";
+    j += "del.title='Delete session #'+s.id;";
+    j += "del.addEventListener('click',function(e){";
+    j += "e.stopPropagation();";
+    j += "if(!e.shiftKey&&!confirm('Delete session #'+s.id+'?\\n(Hold Shift to bypass this confirmation)'))return;";
+    j += "fetch('/api/bf/delete-session',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+encodeURIComponent(s.id)}).then(function(r){return r.json();}).then(function(d){";
+    j += "if(d.ok){";
+    j += "if(activeSession===s.id)activeSession='current';";
+    j += "for(var j2=0;j2<sessions.length;j2++){if(sessions[j2].id===s.id){sessions.splice(j2,1);break;}}";
+    j += "renderSessionTabs();";
+    j += "loadSessionData();}});});";
+    j += "btn.appendChild(del);";
+    j += "btn.addEventListener('click',function(){activeSession=s.id;renderSessionTabs();loadSessionData();});";
+    j += "bar.appendChild(btn);";
+    j += "})(sessions[i]);}";
     j += "}";
 
     // Sub-tab switching
