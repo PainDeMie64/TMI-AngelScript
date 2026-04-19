@@ -1,3 +1,83 @@
+// --- Instance Registry (master-only) ---
+
+class InstanceInfo
+{
+    uint pid;
+    uint16 port;
+    uint64 lastHeartbeat;
+}
+
+array<InstanceInfo@> registeredInstances;
+const uint64 STALE_THRESHOLD_MS = 30000;
+
+void RegisterInstance(uint pid, uint16 port)
+{
+    for (uint i = 0; i < registeredInstances.Length; i++)
+    {
+        if (registeredInstances[i].port == port)
+        {
+            registeredInstances[i].pid = pid;
+            registeredInstances[i].lastHeartbeat = Time::Now;
+            return;
+        }
+    }
+    InstanceInfo@ info = InstanceInfo();
+    info.pid = pid;
+    info.port = port;
+    info.lastHeartbeat = Time::Now;
+    registeredInstances.Add(info);
+}
+
+void CleanStaleInstances()
+{
+    uint64 now = Time::Now;
+    for (int i = int(registeredInstances.Length) - 1; i >= 0; i--)
+    {
+        if (registeredInstances[i].port == localPort) continue;
+        if (now - registeredInstances[i].lastHeartbeat > STALE_THRESHOLD_MS)
+        {
+            log("BfV2Dashboard: Removing stale instance on port " + Text::FormatUInt(registeredInstances[i].port));
+            registeredInstances.RemoveAt(uint(i));
+        }
+    }
+}
+
+string HandleGetInstances(const string &in body)
+{
+    string json = "[";
+    for (uint i = 0; i < registeredInstances.Length; i++)
+    {
+        if (i > 0) json += ",";
+        json += "{" + JsonUInt("pid", registeredInstances[i].pid);
+        json += "," + JsonUInt("port", uint(registeredInstances[i].port));
+        json += "," + JsonBool("isSelf", registeredInstances[i].port == localPort);
+        json += "}";
+    }
+    json += "]";
+    return json;
+}
+
+string HandleInternalRegister(const string &in body)
+{
+    string pidStr = GetFormValue(body, "pid");
+    string portStr = GetFormValue(body, "port");
+    if (pidStr.Length == 0 || portStr.Length == 0)
+        return "{\"ok\":false}";
+    uint pid = uint(Text::ParseUInt(pidStr));
+    uint16 port = uint16(Text::ParseUInt(portStr));
+    if (port == 0) return "{\"ok\":false}";
+    RegisterInstance(pid, port);
+    return "{\"ok\":true}";
+}
+
+string HandleWorkerRedirect(const string &in body)
+{
+    return "<html><head><meta http-equiv='refresh' content='0;url=http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/'></head>"
+        + "<body>Redirecting to <a href='http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/'>master dashboard</a>...</body></html>";
+}
+
+// --- BfV2 API ---
+
 string GetBfTargetTitle()
 {
     string targetId = GetVariableString("bf_target");

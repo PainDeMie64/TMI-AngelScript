@@ -8,6 +8,7 @@ string HandleBfDashboard(const string &in body)
     h += "</head><body>";
     h += "<header><h1>BfV2 Dashboard</h1><span id='conn' class='badge'>Connecting...</span></header>";
     h += "<main>";
+    h += "<div id='instanceBar' class='instance-bar'></div>";
 
     // Status panel
     h += "<section class='panel' id='status'>";
@@ -218,6 +219,12 @@ string BfDashCSS()
     c += ".tab-del { background:none; border:none; color:#8b949e; font-size:0.7rem; cursor:pointer; margin-left:0.3rem; padding:0 0.2rem; line-height:1; }";
     c += ".tab-del:hover { color:#f85149; }";
 
+    c += ".instance-bar { display:flex; gap:0.3rem; margin-bottom:1rem; grid-column:1/-1; flex-wrap:wrap; }";
+    c += ".inst-btn { background:#21262d; color:#8b949e; border:1px solid #30363d; padding:0.4rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem; }";
+    c += ".inst-btn:hover { background:#30363d; }";
+    c += ".inst-btn.active { background:#f0883e20; color:#f0883e; border-color:#f0883e40; }";
+    c += ".inst-single { display:none; }";
+
     c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
 
     return c;
@@ -230,6 +237,12 @@ string BfDashCSS()
 string BfDashJS_Helpers()
 {
     string j = "";
+
+    // Multi-instance state
+    j += "var apiBase = '';";
+    j += "var activeInstancePort = 0;";
+    j += "var instances = [];";
+    j += "var perInstanceState = {};";
 
     // State variables for buffered mode
     j += "var bfIsRunning = null;";
@@ -275,7 +288,7 @@ string BfDashJS_Helpers()
     j += "var sv = String(value);";
     j += "if (bfIsRunning === null) return;";
     j += "if (!bfIsRunning) {";
-    j += "fetch('/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
+    j += "fetch(apiBase+'/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
     j += "body:'name='+encodeURIComponent(name)+'&value='+encodeURIComponent(sv)});";
     j += "return;}";
     j += "if (serverSnapshot[name] !== undefined && serverSnapshot[name] === sv) {";
@@ -287,7 +300,7 @@ string BfDashJS_Helpers()
 
     // POST helper for add-slot / remove-slot (clears slot-related dirty vars on structural changes)
     j += "function postAction(url, bodyStr) {";
-    j += "fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:bodyStr||''});";
+    j += "fetch(apiBase+url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:bodyStr||''});";
     j += "if (bfIsRunning && (url.indexOf('add-slot') !== -1 || url.indexOf('remove-slot') !== -1)) {";
     j += "var keys = Object.keys(dirtyVars);";
     j += "for (var i=0; i<keys.length; i++) {";
@@ -417,7 +430,7 @@ string BfDashJS_Helpers()
     j += "wrap.appendChild(inp);}";
     j += "if(withCopy){var btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Copy Vehicle';";
     j += "btn.addEventListener('click',function(){";
-    j += "fetch('/api/bf/copy-position',{method:'POST'}).then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/bf/copy-position',{method:'POST'}).then(function(r){return r.json();}).then(function(d){";
     j += "if(d.vehiclePosition){var inps=wrap.querySelectorAll('input[type=number]');";
     j += "inps[0].value=d.vehiclePosition.x.toFixed(3);inps[1].value=d.vehiclePosition.y.toFixed(3);inps[2].value=d.vehiclePosition.z.toFixed(3);";
     j += "setVar(varName,d.vehiclePosition.x+' '+d.vehiclePosition.y+' '+d.vehiclePosition.z);}});});";
@@ -439,7 +452,7 @@ string BfDashJS_Status()
 
     // Status polling
     j += "function pollStatus(){";
-    j += "fetch('/api/bf/status').then(function(r){return r.json();}).then(function(d){pollOk=true;";
+    j += "fetch(apiBase+'/api/bf/status').then(function(r){return r.json();}).then(function(d){pollOk=true;";
     j += "var cn=document.getElementById('conn');cn.textContent='Connected';cn.style.background='#3fb95030';cn.style.color='#3fb950';";
     j += "var st=document.getElementById('bfState');st.textContent=d.running?'Running':'Idle';st.className='badge '+(d.running?'running':'idle');";
     j += "var ph=document.getElementById('bfPhase');ph.textContent=d.phase;ph.className='badge '+(d.phase==='Initial'?'initial':d.phase==='Search'?'search':'idle');";
@@ -469,12 +482,76 @@ string BfDashJS_Status()
 
     // Map
     j += "function loadMap(){";
-    j += "fetch('/api/map').then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/map').then(function(r){return r.json();}).then(function(d){";
     j += "setText('mapName',d.loaded?d.name:'No map');";
     j += "setText('mapAuthor',d.loaded?d.author:'-');";
     j += "setText('mapUid',d.loaded?d.uid:'-');";
     j += "}).catch(function(){});}";
     j += "loadMap();setInterval(loadMap,10000);";
+
+    // Multi-instance support
+    j += "function pollInstances(){";
+    j += "fetch('/api/instances').then(function(r){return r.json();}).then(function(arr){";
+    j += "instances=arr;";
+    j += "if(activeInstancePort===0&&instances.length>0){";
+    j += "activeInstancePort=instances[0].port;";
+    j += "apiBase=instances[0].isSelf?'':'http://localhost:'+instances[0].port;}";
+    j += "renderInstances();";
+    j += "}).catch(function(){});}";
+
+    j += "function renderInstances(){";
+    j += "var bar=document.getElementById('instanceBar');";
+    j += "while(bar.firstChild)bar.removeChild(bar.firstChild);";
+    j += "if(instances.length<=1){bar.className='instance-bar inst-single';return;}";
+    j += "bar.className='instance-bar';";
+    j += "for(var i=0;i<instances.length;i++){";
+    j += "(function(inst,idx){";
+    j += "var btn=document.createElement('button');";
+    j += "btn.className='inst-btn'+(activeInstancePort===inst.port?' active':'');";
+    j += "btn.textContent='Instance '+(idx+1)+(inst.isSelf?' (master)':'')+' :'+inst.port;";
+    j += "btn.addEventListener('click',function(){switchInstance(inst.port);});";
+    j += "bar.appendChild(btn);";
+    j += "})(instances[i],i);}}";
+
+    j += "function switchInstance(port){";
+    j += "if(activeInstancePort>0){";
+    j += "perInstanceState[activeInstancePort]={";
+    j += "dirtyVars:dirtyVars,";
+    j += "serverSnapshot:serverSnapshot,";
+    j += "bfIsRunning:bfIsRunning,";
+    j += "lastLogLen:lastLogLen,";
+    j += "lastImpLen:lastImpLen,";
+    j += "activeSession:activeSession,";
+    j += "activeSubTab:activeSubTab};}";
+    j += "activeInstancePort=port;";
+    j += "apiBase=(port===instances[0].port&&instances[0].isSelf)?'':'http://localhost:'+port;";
+    j += "var saved=perInstanceState[port];";
+    j += "if(saved){";
+    j += "dirtyVars=saved.dirtyVars;";
+    j += "serverSnapshot=saved.serverSnapshot;";
+    j += "bfIsRunning=saved.bfIsRunning;";
+    j += "lastLogLen=saved.lastLogLen;";
+    j += "lastImpLen=saved.lastImpLen;";
+    j += "activeSession=saved.activeSession;";
+    j += "activeSubTab=saved.activeSubTab;";
+    j += "}else{";
+    j += "dirtyVars={};";
+    j += "serverSnapshot={};";
+    j += "bfIsRunning=null;";
+    j += "lastLogLen=-1;";
+    j += "lastImpLen=-1;";
+    j += "activeSession='current';";
+    j += "activeSubTab='imp';}";
+    j += "markAllClean();";
+    j += "updateApplyBar();";
+    j += "renderInstances();";
+    j += "pollStatus();";
+    j += "pollSettings();";
+    j += "pollSessions();";
+    j += "loadSessionData();";
+    j += "loadMap();}";
+
+    j += "setInterval(pollInstances,5000);pollInstances();";
 
     return j;
 }
@@ -816,7 +893,7 @@ string BfDashJS_Settings()
 
     // Main settings poll
     j += "function pollSettings(){";
-    j += "fetch('/api/bf/all-settings').then(function(r){return r.json();}).then(function(cfg){";
+    j += "fetch(apiBase+'/api/bf/all-settings').then(function(r){return r.json();}).then(function(cfg){";
     j += "allCfg=cfg;";
 
     // Build serverSnapshot from polled config
@@ -923,7 +1000,7 @@ string BfDashJS_Settings()
     j += "for (var i=0; i<keys.length; i++) {";
     j += "if (i > 0) body += '\\n';";
     j += "body += keys[i] + '=' + dirtyVars[keys[i]];}";
-    j += "fetch('/api/bf/set-batch', {method:'POST', body:body}).then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/bf/set-batch', {method:'POST', body:body}).then(function(r){return r.json();}).then(function(d){";
     j += "if (d.ok) { dirtyVars = {}; markAllClean(); updateApplyBar(); }";
     j += "}).catch(function(){});}";
 
@@ -951,13 +1028,13 @@ string BfDashJS_Sessions()
     j += "var lastLogLen=0,lastImpLen=0;";
     j += "function pollCurrentLog(){";
     j += "if(activeSession!=='current'||activeSubTab!=='log')return;";
-    j += "fetch('/api/bf/log').then(function(r){return r.json();}).then(function(arr){";
+    j += "fetch(apiBase+'/api/bf/log').then(function(r){return r.json();}).then(function(arr){";
     j += "if(arr.length!==lastLogLen){lastLogLen=arr.length;renderLog(arr);}";
     j += "}).catch(function(){});}";
 
     j += "function pollCurrentImp(){";
     j += "if(activeSession!=='current'||activeSubTab!=='imp')return;";
-    j += "fetch('/api/bf/improvements').then(function(r){return r.json();}).then(function(arr){";
+    j += "fetch(apiBase+'/api/bf/improvements').then(function(r){return r.json();}).then(function(arr){";
     j += "if(arr.length!==lastImpLen){lastImpLen=arr.length;renderImp(arr);setText('bfImpCount',arr.length);}";
     j += "}).catch(function(){});}";
 
@@ -965,7 +1042,7 @@ string BfDashJS_Sessions()
 
     // Sessions polling
     j += "function pollSessions(){";
-    j += "fetch('/api/bf/sessions').then(function(r){return r.json();}).then(function(arr){sessions=arr;renderSessionTabs();}).catch(function(){});}";
+    j += "fetch(apiBase+'/api/bf/sessions').then(function(r){return r.json();}).then(function(arr){sessions=arr;renderSessionTabs();}).catch(function(){});}";
     j += "setInterval(pollSessions,5000);pollSessions();";
 
     // Render session tabs (with X delete buttons on past sessions)
@@ -987,7 +1064,7 @@ string BfDashJS_Sessions()
     j += "del.addEventListener('click',function(e){";
     j += "e.stopPropagation();";
     j += "if(!e.shiftKey&&!confirm('Delete session #'+s.id+'?\\n(Hold Shift to bypass this confirmation)'))return;";
-    j += "fetch('/api/bf/delete-session',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+encodeURIComponent(s.id)}).then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/bf/delete-session',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+encodeURIComponent(s.id)}).then(function(r){return r.json();}).then(function(d){";
     j += "if(d.ok){";
     j += "if(activeSession===s.id)activeSession='current';";
     j += "for(var j2=0;j2<sessions.length;j2++){if(sessions[j2].id===s.id){sessions.splice(j2,1);break;}}";
@@ -1012,7 +1089,7 @@ string BfDashJS_Sessions()
     j += "if(activeSession==='current'){";
     j += "if(activeSubTab==='log'){pollCurrentLog();}else{pollCurrentImp();}return;}";
     j += "var type=activeSubTab==='log'?'session-log':'session-imp';";
-    j += "fetch('/api/bf/'+type+'?id='+encodeURIComponent(activeSession)).then(function(r){return r.json();}).then(function(arr){";
+    j += "fetch(apiBase+'/api/bf/'+type+'?id='+encodeURIComponent(activeSession)).then(function(r){return r.json();}).then(function(arr){";
     j += "if(activeSubTab==='log'){renderLog(arr);}else{renderImp(arr);}";
     j += "}).catch(function(){});}";
 

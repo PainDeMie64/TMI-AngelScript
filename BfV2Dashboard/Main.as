@@ -1,3 +1,15 @@
+const uint16 MASTER_PORT = 8489;
+const uint16 WORKER_PORT_START = 8490;
+const uint16 WORKER_PORT_END = 8499;
+
+bool isMaster = false;
+uint16 localPort = 0;
+uint instancePid = 0;
+uint64 lastHeartbeatTime = 0;
+uint consecutiveHeartbeatFailures = 0;
+const uint HEARTBEAT_INTERVAL_MS = 10000;
+const uint MAX_HEARTBEAT_FAILURES = 3;
+
 PluginInfo @GetPluginInfo()
 {
     auto info = PluginInfo();
@@ -7,6 +19,38 @@ PluginInfo @GetPluginInfo()
     info.Description = "Next generation bruteforce with web dashboard";
     return info;
 }
+
+void RegisterCommonRoutes()
+{
+    RegisterRoute("GET", "/api/bf/status", HandleGetBfStatus);
+    RegisterRoute("GET", "/api/bf/log", HandleGetBfLog);
+    RegisterRoute("GET", "/api/bf/improvements", HandleGetBfImprovements);
+    RegisterRoute("GET", "/api/bf/settings", HandleGetBfSettings);
+    RegisterRoute("GET", "/api/bf/all-settings", HandleGetAllSettings);
+    RegisterRoute("GET", "/api/bf/sessions", HandleGetBfSessions);
+    RegisterRoute("GET", "/api/bf/session-log", HandleGetSessionLog);
+    RegisterRoute("GET", "/api/bf/session-imp", HandleGetSessionImp);
+    RegisterRoute("POST", "/api/bf/set", HandlePostSetVar);
+    RegisterRoute("POST", "/api/bf/add-slot", HandlePostAddSlot);
+    RegisterRoute("POST", "/api/bf/remove-slot", HandlePostRemoveSlot);
+    RegisterRoute("POST", "/api/bf/copy-position", HandleCopyPosition);
+    RegisterRoute("POST", "/api/bf/delete-session", HandleDeleteSession);
+    RegisterRoute("POST", "/api/bf/set-batch", HandlePostSetBatch);
+    RegisterRoute("GET", "/api/map", HandleGetMap);
+}
+
+void RegisterMasterRoutes()
+{
+    RegisterRoute("GET", "/api/instances", HandleGetInstances);
+    RegisterRoute("POST", "/api/internal/register", HandleInternalRegister);
+    RegisterRoute("GET", "/", HandleBfDashboard);
+}
+
+void RegisterWorkerRoutes()
+{
+    RegisterRoute("GET", "/", HandleWorkerRedirect);
+}
+
 void Main()
 {
     InitializeInputModAlgorithms();
@@ -74,30 +118,98 @@ void Main()
     CustomTargetBf::Main();
     RegisterSettingsPage("Scripting Docs", ScriptingReference::Render);
 
-    RegisterRoute("GET", "/api/bf/status", HandleGetBfStatus);
-    RegisterRoute("GET", "/api/bf/log", HandleGetBfLog);
-    RegisterRoute("GET", "/api/bf/improvements", HandleGetBfImprovements);
-    RegisterRoute("GET", "/api/bf/settings", HandleGetBfSettings);
-    RegisterRoute("GET", "/api/bf/all-settings", HandleGetAllSettings);
-    RegisterRoute("GET", "/api/bf/sessions", HandleGetBfSessions);
-    RegisterRoute("GET", "/api/bf/session-log", HandleGetSessionLog);
-    RegisterRoute("GET", "/api/bf/session-imp", HandleGetSessionImp);
-    RegisterRoute("POST", "/api/bf/set", HandlePostSetVar);
-    RegisterRoute("POST", "/api/bf/add-slot", HandlePostAddSlot);
-    RegisterRoute("POST", "/api/bf/remove-slot", HandlePostRemoveSlot);
-    RegisterRoute("POST", "/api/bf/copy-position", HandleCopyPosition);
-    RegisterRoute("POST", "/api/bf/delete-session", HandleDeleteSession);
-    RegisterRoute("POST", "/api/bf/set-batch", HandlePostSetBatch);
-    RegisterRoute("GET", "/api/map", HandleGetMap);
-    RegisterRoute("GET", "/", HandleBfDashboard);
-    StartServer("127.0.0.1", 8081);
+    instancePid = IO::GetCurrentProcessId();
+
+    // Try to become master on port 8489
+    SetupAsRole(true);
 }
+
+void SetupAsRole(bool tryMaster)
+{
+    routes.Resize(0);
+    isMaster = false;
+    if (tryMaster)
+    {
+        RegisterCommonRoutes();
+        RegisterMasterRoutes();
+        StartServer("127.0.0.1", MASTER_PORT);
+        if (@listenSock !is null)
+        {
+            isMaster = true;
+            localPort = MASTER_PORT;
+            RegisterInstance(instancePid, MASTER_PORT);
+            log("BfV2Dashboard: MASTER on port " + Text::FormatUInt(MASTER_PORT) + " (PID " + Text::FormatUInt(instancePid) + ")");
+            return;
+        }
+    }
+
+    // Worker: find a free port (clear stale master routes if master bind failed)
+    routes.Resize(0);
+    RegisterCommonRoutes();
+    RegisterWorkerRoutes();
+    for (uint16 p = WORKER_PORT_START; p <= WORKER_PORT_END; p++)
+    {
+        StartServer("127.0.0.1", p);
+        if (@listenSock !is null)
+        {
+            localPort = p;
+            log("BfV2Dashboard: Worker on port " + Text::FormatUInt(localPort) + " (PID " + Text::FormatUInt(instancePid) + ")");
+            return;
+        }
+    }
+    log("BfV2Dashboard: No free port found (8489-8499 all taken)");
+}
+
+void SendHeartbeat()
+{
+    Net::Socket@ sock = Net::Socket();
+    if (sock.Connect("127.0.0.1", MASTER_PORT, 1))
+    {
+        string body = "pid=" + Text::FormatUInt(instancePid) + "&port=" + Text::FormatUInt(localPort);
+        string req = "POST /api/internal/register HTTP/1.1\r\n";
+        req += "Content-Length: " + Text::FormatUInt(body.Length) + "\r\n";
+        req += "Connection: close\r\n\r\n";
+        req += body;
+        if (sock.Write(req))
+            consecutiveHeartbeatFailures = 0;
+        else
+            consecutiveHeartbeatFailures++;
+    }
+    else
+    {
+        consecutiveHeartbeatFailures++;
+    }
+
+    if (consecutiveHeartbeatFailures >= MAX_HEARTBEAT_FAILURES)
+    {
+        log("BfV2Dashboard: Master unreachable, attempting promotion...");
+        StopServer();
+        SetupAsRole(true);
+        consecutiveHeartbeatFailures = 0;
+    }
+}
+
 void Render()
 {
     PollServer();
+
+    if (!isMaster && localPort > 0)
+    {
+        uint64 now = Time::Now;
+        if (now - lastHeartbeatTime >= HEARTBEAT_INTERVAL_MS)
+        {
+            lastHeartbeatTime = now;
+            SendHeartbeat();
+        }
+    }
+
+    if (isMaster)
+        CleanStaleInstances();
+
     if (current !is null && current.onRender !is null)
         current.onRender();
 }
+
 void OnDisabled()
 {
     StopServer();
