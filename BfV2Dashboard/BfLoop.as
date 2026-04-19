@@ -1453,18 +1453,26 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
     {
         PollServer();
         lastPollTime = pollNow;
+        // Update iter/sec every 100ms for responsive dashboard
+        if (now > lastIterationTime && lastIterationTime > 0)
+        {
+            float elapsedCalc = float(now - lastIterationTime) / 1000.0f;
+            if (elapsedCalc > 0.5f)
+            {
+                iterationsPerSecond = float(info.Iterations - iterationsAtLastCalc) / elapsedCalc;
+                lastIterationTime = now;
+                iterationsAtLastCalc = info.Iterations;
+            }
+        }
+        else if (lastIterationTime == 0)
+        {
+            lastIterationTime = now;
+            iterationsAtLastCalc = info.Iterations;
+        }
     }
     if(now - lastWindowTitleUpdateTime > 1000)
     {
         lastWindowTitleUpdateTime = now;
-        if (now > lastIterationTime && lastIterationTime > 0)
-        {
-            float elapsedCalc = float(now - lastIterationTime) / 1000.0f;
-            if (elapsedCalc > 0.0f)
-                iterationsPerSecond = float(info.Iterations - iterationsAtLastCalc) / elapsedCalc;
-        }
-        lastIterationTime = now;
-        iterationsAtLastCalc = info.Iterations;
         float elapsedSeconds = (now - lastRestartTime) / 1000.0f;
         if (elapsedSeconds > 0)
         {

@@ -103,7 +103,7 @@ string HandleBfDashboard(const string &in body)
     h += "<section class='panel wide' id='baseInputs'>";
     h += "<h2>Base Run Inputs</h2>";
     h += "<p class='hint'>Paste input commands to replace the current base run. Click Apply to restart bruteforce with these inputs.</p>";
-    h += "<textarea id='inputScript' rows='8' class='code-input' placeholder='press up 0&#10;steer 1000 100&#10;press down 5000&#10;...'></textarea>";
+    h += "<textarea id='inputScript' rows='8' class='code-input' placeholder='0 press up&#10;0.1 steer 13107&#10;0.5 steer -65536&#10;5 press down&#10;...'></textarea>";
     h += "<div class='base-actions'>";
     h += "<button id='btnApplyInputs' class='btn-action btn-apply'>Apply &amp; Restart Bruteforce</button>";
     h += "<span id='inputResult' class='input-result'></span>";
@@ -578,20 +578,26 @@ string BfDashJS_Status()
     j += "renderInstances();";
     j += "updateLiveCards(found);}";
 
+    j += "var lastInstKey='';";
     j += "function renderInstances(){";
     j += "var bar=document.getElementById('instanceBar');";
-    j += "while(bar.firstChild)bar.removeChild(bar.firstChild);";
-    j += "if(instances.length===0)return;";
+    j += "if(instances.length===0){while(bar.firstChild)bar.removeChild(bar.firstChild);lastInstKey='';return;}";
     j += "bar.className='instance-bar';";
+    j += "var key=instances.map(function(i){return i.port;}).join(',');";
+    j += "if(key!==lastInstKey){";
+    j += "lastInstKey=key;";
+    j += "while(bar.firstChild)bar.removeChild(bar.firstChild);";
     j += "for(var i=0;i<instances.length;i++){";
     j += "(function(inst,idx){";
-    j += "var btn=document.createElement('button');";
-    j += "btn.className='inst-btn'+(activeInstancePort===inst.port?' active':'');";
-    j += "var lbl=inst.running?'BF: '+inst.target:'Idle';";
-    j += "btn.textContent='Instance '+(idx+1)+' :'+inst.port+' ('+lbl+')';";
+    j += "var btn=document.createElement('button');btn.id='instBtn'+inst.port;";
     j += "btn.addEventListener('click',function(){switchInstance(inst.port);});";
     j += "bar.appendChild(btn);";
     j += "})(instances[i],i);}}";
+    j += "for(var i=0;i<instances.length;i++){";
+    j += "var btn=document.getElementById('instBtn'+instances[i].port);if(!btn)continue;";
+    j += "btn.className='inst-btn'+(activeInstancePort===instances[i].port?' active':'');";
+    j += "var lbl=instances[i].running?'BF: '+instances[i].target:'Idle';";
+    j += "btn.textContent='Instance '+(i+1)+' :'+instances[i].port+' ('+lbl+')';}}";
 
     j += "function switchInstance(port){";
     j += "if(activeInstancePort>0){";
