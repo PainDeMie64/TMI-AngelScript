@@ -246,9 +246,9 @@ vec3 GetConVarVec3(const string &in name)
     return Text::ParseVec3(GetVariableString(name));
 }
 
-void SetVariable(const string &in name, const vec3 value)
+void SetVarVec3(const string &in name, const vec3 value)
 {
-    SetVariable(name, value.ToString());
+    ::SetVariable(name, value.ToString());
 }
 
 
@@ -1230,7 +1230,7 @@ void RenderSettings()
             {
                 targetVec3Display = GetConVarVec3(VAR_TARGET_VEC3_DISPLAY);
                 targetVec3 = ConvertDisplayToValue3(targetGroup, targetVec3Display);
-                SetVariable(VAR_TARGET_VEC3, targetVec3);
+                SetVarVec3(VAR_TARGET_VEC3, targetVec3);
             }
         }
         else
@@ -1515,8 +1515,10 @@ bool CarPosOnClick(const string &in label, vec3 &out position)
 
 void SetTargetVec3(const vec3 &in value)
 {
-    SetVariable(VAR_TARGET_VEC3, targetVec3 = value);
-    SetVariable(VAR_TARGET_VEC3_DISPLAY, targetVec3Display = value);
+    targetVec3 = value;
+    SetVarVec3(VAR_TARGET_VEC3, targetVec3);
+    targetVec3Display = value;
+    SetVarVec3(VAR_TARGET_VEC3_DISPLAY, targetVec3Display);
 }
 
 void TriggerCombo(int& id, int& index)
