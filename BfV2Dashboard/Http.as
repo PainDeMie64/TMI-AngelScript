@@ -1,4 +1,4 @@
-const uint MAX_BUFFER_SIZE = 8192;
+const uint MAX_BUFFER_SIZE = 524288;
 const int MAX_WAIT_FRAMES = 30;
 
 Net::Socket@ listenSock = null;
