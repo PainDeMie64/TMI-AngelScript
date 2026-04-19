@@ -700,6 +700,11 @@ string HandleApplyInputs(const string &in body)
     info.Rewinded = false;
     currentIterations = 0;
     currentPhase = "Initial";
+    restartCount = 0;
+    currentRestarts = 0;
+    uint64 nowApply = Time::Now;
+    lastImprovementTime = nowApply;
+    lastRestartTime = nowApply;
     simStateCache.Clear();
     simStateTimes.Clear();
 

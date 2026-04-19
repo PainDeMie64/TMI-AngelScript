@@ -628,9 +628,9 @@ string BfDashJS_Status()
     j += "for(var i=0;i<keys.length;i++){found.push(instanceLastSeen[keys[i]].data);}";
     j += "found.sort(function(a,b){return a.port-b.port;});";
     j += "instances=found;";
-    j += "if(activeInstancePort===0&&found.length>0){";
-    j += "activeInstancePort=found[0].port;";
-    j += "apiBase='http://localhost:'+found[0].port;}";
+    j += "if(found.length>0){";
+    j += "var stillExists=false;for(var si=0;si<found.length;si++){if(found[si].port===activeInstancePort)stillExists=true;}";
+    j += "if(!stillExists||activeInstancePort===0){activeInstancePort=found[0].port;apiBase='http://localhost:'+found[0].port;}}";
     j += "renderInstances();";
     j += "updateLiveCards(found);}";
 
@@ -1262,7 +1262,7 @@ string BfDashJS_Sessions()
     j += "var emptyMsg=document.getElementById('liveEmpty');";
     j += "if(running.length===0){";
     j += "if(emptyMsg)emptyMsg.style.display='';";
-    j += "var keys=Object.keys(liveCards);for(var k=0;k<keys.length;k++){clearInterval(liveCards[keys[k]].logTimer);clearInterval(liveCards[keys[k]].impTimer);liveCards[keys[k]].contentEl.parentNode.removeChild(liveCards[keys[k]].contentEl.parentNode);}";
+    j += "var keys=Object.keys(liveCards);for(var k=0;k<keys.length;k++){clearInterval(liveCards[keys[k]].logTimer);clearInterval(liveCards[keys[k]].impTimer);var cardEl=liveCards[keys[k]].contentEl.parentNode;if(cardEl&&cardEl.parentNode)cardEl.parentNode.removeChild(cardEl);}";
     j += "liveCards={};return;}";
     j += "if(emptyMsg)emptyMsg.style.display='none';";
 
@@ -1373,6 +1373,7 @@ string BfDashJS_Sessions()
     j += "var script=document.getElementById('inputScript').value;";
     j += "if(!script.trim())return;";
     j += "var res=document.getElementById('inputResult');";
+    j += "if(instances.length===0){res.textContent='No instances found';res.style.color='#f85149';return;}";
     j += "res.textContent='Sending to all instances...';res.style.color='#8b949e';";
     j += "var sent=0,ok=0,fail=0;";
     j += "for(var i=0;i<instances.length;i++){";

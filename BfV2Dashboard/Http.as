@@ -188,7 +188,14 @@ void PollServer()
             int contentLength = ParseContentLength(requestBuffer);
             uint expectedTotal = uint(headerEnd + 4) + uint(contentLength);
             if (requestBuffer.Length < expectedTotal)
+            {
+                if (readWaitFrames > MAX_WAIT_FRAMES)
+                {
+                    @clientSock = null;
+                    requestBuffer = "";
+                }
                 return;
+            }
         }
 
         ParseRequest(requestBuffer);

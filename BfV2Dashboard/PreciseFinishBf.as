@@ -101,8 +101,10 @@ namespace PreciseFinishBf
         else
         {
             // Reject imprecise times (5+ zeroes after centisecond place)
-            double rounded4 = Math::Round(preciseTime * 10000.0) / 10000.0;
-            if (Math::Abs(preciseTime - rounded4) < 1e-8)
+            double scaled = preciseTime * 10000.0;
+            double frac = scaled - int64(scaled);
+            if (frac < 0) frac = -frac;
+            if (frac < 1e-5 || frac > (1.0 - 1e-5))
             {
                 resp.Decision = BFEvaluationDecision::Reject;
                 PreciseFinish::Reset();

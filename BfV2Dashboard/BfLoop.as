@@ -1401,8 +1401,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
             settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
             settings.maxInputsTime = ResolveMaxTime(settings.maxInputsTime, int(simManager.EventsDuration));
-            // Fix maxTime==0 for advanced algorithm variables on restart
             string algoId_fix = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+            settings.algorithmIndex = GetInputModAlgorithmIndex(algoId_fix);
             int ed = int(simManager.EventsDuration);
             if (algoId_fix == "advanced_basic")
             {
