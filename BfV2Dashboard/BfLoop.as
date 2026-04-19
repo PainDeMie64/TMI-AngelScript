@@ -1412,7 +1412,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             SetConsoleWindowTitle("BfV2 - " + current.title + " | Restarts: " + restartCount + " | Iterations: " + info.Iterations);
         }
     }
-    // Mid-BF hot-swap: re-resolve target and re-read input mod settings
+    // Mid-BF hot-swap: detect target change
+    bool settingsChanged = false;
     string liveTargetId = GetVariableString("bf_target");
     if (liveTargetId != current.identifier)
     {
@@ -1426,6 +1427,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         if (current.onSimBegin !is null)
             current.onSimBegin(simManager);
         DashboardLog("Target switched to: " + currentTarget);
+        settingsChanged = true;
     }
     // Re-read input mod settings every second (covers Apply changes)
     if (now - lastWindowTitleUpdateTime < 50)
@@ -1438,20 +1440,34 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             g_inputModSettings.Add(s);
         }
         while (int(g_inputModSettings.Length) > savedCount)
+        {
             g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
+            settingsChanged = true;
+        }
         for (uint im = 0; im < g_inputModSettings.Length; im++)
         {
             string varSuffix = GetInputModVarSuffix(im);
             InputModificationSettings @s = g_inputModSettings[im];
-            s.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
-            s.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
-            s.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
-            s.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
-            s.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
-            s.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
-            s.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-            s.maxInputsTime = ResolveMaxTime(s.maxInputsTime, int(simManager.EventsDuration));
-            s.algorithmIndex = GetInputModAlgorithmIndex(GetVariableString("bf_input_mod_algorithm" + varSuffix));
+            int newInputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
+            int newMinTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
+            int newMaxTime = ResolveMaxTime(int(GetVariableDouble("bf_inputs_max_time" + varSuffix)), int(simManager.EventsDuration));
+            int newMaxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
+            int newMaxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
+            bool newFill = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+            bool newEnabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
+            int newAlgoIdx = GetInputModAlgorithmIndex(GetVariableString("bf_input_mod_algorithm" + varSuffix));
+            if (s.inputCount != newInputCount || s.minInputsTime != newMinTime || s.maxInputsTime != newMaxTime
+                || s.maxSteerDiff != newMaxSteerDiff || s.maxTimeDiff != newMaxTimeDiff
+                || s.fillSteerInputs != newFill || s.enabled != newEnabled || s.algorithmIndex != newAlgoIdx)
+                settingsChanged = true;
+            s.inputCount = newInputCount;
+            s.minInputsTime = newMinTime;
+            s.maxInputsTime = newMaxTime;
+            s.maxSteerDiff = newMaxSteerDiff;
+            s.maxTimeDiff = newMaxTimeDiff;
+            s.fillSteerInputs = newFill;
+            s.enabled = newEnabled;
+            s.algorithmIndex = newAlgoIdx;
         }
         if (g_inputModSettings.Length > 0)
         {
@@ -1468,6 +1484,17 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             if (g_inputModSettings[lm].enabled && g_inputModSettings[lm].minInputsTime < leastMinInputsTime)
                 leastMinInputsTime = g_inputModSettings[lm].minInputsTime;
         }
+    }
+    if (settingsChanged)
+    {
+        RestoreBestInputs(simManager);
+        simStateCache.Clear();
+        simStateTimes.Clear();
+        simManager.RewindToState(rewindState);
+        info.Phase = BFPhase::Initial;
+        info.Rewinded = false;
+        currentPhase = "Initial";
+        return;
     }
     int raceTime = simManager.RaceTime;
     if (current.type == CallbackType::FullControl)
