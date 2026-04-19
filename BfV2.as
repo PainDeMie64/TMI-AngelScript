@@ -74,6 +74,9 @@ void BruteforceV2Settings()
         toolTip(300, {"Folder where the result files will be saved. Leave empty to use the root folder. Example:",
                       "'results' will save files in " + GetVariableString("scripts_folder") + "\\results\\"});
         UI::Dummy(vec2(0, 2));
+        UI::CheckboxVar("Persist dashboard logs to file", "bf_dashboard_persist_logs");
+        toolTip(300, {"When enabled, dashboard improvements and log entries are written to files in the Scripts/BfV2Dashboard/ folder, allowing them to persist across game restarts and appear in Past Sessions."});
+        UI::Dummy(vec2(0, 2));
         string lines = Replace(GetVariableString("bf_restart_condition_script"), ":", "\n");
         int currentHeight = int(GetVariableDouble("bf_restart_condition_script_height"));
         string t;
@@ -536,7 +539,8 @@ void StartSession()
     if (ch !is null) mapName = ch.Name;
 
     string sessionLine = Text::FormatInt(currentSessionId) + "|" + currentTarget + "|" + Text::FormatUInt(Time::Now) + "|" + mapName;
-    FileAppendLine(DATA_FOLDER + "/sessions.txt", sessionLine);
+    if (GetVariableBool("bf_dashboard_persist_logs"))
+        FileAppendLine(DATA_FOLDER + "/sessions.txt", sessionLine);
 
     logBuffer.Resize(0);
     improvementLog.Resize(0);
@@ -554,7 +558,7 @@ void DashboardLog(const string &in message)
     logBuffer.Add(entry);
     if (logBuffer.Length > MAX_LOG_ENTRIES)
         logBuffer.RemoveAt(0);
-    if (currentSessionId > 0)
+    if (currentSessionId > 0 && GetVariableBool("bf_dashboard_persist_logs"))
         FileAppendLine(SessionPath("log.txt"), entry);
 }
 
@@ -573,8 +577,70 @@ void DashboardImprovement(const string &in evalName, const string &in details)
     improvementLog.Add(entry);
     if (improvementLog.Length > MAX_IMPROVEMENTS)
         improvementLog.RemoveAt(0);
-    if (currentSessionId > 0)
+    if (currentSessionId > 0 && GetVariableBool("bf_dashboard_persist_logs"))
         FileAppendLine(SessionPath("improvements.txt"), entry);
+}
+
+void RefreshInputModSettings(SimulationManager@ simManager)
+{
+    int savedCount = int(GetVariableDouble("bf_input_mod_count"));
+    if (savedCount < 1) savedCount = 1;
+    while (int(g_inputModSettings.Length) < savedCount)
+    {
+        InputModificationSettings @s = InputModificationSettings();
+        g_inputModSettings.Add(s);
+    }
+    while (int(g_inputModSettings.Length) > savedCount)
+        g_inputModSettings.RemoveAt(g_inputModSettings.Length - 1);
+    for (uint im = 0; im < g_inputModSettings.Length; im++)
+    {
+        string varSuffix = GetInputModVarSuffix(im);
+        InputModificationSettings @s = g_inputModSettings[im];
+        s.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
+        s.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
+        s.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
+        s.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
+        s.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
+        s.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+        s.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
+        s.maxInputsTime = ResolveMaxTime(s.maxInputsTime, int(simManager.EventsDuration));
+        string algoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+        s.algorithmIndex = GetInputModAlgorithmIndex(algoId);
+        int ed = int(simManager.EventsDuration);
+        if (algoId == "advanced_basic")
+        {
+            if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_steer_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_accel_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
+                SetVariable("bf_adv_brake_max_time" + varSuffix, ed);
+        }
+        else if (algoId == "advanced_range")
+        {
+            if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_steer_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_accel_max_time" + varSuffix, ed);
+            if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
+                SetVariable("bf_advr_brake_max_time" + varSuffix, ed);
+        }
+    }
+    if (g_inputModSettings.Length > 0)
+    {
+        inputCount = g_inputModSettings[0].inputCount;
+        minInputsTime = g_inputModSettings[0].minInputsTime;
+        maxInputsTime = g_inputModSettings[0].maxInputsTime;
+        maxSteerDiff = g_inputModSettings[0].maxSteerDiff;
+        maxTimeDiff = g_inputModSettings[0].maxTimeDiff;
+        fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
+    }
+    leastMinInputsTime = 1000000000;
+    for (uint lm = 0; lm < g_inputModSettings.Length; lm++)
+    {
+        if (g_inputModSettings[lm].enabled && g_inputModSettings[lm].minInputsTime < leastMinInputsTime)
+            leastMinInputsTime = g_inputModSettings[lm].minInputsTime;
+    }
 }
 
 class InputModificationAlgorithm
@@ -1825,8 +1891,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
             settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
             settings.maxInputsTime = ResolveMaxTime(settings.maxInputsTime, int(simManager.EventsDuration));
-            // Fix maxTime==0 for advanced algorithm variables on restart
             string algoId_fix = GetVariableString("bf_input_mod_algorithm" + varSuffix);
+            settings.algorithmIndex = GetInputModAlgorithmIndex(algoId_fix);
             int ed = int(simManager.EventsDuration);
             if (algoId_fix == "advanced_basic")
             {
@@ -1877,18 +1943,26 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
     {
         PollServer();
         lastPollTime = pollNow;
+        // Update iter/sec every 100ms for responsive dashboard
+        if (now > lastIterationTime && lastIterationTime > 0)
+        {
+            float elapsedCalc = float(now - lastIterationTime) / 1000.0f;
+            if (elapsedCalc > 0.5f)
+            {
+                iterationsPerSecond = float(info.Iterations - iterationsAtLastCalc) / elapsedCalc;
+                lastIterationTime = now;
+                iterationsAtLastCalc = info.Iterations;
+            }
+        }
+        else if (lastIterationTime == 0)
+        {
+            lastIterationTime = now;
+            iterationsAtLastCalc = info.Iterations;
+        }
     }
     if(now - lastWindowTitleUpdateTime > 1000)
     {
         lastWindowTitleUpdateTime = now;
-        if (now > lastIterationTime && lastIterationTime > 0)
-        {
-            float elapsedCalc = float(now - lastIterationTime) / 1000.0f;
-            if (elapsedCalc > 0.0f)
-                iterationsPerSecond = float(info.Iterations - iterationsAtLastCalc) / elapsedCalc;
-        }
-        lastIterationTime = now;
-        iterationsAtLastCalc = info.Iterations;
         float elapsedSeconds = (now - lastRestartTime) / 1000.0f;
         if (elapsedSeconds > 0)
         {
@@ -3049,6 +3123,14 @@ namespace CustomTargetBf
         @eval.onSimBegin = @OnSimulationBegin;
     }
 }
+string HandleWorkerRedirect(const string &in body)
+{
+    return "<html><head><meta http-equiv='refresh' content='0;url=http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/'></head>"
+        + "<body>Redirecting to <a href='http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/'>master dashboard</a>...</body></html>";
+}
+
+// --- BfV2 API ---
+
 string GetBfTargetTitle()
 {
     string targetId = GetVariableString("bf_target");
@@ -3075,6 +3157,7 @@ string HandleGetBfStatus(const string &in body)
     if (bfRunning && bfStartTime > 0)
         elapsed = Time::Now - bfStartTime;
     json += "," + JsonUInt("elapsedMs", uint(elapsed));
+    json += "," + JsonUInt("improvements", uint(improvementLog.Length));
     json += "}";
     return json;
 }
@@ -3301,6 +3384,7 @@ string HandleGetAllSettings(const string &in body)
     json += JsonString("resultFilename", GetVariableString("bf_result_filename"));
     json += "," + JsonInt("iterationsBeforeRestart", int(GetVariableDouble("bf_iterations_before_restart")));
     json += "," + JsonString("resultFolder", GetVariableString("bf_result_folder"));
+    json += "," + JsonBool("persistLogs", GetVariableBool("bf_dashboard_persist_logs"));
     json += "," + JsonString("restartConditionScript", GetVariableString("bf_restart_condition_script"));
     json += "}";
 
@@ -3485,6 +3569,46 @@ string HandleGetAllSettings(const string &in body)
         json += JsonString("bf_customtarget_script", GetVariableString("bf_customtarget_script"));
         json += "," + JsonInt("bf_customtarget_eval_min_time", int(GetVariableDouble("bf_customtarget_eval_min_time")));
         json += "," + JsonInt("bf_customtarget_eval_max_time", int(GetVariableDouble("bf_customtarget_eval_max_time")));
+    }
+    else if (targetId == "finetuner")
+    {
+        json += JsonInt("finetuner_eval_from", int(GetVariableDouble("finetuner_eval_from")));
+        json += "," + JsonInt("finetuner_eval_to", int(GetVariableDouble("finetuner_eval_to")));
+        json += "," + JsonBool("finetuner_target_grouped", GetVariableBool("finetuner_target_grouped"));
+        json += "," + JsonInt("finetuner_target_scalar", int(GetVariableDouble("finetuner_target_scalar")));
+        json += "," + JsonInt("finetuner_target_group", int(GetVariableDouble("finetuner_target_group")));
+        json += "," + JsonInt("finetuner_target_towards", int(GetVariableDouble("finetuner_target_towards")));
+        json += "," + JsonFloat("finetuner_target_value", float(GetVariableDouble("finetuner_target_value")));
+        json += "," + JsonFloat("finetuner_target_value_display", float(GetVariableDouble("finetuner_target_value_display")));
+        vec3 ftVec = Text::ParseVec3(GetVariableString("finetuner_target_vec3"));
+        json += "," + JsonVec3("finetuner_target_vec3", ftVec);
+        vec3 ftVecDisp = Text::ParseVec3(GetVariableString("finetuner_target_vec3_display"));
+        json += "," + JsonVec3("finetuner_target_vec3_display", ftVecDisp);
+        json += "," + JsonBool("finetuner_print_by_component", GetVariableBool("finetuner_print_by_component"));
+        json += "," + JsonString("finetuner_common_groups", GetVariableString("finetuner_common_groups"));
+        json += "," + JsonString("finetuner_common_scalars", GetVariableString("finetuner_common_scalars"));
+        json += "," + JsonString("finetuner_common_conditions", GetVariableString("finetuner_common_conditions"));
+    }
+    else if (targetId == "nosepos_plus")
+    {
+        json += JsonInt("shweetz_eval_time_min", int(GetVariableDouble("shweetz_eval_time_min")));
+        json += "," + JsonInt("shweetz_eval_time_max", int(GetVariableDouble("shweetz_eval_time_max")));
+        json += "," + JsonInt("shweetz_yaw_deg", int(GetVariableDouble("shweetz_yaw_deg")));
+        json += "," + JsonInt("shweetz_pitch_deg", int(GetVariableDouble("shweetz_pitch_deg")));
+        json += "," + JsonInt("shweetz_roll_deg", int(GetVariableDouble("shweetz_roll_deg")));
+        json += "," + JsonBool("shweetz_allow_yaw_180", GetVariableBool("shweetz_allow_yaw_180"));
+        json += "," + JsonBool("shweetz_next_eval_check", GetVariableBool("shweetz_next_eval_check"));
+        json += "," + JsonString("shweetz_next_eval", GetVariableString("shweetz_next_eval"));
+        vec3 spPoint = Text::ParseVec3(GetVariableString("shweetz_point"));
+        json += "," + JsonVec3("shweetz_point", spPoint);
+        json += "," + JsonInt("shweetz_angle_min_deg", int(GetVariableDouble("shweetz_angle_min_deg")));
+        json += "," + JsonFloat("shweetz_condition_speed", float(GetVariableDouble("shweetz_condition_speed")));
+        json += "," + JsonInt("shweetz_min_cp", int(GetVariableDouble("shweetz_min_cp")));
+        json += "," + JsonInt("shweetz_min_wheels_on_ground", int(GetVariableDouble("shweetz_min_wheels_on_ground")));
+        json += "," + JsonInt("shweetz_gear", int(GetVariableDouble("shweetz_gear")));
+        json += "," + JsonInt("shweetz_trigger_index", int(GetVariableDouble("shweetz_trigger_index")));
+        json += "," + JsonInt("shweetz_antitrigger_index", int(GetVariableDouble("shweetz_antitrigger_index")));
+        json += "," + JsonInt("shweetz_debug", int(GetVariableDouble("shweetz_debug")));
     }
     json += "}";
 
@@ -3709,6 +3833,58 @@ string HandlePostSetBatch(const string &in body)
     }
     return "{\"ok\":true,\"count\":" + Text::FormatInt(setCount) + "}";
 }
+
+string HandleApplyInputs(const string &in body)
+{
+    if (!IsBfV2Active)
+        return "{\"ok\":false,\"error\":\"BfV2 not active\"}";
+    if (!rewindStateAssigned)
+        return "{\"ok\":false,\"error\":\"BF not initialized (no rewind state yet)\"}";
+
+    SimulationManager@ sim = GetSimulationManager();
+    if (sim is null)
+        return "{\"ok\":false,\"error\":\"no simulation manager\"}";
+
+    CommandList list;
+    list.Content = body;
+    list.Process(CommandListProcessOption::OnlyParse);
+    const array<InputCommand>@ cmds = list.InputCommands;
+    if (cmds is null || cmds.Length == 0)
+        return "{\"ok\":false,\"error\":\"no valid inputs parsed\"}";
+
+    sim.InputEvents.Clear();
+    for (uint i = 0; i < cmds.Length; i++)
+        sim.InputEvents.Add(cmds[i].Timestamp, cmds[i].Type, cmds[i].State);
+
+    SaveBaseInputs(sim);
+    SaveBestInputs(sim);
+
+    RefreshInputModSettings(sim);
+
+    info.Iterations = 0;
+    info.Phase = BFPhase::Initial;
+    info.Rewinded = false;
+    currentIterations = 0;
+    currentPhase = "Initial";
+    restartCount = 0;
+    currentRestarts = 0;
+    uint64 nowApply = Time::Now;
+    lastImprovementTime = nowApply;
+    lastRestartTime = nowApply;
+    simStateCache.Clear();
+    simStateTimes.Clear();
+
+    if (current !is null && current.onSimBegin !is null)
+        current.onSimBegin(sim);
+
+    sim.RewindToState(rewindState);
+    RestoreBestInputs(sim);
+
+    // Start a fresh session (old log/improvements go to past)
+    StartSession();
+    DashboardLog("Base inputs replaced (" + Text::FormatUInt(cmds.Length) + " commands), BF restarted");
+    return "{\"ok\":true,\"commands\":" + Text::FormatUInt(cmds.Length) + "}";
+}
 string HandleBfDashboard(const string &in body)
 {
     string h = "<!DOCTYPE html><html lang='en'><head>";
@@ -3719,6 +3895,20 @@ string HandleBfDashboard(const string &in body)
     h += "</head><body>";
     h += "<header><h1>BfV2 Dashboard</h1><span id='conn' class='badge'>Connecting...</span></header>";
     h += "<main>";
+
+    // Live Bruteforce panel (wide, always visible, at the very top)
+    h += "<section class='panel wide' id='liveBf'>";
+    h += "<h2>Live Bruteforce</h2>";
+    h += "<div id='liveCards' class='live-cards'></div>";
+    h += "<p id='liveEmpty' class='hint' style='color:#8b949e;padding:0.5rem 0;'>No instances currently running bruteforce.</p>";
+    h += "</section>";
+
+    // Instance switcher
+    h += "<div class='instance-switcher'>";
+    h += "<span class='instance-label'>Viewing instance:</span>";
+    h += "<div id='instanceBar' class='instance-bar'></div>";
+    h += "<p class='instance-hint'>Switching changes all panels below (Status, Settings, Sessions, etc.)</p>";
+    h += "</div>";
 
     // Status panel
     h += "<section class='panel' id='status'>";
@@ -3754,37 +3944,38 @@ string HandleBfDashboard(const string &in body)
     h += "<button id='btnApply' class='btn-action btn-apply' disabled>Apply All</button>";
     h += "</div>";
 
-    // Optimization section
-    h += "<details id='secOptimization' open>";
-    h += "<summary>Optimization</summary>";
-    h += "<div class='sec-body'>";
-    h += "<div class='field-row'><label>Target</label><select id='optTarget' data-var='bf_target'></select></div>";
-    h += "<div id='evalFields'></div>";
-    h += "</div></details>";
-
     // Behavior section
-    h += "<details id='secBehavior'>";
-    h += "<summary>Behavior</summary>";
+    h += "<details id='secBehavior' open>";
+    h += "<summary>Behavior <button class='propagate-btn' data-section='secBehavior' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div class='field-row'><label>Result Filename</label><input type='text' id='behFile' data-var='bf_result_filename'></div>";
     h += "<div class='field-row'><label>Iterations Before Restart</label><input type='number' id='behIter' data-var='bf_iterations_before_restart' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Result Folder</label><input type='text' id='behFolder' data-var='bf_result_folder'></div>";
-    h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' rows='3'></textarea></div>";
+    h += "<div class='chk-row'><input type='checkbox' id='behPersist' data-var='bf_dashboard_persist_logs'><label for='behPersist'>Persist dashboard logs to file</label></div>";
+    h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' data-script='1' rows='3'></textarea></div>";
+    h += "</div></details>";
+
+    // Optimization section
+    h += "<details id='secOptimization'>";
+    h += "<summary>Optimization <button class='propagate-btn' data-section='secOptimization' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
+    h += "<div class='sec-body'>";
+    h += "<div class='field-row full'><label>Target</label><select id='optTarget' data-var='bf_target'></select></div>";
+    h += "<div id='evalFields'></div>";
     h += "</div></details>";
 
     // Conditions section
     h += "<details id='secConditions'>";
-    h += "<summary>Conditions</summary>";
+    h += "<summary>Conditions <button class='propagate-btn' data-section='secConditions' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div class='field-row'><label>Min Speed</label><input type='number' id='condSpeed' data-var='bf_condition_speed' min='0' step='0.1'></div>";
     h += "<div class='field-row'><label>Min CPs</label><input type='number' id='condCps' data-var='bf_condition_cps' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Trigger</label><select id='condTrigger' data-var='bf_condition_trigger'></select></div>";
-    h += "<div class='field-row full'><label>Condition Script</label><textarea id='condScript' data-var='bf_condition_script' rows='3'></textarea></div>";
+    h += "<div class='field-row full'><label>Condition Script</label><textarea id='condScript' data-var='bf_condition_script' data-script='1' rows='3'></textarea></div>";
     h += "</div></details>";
 
     // Input Modification section
     h += "<details id='secInputMod'>";
-    h += "<summary>Input Modification</summary>";
+    h += "<summary>Input Modification <button class='propagate-btn' data-section='secInputMod' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
     h += "<div class='sec-body'>";
     h += "<div id='slotsContainer'></div>";
     h += "<button id='btnAddSlot' class='btn-action'>+ Add Slot</button>";
@@ -3792,14 +3983,32 @@ string HandleBfDashboard(const string &in body)
 
     h += "</section>";
 
-    // Session history panel (wide)
-    h += "<section class='panel wide' id='history'>";
+    // Past Sessions panel (wide)
+    h += "<section class='panel wide' id='pastSessions'>";
+    h += "<h2>Past Sessions</h2>";
     h += "<div class='tab-bar' id='sessionTabs'></div>";
     h += "<div class='sub-tabs'>";
     h += "<button class='sub-tab active' id='tabImp'>Improvements</button>";
     h += "<button class='sub-tab' id='tabLog'>Log</button>";
     h += "</div>";
     h += "<div id='historyContent' class='history-content'></div>";
+    h += "</section>";
+
+    // Base Run Inputs panel (wide, disabled overlay when BF not running)
+    h += "<section class='panel wide' id='baseInputs'>";
+    h += "<h2>Base Run Inputs</h2>";
+    h += "<div id='baseDisabledOverlay' class='disabled-overlay'>";
+    h += "<span>Bruteforce must be running to use this feature</span>";
+    h += "</div>";
+    h += "<div id='baseContent'>";
+    h += "<p class='hint'>Paste input commands to replace the current base run and restart bruteforce with these inputs.</p>";
+    h += "<textarea id='inputScript' rows='8' class='code-input' placeholder='0 press up&#10;0.1 steer 13107&#10;0.5 steer -65536&#10;5 press down&#10;...'></textarea>";
+    h += "<div class='base-actions'>";
+    h += "<button id='btnApplyInputs' class='btn-action btn-apply'>Apply &amp; Restart Bruteforce</button>";
+    h += "<button id='btnApplyAll' class='btn-action btn-apply'>Apply to All &amp; Restart All Bruteforces</button>";
+    h += "<span id='inputResult' class='input-result'></span>";
+    h += "</div>";
+    h += "</div>";
     h += "</section>";
 
     h += "</main>";
@@ -3849,6 +4058,8 @@ string BfDashCSS()
     c += "summary::before{content:'\\25B6';display:inline-block;margin-right:0.5rem;font-size:0.65rem;transition:transform 0.15s}";
     c += "details[open]>summary::before{transform:rotate(90deg)}";
     c += "summary:hover{background:#161b22}";
+    c += ".propagate-btn{float:right;background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.7rem;cursor:pointer}";
+    c += ".propagate-btn:hover{background:#58a6ff30;color:#58a6ff;border-color:#58a6ff40}";
     c += ".sec-body{padding:0.7rem;display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem;overflow:hidden}";
 
     // Field rows
@@ -3929,6 +4140,75 @@ string BfDashCSS()
     c += ".tab-del { background:none; border:none; color:#8b949e; font-size:0.7rem; cursor:pointer; margin-left:0.3rem; padding:0 0.2rem; line-height:1; }";
     c += ".tab-del:hover { color:#f85149; }";
 
+    c += ".instance-switcher{grid-column:1/-1;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:0.8rem 1.2rem;margin-bottom:0}";
+    c += ".instance-label{color:#f0883e;font-weight:600;font-size:0.85rem;display:block;margin-bottom:0.4rem}";
+    c += ".instance-hint{color:#8b949e;font-size:0.7rem;margin-top:0.3rem;font-style:italic}";
+    c += ".instance-bar{display:flex;gap:0.3rem;flex-wrap:wrap}";
+    c += ".inst-btn { background:#21262d; color:#8b949e; border:1px solid #30363d; padding:0.4rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem; }";
+    c += ".inst-btn:hover { background:#30363d; }";
+    c += ".inst-btn.active { background:#f0883e20; color:#f0883e; border-color:#f0883e40; }";
+
+    // Live BF cards
+    c += ".live-cards { display:flex; flex-wrap:wrap; gap:0.5rem; }";
+    c += ".live-card { flex:0 0 calc(25% - 0.375rem); background:#0d1117; border:1px solid #30363d; border-radius:6px; overflow:hidden; min-width:200px; }";
+    c += ".live-card-hdr { padding:0.4rem 0.6rem; background:#161b22; border-bottom:1px solid #21262d; font-size:0.8rem; }";
+    c += ".live-card-hdr .port { color:#f0883e; font-weight:600; }";
+    c += ".live-card-hdr .target { color:#8b949e; margin-left:0.3rem; }";
+    c += ".live-card-tabs { display:flex; border-bottom:1px solid #21262d; }";
+    c += ".live-card-tab { flex:1; text-align:center; padding:0.25rem; font-size:0.7rem; cursor:pointer; color:#8b949e; background:none; border:none; border-bottom:2px solid transparent; }";
+    c += ".live-card-tab.active { color:#f0883e; border-bottom-color:#f0883e; }";
+    c += ".live-card-body { max-height:200px; overflow-y:auto; padding:0.3rem; font-size:0.75rem; font-family:monospace; }";
+
+    // Base Run Inputs
+    c += ".code-input { width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:0.5rem; font-family:monospace; font-size:0.8rem; resize:vertical; }";
+    c += ".hint { color:#8b949e; font-size:0.75rem; margin-bottom:0.5rem; }";
+    c += ".base-actions { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap; }";
+    c += "#baseInputs{position:relative}";
+    c += ".disabled-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(13,17,23,0.85);z-index:10;display:flex;align-items:center;justify-content:center;border-radius:8px}";
+    c += ".disabled-overlay span{color:#8b949e;font-size:0.9rem;padding:1rem;text-align:center}";
+    c += ".input-result { font-size:0.8rem; font-family:monospace; }";
+
+    // Group Editor
+    c += ".ge-wrap{grid-column:1/-1;border:1px solid #30363d;border-radius:6px;margin-top:0.4rem;background:#0d1117}";
+    c += ".ge-title{font-size:0.85rem;font-weight:600;color:#f0883e;padding:0.5rem 0.7rem;border-bottom:1px solid #21262d}";
+    c += ".ge-body{padding:0.5rem 0.7rem}";
+    c += ".ge-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;flex-wrap:wrap}";
+    c += ".ge-row label{color:#8b949e;font-size:0.7rem;text-transform:uppercase}";
+    c += ".ge-row select,.ge-row input[type=number]{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;font-family:inherit}";
+    c += ".ge-row select{min-width:10rem}";
+    c += ".ge-row input[type=number]{width:6rem}";
+    c += ".ge-row input[type=checkbox]{width:1rem;height:1rem;accent-color:#f0883e}";
+    c += ".ge-scalar{border:1px solid #21262d;border-radius:4px;padding:0.5rem 0.6rem;margin-top:0.3rem;background:#0d111780}";
+    c += ".ge-scalar-name{font-size:0.8rem;font-weight:600;color:#c9d1d9;margin-bottom:0.3rem}";
+    c += ".ge-bound{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.2rem}";
+    c += ".ge-bound label{color:#8b949e;font-size:0.7rem;min-width:4rem}";
+    c += ".ge-hint{color:#8b949e;font-size:0.7rem;font-style:italic;padding:0.3rem 0}";
+    c += ".ge-row input:focus,.ge-row select:focus{outline:none;border-color:#f0883e}";
+    c += ".ge-bound input:focus{outline:none;border-color:#f0883e}";
+    c += ".ge-bound input{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;width:6rem}";
+
+    // Condition Editor
+    c += ".ce-wrap{grid-column:1/-1;border:1px solid #30363d;border-radius:6px;margin-top:0.4rem;background:#0d1117}";
+    c += ".ce-title{font-size:0.85rem;font-weight:600;color:#f0883e;padding:0.5rem 0.7rem;border-bottom:1px solid #21262d}";
+    c += ".ce-body{padding:0.5rem 0.7rem}";
+    c += ".ce-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;flex-wrap:wrap}";
+    c += ".ce-row label{color:#8b949e;font-size:0.7rem;text-transform:uppercase}";
+    c += ".ce-row select,.ce-row input[type=number]{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;font-family:inherit}";
+    c += ".ce-row select{min-width:10rem}";
+    c += ".ce-row input[type=number]{width:6rem}";
+    c += ".ce-row input[type=checkbox]{width:1rem;height:1rem;accent-color:#f0883e}";
+    c += ".ce-fields{border:1px solid #21262d;border-radius:4px;padding:0.5rem 0.6rem;margin-top:0.3rem;background:#0d111780}";
+    c += ".ce-hint{color:#8b949e;font-size:0.7rem;font-style:italic;padding:0.3rem 0}";
+    c += ".ce-row input:focus,.ce-row select:focus{outline:none;border-color:#f0883e}";
+    c += ".ce-fields input:focus{outline:none;border-color:#f0883e}";
+    c += ".ce-fields input[type=number]{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;width:6rem}";
+    c += ".ce-range-row{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.2rem}";
+    c += ".ce-range-row label{color:#8b949e;font-size:0.7rem;min-width:3rem}";
+    c += ".ce-range-row input[type=range]{flex:1;min-width:4rem}";
+    c += ".ce-range-row .ce-range-val{font-size:0.8rem;color:#c9d1d9;min-width:2rem;text-align:right;font-family:monospace}";
+    c += ".ce-reset{background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.7rem;cursor:pointer;margin-left:auto}";
+    c += ".ce-reset:hover{background:#f8514920;color:#f85149;border-color:#f8514940}";
+
     c += "@media(max-width:700px){main{grid-template-columns:1fr}.sec-body{grid-template-columns:1fr}.slot-body{grid-template-columns:1fr}.sub-sec-grid{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}";
 
     return c;
@@ -3941,6 +4221,12 @@ string BfDashCSS()
 string BfDashJS_Helpers()
 {
     string j = "";
+
+    // Multi-instance state
+    j += "var apiBase = '';";
+    j += "var activeInstancePort = 0;";
+    j += "var instances = [];";
+    j += "var perInstanceState = {};";
 
     // State variables for buffered mode
     j += "var bfIsRunning = null;";
@@ -3986,7 +4272,7 @@ string BfDashJS_Helpers()
     j += "var sv = String(value);";
     j += "if (bfIsRunning === null) return;";
     j += "if (!bfIsRunning) {";
-    j += "fetch('/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
+    j += "fetch(apiBase+'/api/bf/set', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},";
     j += "body:'name='+encodeURIComponent(name)+'&value='+encodeURIComponent(sv)});";
     j += "return;}";
     j += "if (serverSnapshot[name] !== undefined && serverSnapshot[name] === sv) {";
@@ -3998,7 +4284,7 @@ string BfDashJS_Helpers()
 
     // POST helper for add-slot / remove-slot (clears slot-related dirty vars on structural changes)
     j += "function postAction(url, bodyStr) {";
-    j += "fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:bodyStr||''});";
+    j += "fetch(apiBase+url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:bodyStr||''});";
     j += "if (bfIsRunning && (url.indexOf('add-slot') !== -1 || url.indexOf('remove-slot') !== -1)) {";
     j += "var keys = Object.keys(dirtyVars);";
     j += "for (var i=0; i<keys.length; i++) {";
@@ -4058,6 +4344,34 @@ string BfDashJS_Helpers()
     j += "document.body.appendChild(t);";
     j += "setTimeout(function(){ t.classList.add('show'); }, 10);";
     j += "setTimeout(function(){ t.classList.remove('show'); setTimeout(function(){ t.remove(); }, 300); }, 3000);}";
+
+    // Propagate a section's settings to all other instances
+    j += "function propagateSection(sectionId){";
+    j += "var sec=document.getElementById(sectionId);if(!sec)return;";
+    j += "var els=sec.querySelectorAll('[data-var]');";
+    j += "var pairs={};";
+    j += "for(var i=0;i<els.length;i++){";
+    j += "var vn=els[i].getAttribute('data-var');if(!vn)continue;";
+    j += "var val;";
+    j += "if(els[i].type==='checkbox')val=els[i].checked?'true':'false';";
+    j += "else if(els[i].getAttribute('data-script'))val=displayToScript(els[i].value);";
+    j += "else if(els[i].getAttribute('data-time'))val=String(parseTime(els[i].value));";
+    j += "else if(els[i].getAttribute('data-vec3-idx')){";
+    j += "var vidx=els[i].getAttribute('data-vec3-idx');";
+    j += "if(vidx!=='0')continue;";
+    j += "var row=els[i].closest('.vec3-row');if(!row)continue;";
+    j += "var inps=row.querySelectorAll('input[type=number]');";
+    j += "val=inps[0].value+' '+inps[1].value+' '+inps[2].value;";
+    j += "}else val=els[i].value;";
+    j += "pairs[vn]=val;}";
+    j += "var body='';var keys=Object.keys(pairs);";
+    j += "for(var k=0;k<keys.length;k++){if(k>0)body+='\\n';body+=keys[k]+'='+pairs[keys[k]];}";
+    j += "var sent=0;";
+    j += "for(var ii=0;ii<instances.length;ii++){";
+    j += "if(instances[ii].port===activeInstancePort)continue;";
+    j += "sent++;";
+    j += "fetch('http://localhost:'+instances[ii].port+'/api/bf/set-batch',{method:'POST',body:body}).catch(function(){});}";
+    j += "showToast('Propagated '+keys.length+' settings to '+sent+' instance'+(sent!==1?'s':''));}";
 
     // Create a field-row div
     j += "function mkFieldRow(labelText,inputEl,full){";
@@ -4128,12 +4442,375 @@ string BfDashJS_Helpers()
     j += "wrap.appendChild(inp);}";
     j += "if(withCopy){var btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Copy Vehicle';";
     j += "btn.addEventListener('click',function(){";
-    j += "fetch('/api/bf/copy-position',{method:'POST'}).then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/bf/copy-position',{method:'POST'}).then(function(r){return r.json();}).then(function(d){";
     j += "if(d.vehiclePosition){var inps=wrap.querySelectorAll('input[type=number]');";
     j += "inps[0].value=d.vehiclePosition.x.toFixed(3);inps[1].value=d.vehiclePosition.y.toFixed(3);inps[2].value=d.vehiclePosition.z.toFixed(3);";
     j += "setVar(varName,d.vehiclePosition.x+' '+d.vehiclePosition.y+' '+d.vehiclePosition.z);}});});";
     j += "wrap.appendChild(btn);}";
     j += "return wrap;}";
+
+    // ---- Group Editor globals ----
+    // Constants: group and scalar names (must match FinetunerBf.as exactly)
+    j += "var GE_GROUPS=['Position','Rotation','Global Speed','Local Speed',";
+    j += "'Front Left Wheel','Front Right Wheel','Back Right Wheel','Back Left Wheel'];";
+    j += "var GE_SCALARS=['X Position','Y Position','Z Position',";
+    j += "'Yaw','Pitch','Roll',";
+    j += "'Global X Speed','Global Y Speed','Global Z Speed',";
+    j += "'Local X Speed (Sideways)','Local Y Speed (Upwards)','Local Z Speed (Forwards)',";
+    j += "'X Front Left Wheel','Y Front Left Wheel','Z Front Left Wheel',";
+    j += "'X Front Right Wheel','Y Front Right Wheel','Z Front Right Wheel',";
+    j += "'X Back Right Wheel','Y Back Right Wheel','Z Back Right Wheel',";
+    j += "'X Back Left Wheel','Y Back Left Wheel','Z Back Left Wheel'];";
+
+    // Parse groups: "v2.0.0|Name:0;Name:1;..." -> [{name,active}]
+    j += "function geParseGroups(s){";
+    j += "var result=[];for(var i=0;i<GE_GROUPS.length;i++)result.push({name:GE_GROUPS[i],active:false});";
+    j += "if(!s||s.indexOf('|')===-1)return result;";
+    j += "var parts=s.split('|');if(parts.length!==2)return result;";
+    j += "var entries=parts[1].split(';');";
+    j += "for(var i=0;i<entries.length;i++){";
+    j += "var kv=entries[i].split(':');if(kv.length!==2)continue;";
+    j += "var idx=GE_GROUPS.indexOf(kv[0]);if(idx===-1)continue;";
+    j += "result[idx].active=kv[1]==='1';}";
+    j += "return result;}";
+
+    // Serialize groups: [{name,active}] -> "v2.0.0|Name:0;Name:1;..."
+    j += "function geSerializeGroups(groups){";
+    j += "var parts=[];for(var i=0;i<groups.length;i++){";
+    j += "parts.push(groups[i].name+':'+(groups[i].active?'1':'0'));}";
+    j += "return 'v2.0.0|'+parts.join(';');}";
+
+    // Parse scalars: "v2.0.0|Name:lower,upper,valLow,valUp,dispLow,dispUp;..."
+    j += "function geParseScalars(s){";
+    j += "var result=[];for(var i=0;i<GE_SCALARS.length;i++)result.push({name:GE_SCALARS[i],lower:false,upper:false,valueLower:0,valueUpper:0,displayLower:0,displayUpper:0});";
+    j += "if(!s||s.indexOf('|')===-1)return result;";
+    j += "var parts=s.split('|');if(parts.length!==2)return result;";
+    j += "var entries=parts[1].split(';');";
+    j += "for(var i=0;i<entries.length;i++){";
+    j += "var kv=entries[i].split(':');if(kv.length!==2)continue;";
+    j += "var idx=GE_SCALARS.indexOf(kv[0]);if(idx===-1)continue;";
+    j += "var vals=kv[1].split(',');if(vals.length!==6)continue;";
+    j += "result[idx].lower=vals[0]==='1';";
+    j += "result[idx].upper=vals[1]==='1';";
+    j += "result[idx].valueLower=parseFloat(vals[2])||0;";
+    j += "result[idx].valueUpper=parseFloat(vals[3])||0;";
+    j += "result[idx].displayLower=parseFloat(vals[4])||0;";
+    j += "result[idx].displayUpper=parseFloat(vals[5])||0;}";
+    j += "return result;}";
+
+    // Serialize scalars
+    j += "function geSerializeScalars(scalars){";
+    j += "var parts=[];for(var i=0;i<scalars.length;i++){var sc=scalars[i];";
+    j += "parts.push(sc.name+':'+(sc.lower?'1':'0')+','+(sc.upper?'1':'0')+','+sc.valueLower+','+sc.valueUpper+','+sc.displayLower+','+sc.displayUpper);}";
+    j += "return 'v2.0.0|'+parts.join(';');}";
+
+    // Render the group editor detail panel for the selected group
+    j += "function renderGroupEditor(es){";
+    j += "var detail=document.getElementById('geDetail');if(!detail)return;";
+    j += "while(detail.firstChild)detail.removeChild(detail.firstChild);";
+    j += "var sel=document.getElementById('geGroupSel');if(!sel)return;";
+    j += "var gi=parseInt(sel.value,10);if(gi<0)return;";
+    j += "var grpStr=es.finetuner_common_groups||'';";
+    j += "var sclStr=es.finetuner_common_scalars||'';";
+    j += "var groups=geParseGroups(grpStr);";
+    j += "var scalars=geParseScalars(sclStr);";
+    j += "var grp=groups[gi];";
+
+    // Group active checkbox
+    j += "var gaRow=document.createElement('div');gaRow.className='ge-row';";
+    j += "var gaLabel=document.createElement('label');gaLabel.textContent='Active';gaRow.appendChild(gaLabel);";
+    j += "var gaCb=document.createElement('input');gaCb.type='checkbox';gaCb.checked=grp.active;";
+    j += "gaCb.addEventListener('change',function(){";
+    j += "var gs=geParseGroups(es.finetuner_common_groups||'');";
+    j += "gs[gi].active=this.checked;";
+    j += "var ser=geSerializeGroups(gs);";
+    j += "es.finetuner_common_groups=ser;";
+    j += "setVar('finetuner_common_groups',ser);});";
+    j += "gaRow.appendChild(gaCb);detail.appendChild(gaRow);";
+
+    // Bulk action buttons: Reset All, Toggle All, Activate All
+    j += "var bulkRow=document.createElement('div');bulkRow.className='ge-row';";
+    j += "var btnResetAll=document.createElement('button');btnResetAll.className='btn-sm';btnResetAll.textContent='Reset All';";
+    j += "btnResetAll.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=false;ss[idx].upper=false;ss[idx].displayLower=0;ss[idx].valueLower=0;ss[idx].displayUpper=0;ss[idx].valueUpper=0;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "bulkRow.appendChild(btnResetAll);";
+    j += "var btnToggleAll=document.createElement('button');btnToggleAll.className='btn-sm';btnToggleAll.textContent='Toggle All';";
+    j += "btnToggleAll.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=!ss[idx].lower;ss[idx].upper=!ss[idx].upper;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "bulkRow.appendChild(btnToggleAll);";
+    j += "var btnActivateAll=document.createElement('button');btnActivateAll.className='btn-sm';btnActivateAll.textContent='Activate All';";
+    j += "btnActivateAll.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=true;ss[idx].upper=true;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "bulkRow.appendChild(btnActivateAll);";
+    j += "detail.appendChild(bulkRow);";
+
+    // Copy Vehicle Position button (only for Position group, index 0)
+    j += "if(gi===0){";
+    j += "var cpRow=document.createElement('div');cpRow.className='ge-row';";
+    j += "var btnCopyPos=document.createElement('button');btnCopyPos.className='btn-sm';btnCopyPos.textContent='Copy Vehicle Position';";
+    j += "btnCopyPos.addEventListener('click',function(){";
+    j += "fetch(apiBase+'/api/bf/copy-position',{method:'POST'}).then(function(r){return r.json();}).then(function(d){";
+    j += "if(d.vehiclePosition){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "var coords=[d.vehiclePosition.x,d.vehiclePosition.y,d.vehiclePosition.z];";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=true;ss[idx].upper=true;ss[idx].displayLower=coords[k]-2;ss[idx].valueLower=coords[k]-2;ss[idx].displayUpper=coords[k]+2;ss[idx].valueUpper=coords[k]+2;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);}});});";
+    j += "cpRow.appendChild(btnCopyPos);detail.appendChild(cpRow);}";
+
+    // Scalars for this group (3 per group, at indices gi*3 .. gi*3+2)
+    j += "for(var si=0;si<3;si++){";
+    j += "(function(si){";
+    j += "var scIdx=gi*3+si;";
+    j += "var sc=scalars[scIdx];";
+    j += "var scDiv=document.createElement('div');scDiv.className='ge-scalar';";
+    j += "var scName=document.createElement('div');scName.className='ge-scalar-name';scName.textContent=GE_SCALARS[scIdx];";
+    j += "scDiv.appendChild(scName);";
+
+    // Per-scalar Reset button
+    j += "var scResetBtn=document.createElement('button');scResetBtn.className='btn-sm';scResetBtn.textContent='Reset';scResetBtn.style.marginBottom='0.3rem';";
+    j += "scResetBtn.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].lower=false;ss[scIdx].upper=false;ss[scIdx].displayLower=0;ss[scIdx].valueLower=0;ss[scIdx].displayUpper=0;ss[scIdx].valueUpper=0;";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "scDiv.appendChild(scResetBtn);";
+
+    // Lower bound row
+    j += "var lbRow=document.createElement('div');lbRow.className='ge-bound';";
+    j += "var lbCb=document.createElement('input');lbCb.type='checkbox';lbCb.checked=sc.lower;";
+    j += "var lbLabel=document.createElement('label');lbLabel.textContent='Lower';";
+    j += "var lbInp=document.createElement('input');lbInp.type='number';lbInp.step='0.001';lbInp.value=sc.displayLower;";
+    j += "lbInp.disabled=!sc.lower;";
+    j += "lbCb.addEventListener('change',function(){";
+    j += "lbInp.disabled=!this.checked;";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].lower=this.checked;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "lbInp.addEventListener('blur',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].displayLower=parseFloat(this.value)||0;";
+    j += "var grpIdx=Math.floor(scIdx/3);";
+    j += "if(grpIdx===1)ss[scIdx].valueLower=ss[scIdx].displayLower*Math.PI/180;";
+    j += "else if(grpIdx===2||grpIdx===3)ss[scIdx].valueLower=ss[scIdx].displayLower/3.6;";
+    j += "else ss[scIdx].valueLower=ss[scIdx].displayLower;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "lbRow.appendChild(lbCb);lbRow.appendChild(lbLabel);lbRow.appendChild(lbInp);";
+    j += "scDiv.appendChild(lbRow);";
+
+    // Upper bound row
+    j += "var ubRow=document.createElement('div');ubRow.className='ge-bound';";
+    j += "var ubCb=document.createElement('input');ubCb.type='checkbox';ubCb.checked=sc.upper;";
+    j += "var ubLabel=document.createElement('label');ubLabel.textContent='Upper';";
+    j += "var ubInp=document.createElement('input');ubInp.type='number';ubInp.step='0.001';ubInp.value=sc.displayUpper;";
+    j += "ubInp.disabled=!sc.upper;";
+    j += "ubCb.addEventListener('change',function(){";
+    j += "ubInp.disabled=!this.checked;";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].upper=this.checked;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "ubInp.addEventListener('blur',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].displayUpper=parseFloat(this.value)||0;";
+    j += "var grpIdx2=Math.floor(scIdx/3);";
+    j += "if(grpIdx2===1)ss[scIdx].valueUpper=ss[scIdx].displayUpper*Math.PI/180;";
+    j += "else if(grpIdx2===2||grpIdx2===3)ss[scIdx].valueUpper=ss[scIdx].displayUpper/3.6;";
+    j += "else ss[scIdx].valueUpper=ss[scIdx].displayUpper;";
+    j += "var ser=geSerializeScalars(ss);";
+    j += "es.finetuner_common_scalars=ser;";
+    j += "setVar('finetuner_common_scalars',ser);});";
+    j += "ubRow.appendChild(ubCb);ubRow.appendChild(ubLabel);ubRow.appendChild(ubInp);";
+    j += "scDiv.appendChild(ubRow);";
+
+    j += "detail.appendChild(scDiv);";
+    j += "})(si);}";
+    j += "}";
+
+    // Store the latest evalSettings ref for group/condition editor refresh from updateEvalValues
+    j += "var geLastEs=null;";
+    j += "var ceLastEs=null;";
+    // Finetuner grouped visibility function (assigned in buildEvalFields finetuner block)
+    j += "var updateFtGroupedVisibility=null;";
+
+    // ---- Condition Editor globals ----
+    // Constants: condition names (must match FinetunerBf.as ConditionKind enum exactly)
+    j += "var CE_CONDS=['Minimum Real Speed','Freewheeling','Sliding','Wheel Touching Wall','Wheel Contacts',";
+    j += "'Checkpoints','RPM','Gear','Rear Gear','Glitching'];";
+
+    // Parse conditions string: "v2.0.0|Name:active,value,valueMin,valueMax,display,displayMin,displayMax;..."
+    j += "function ceParseConditions(s){";
+    j += "var result=[];for(var i=0;i<CE_CONDS.length;i++)result.push({name:CE_CONDS[i],active:false,value:0,valueMin:0,valueMax:0,display:0,displayMin:0,displayMax:0});";
+    j += "if(!s||s.indexOf('|')===-1)return result;";
+    j += "var parts=s.split('|');if(parts.length!==2)return result;";
+    j += "var entries=parts[1].split(';');";
+    j += "for(var i=0;i<entries.length;i++){";
+    j += "var kv=entries[i].split(':');if(kv.length!==2)continue;";
+    j += "var idx=CE_CONDS.indexOf(kv[0]);if(idx===-1)continue;";
+    j += "var vals=kv[1].split(',');if(vals.length!==7)continue;";
+    j += "result[idx].active=vals[0]==='1';";
+    j += "result[idx].value=parseFloat(vals[1])||0;";
+    j += "result[idx].valueMin=parseFloat(vals[2])||0;";
+    j += "result[idx].valueMax=parseFloat(vals[3])||0;";
+    j += "result[idx].display=parseFloat(vals[4])||0;";
+    j += "result[idx].displayMin=parseFloat(vals[5])||0;";
+    j += "result[idx].displayMax=parseFloat(vals[6])||0;}";
+    j += "return result;}";
+
+    // Serialize conditions back: "v2.0.0|Name:active,value,valueMin,valueMax,display,displayMin,displayMax;..."
+    j += "function ceSerializeConditions(conds){";
+    j += "var parts=[];for(var i=0;i<conds.length;i++){var cd=conds[i];";
+    j += "parts.push(cd.name+':'+(cd.active?'1':'0')+','+cd.value+','+cd.valueMin+','+cd.valueMax+','+cd.display+','+cd.displayMin+','+cd.displayMax);}";
+    j += "return 'v2.0.0|'+parts.join(';');}";
+
+    // Helper: re-parse conditions, apply a mutation, serialize and send
+    j += "function ceSave(es,ci,mutate){";
+    j += "var conds=ceParseConditions(es.finetuner_common_conditions||'');";
+    j += "mutate(conds[ci]);";
+    j += "var ser=ceSerializeConditions(conds);";
+    j += "es.finetuner_common_conditions=ser;";
+    j += "setVar('finetuner_common_conditions',ser);}";
+
+    // Helper: create a labeled range slider row for condition editor
+    j += "function ceMkRange(labelText,min,max,step,initVal,onChange){";
+    j += "var row=document.createElement('div');row.className='ce-range-row';";
+    j += "var lb=document.createElement('label');lb.textContent=labelText;row.appendChild(lb);";
+    j += "var inp=document.createElement('input');inp.type='range';inp.min=min;inp.max=max;inp.step=step||'1';inp.value=initVal;";
+    j += "var sp=document.createElement('span');sp.className='ce-range-val';sp.textContent=String(initVal);";
+    j += "inp.addEventListener('input',function(){sp.textContent=this.value;});";
+    j += "inp.addEventListener('change',function(){onChange(parseInt(this.value,10));});";
+    j += "row.appendChild(inp);row.appendChild(sp);return row;}";
+
+    // Render the condition editor detail panel for the selected condition
+    j += "function renderConditionEditor(es){";
+    j += "var detail=document.getElementById('ceDetail');if(!detail)return;";
+    j += "while(detail.firstChild)detail.removeChild(detail.firstChild);";
+    j += "var sel=document.getElementById('ceCondSel');if(!sel)return;";
+    j += "var ci=parseInt(sel.value,10);if(ci<0)return;";
+    j += "var condStr=es.finetuner_common_conditions||'';";
+    j += "var conds=ceParseConditions(condStr);";
+    j += "var cond=conds[ci];";
+
+    // Active checkbox + Reset button row
+    j += "var actRow=document.createElement('div');actRow.className='ce-row';";
+    j += "var actLabel=document.createElement('label');actLabel.textContent='Active';actRow.appendChild(actLabel);";
+    j += "var actCb=document.createElement('input');actCb.type='checkbox';actCb.checked=cond.active;";
+    j += "actCb.addEventListener('change',function(){var chk=this.checked;ceSave(es,ci,function(cd){cd.active=chk;});});";
+    j += "actRow.appendChild(actCb);";
+    j += "var rstBtn=document.createElement('button');rstBtn.className='ce-reset';rstBtn.textContent='Reset';";
+    j += "rstBtn.addEventListener('click',function(){ceSave(es,ci,function(cd){cd.active=false;cd.value=0;cd.valueMin=0;cd.valueMax=0;cd.display=0;cd.displayMin=0;cd.displayMax=0;});renderConditionEditor(es);});";
+    j += "actRow.appendChild(rstBtn);";
+    j += "detail.appendChild(actRow);";
+
+    // Condition-specific fields container
+    j += "var fields=document.createElement('div');fields.className='ce-fields';";
+
+    // Kind 0: MIN_REAL_SPEED - float input (display km/h, value = display / 3.6)
+    j += "if(ci===0){";
+    j += "var fr=document.createElement('div');fr.className='ce-row';";
+    j += "var fl=document.createElement('label');fl.textContent='Min Speed (km/h)';fr.appendChild(fl);";
+    j += "var fi=document.createElement('input');fi.type='number';fi.step='0.1';fi.value=cond.display;";
+    j += "fi.addEventListener('blur',function(){var v=parseFloat(this.value)||0;ceSave(es,ci,function(cd){cd.display=v;cd.value=v/3.6;});});";
+    j += "fr.appendChild(fi);fields.appendChild(fr);";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "ht.textContent='The car MUST have a real speed of at least '+cond.display+' km/h in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kinds 1,2,3,9: checkbox (FREEWHEELING, SLIDING, WHEEL_TOUCHING, GLITCHING)
+    j += "if(ci===1||ci===2||ci===3||ci===9){";
+    j += "var whatMap={1:'be free-wheeled',2:'be sliding',3:'have wheel(s) crashing into a wall',9:'be glitching'};";
+    j += "var cr=document.createElement('div');cr.className='ce-row';";
+    j += "var cl=document.createElement('label');cl.textContent='Required';cr.appendChild(cl);";
+    j += "var ccb=document.createElement('input');ccb.type='checkbox';ccb.checked=cond.display!==0;";
+    j += "ccb.addEventListener('change',function(){var v=this.checked?1:0;ceSave(es,ci,function(cd){cd.display=v;cd.value=v;});";
+    j += "var htEl=fields.querySelector('.ce-hint');if(htEl)htEl.textContent='The car MUST'+(v?' ':' NOT ')+whatMap[ci]+' in the eval timeframe.';});";
+    j += "cr.appendChild(ccb);fields.appendChild(cr);";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "ht.textContent='The car MUST'+(cond.display!==0?' ':' NOT ')+whatMap[ci]+' in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 4: WHEEL_CONTACTS - two range sliders (int 0-4)
+    j += "if(ci===4){";
+    j += "fields.appendChild(ceMkRange('Min',0,4,'1',Math.round(cond.displayMin),function(v){ceSave(es,ci,function(cd){";
+    j += "var mx=Math.round(cd.displayMax);if(v>mx){cd.displayMin=mx;cd.displayMax=v;}else{cd.displayMin=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "fields.appendChild(ceMkRange('Max',0,4,'1',Math.round(cond.displayMax),function(v){ceSave(es,ci,function(cd){";
+    j += "var mn=Math.round(cd.displayMin);if(v<mn){cd.displayMax=mn;cd.displayMin=v;}else{cd.displayMax=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=Math.round(cond.displayMin);var mx=Math.round(cond.displayMax);";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' wheels contacting the ground in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 5: CHECKPOINTS - int input (value = display)
+    j += "if(ci===5){";
+    j += "var fr=document.createElement('div');fr.className='ce-row';";
+    j += "var fl=document.createElement('label');fl.textContent='Checkpoints';fr.appendChild(fl);";
+    j += "var fi=document.createElement('input');fi.type='number';fi.step='1';fi.min='0';fi.value=Math.round(cond.display);";
+    j += "fi.addEventListener('blur',function(){var v=parseInt(this.value,10)||0;ceSave(es,ci,function(cd){cd.display=v;cd.value=v;});});";
+    j += "fr.appendChild(fi);fields.appendChild(fr);";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "ht.textContent='The car MUST have exactly '+Math.round(cond.display)+' checkpoints in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 6: RPM - two float inputs (min/max)
+    j += "if(ci===6){";
+    j += "var mrMin=document.createElement('div');mrMin.className='ce-row';";
+    j += "var mlMin=document.createElement('label');mlMin.textContent='Min RPM';mrMin.appendChild(mlMin);";
+    j += "var miMin=document.createElement('input');miMin.type='number';miMin.step='1';miMin.value=cond.displayMin;";
+    j += "mrMin.appendChild(miMin);fields.appendChild(mrMin);";
+    j += "var mrMax=document.createElement('div');mrMax.className='ce-row';";
+    j += "var mlMax=document.createElement('label');mlMax.textContent='Max RPM';mrMax.appendChild(mlMax);";
+    j += "var miMax=document.createElement('input');miMax.type='number';miMax.step='1';miMax.value=cond.displayMax;";
+    j += "mrMax.appendChild(miMax);fields.appendChild(mrMax);";
+    j += "miMin.addEventListener('blur',function(){var vn=parseFloat(miMin.value)||0;var vx=parseFloat(miMax.value)||0;";
+    j += "var lo=Math.min(vn,vx);var hi=Math.max(vn,vx);miMin.value=lo;miMax.value=hi;";
+    j += "ceSave(es,ci,function(cd){cd.displayMin=lo;cd.displayMax=hi;cd.valueMin=lo;cd.valueMax=hi;});});";
+    j += "miMax.addEventListener('blur',function(){var vn=parseFloat(miMin.value)||0;var vx=parseFloat(miMax.value)||0;";
+    j += "var lo=Math.min(vn,vx);var hi=Math.max(vn,vx);miMin.value=lo;miMax.value=hi;";
+    j += "ceSave(es,ci,function(cd){cd.displayMin=lo;cd.displayMax=hi;cd.valueMin=lo;cd.valueMax=hi;});});";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=cond.displayMin;var mx=cond.displayMax;";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' RPM in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 7: GEAR - two range sliders (int 0-5)
+    j += "if(ci===7){";
+    j += "fields.appendChild(ceMkRange('Min',0,5,'1',Math.round(cond.displayMin),function(v){ceSave(es,ci,function(cd){";
+    j += "var mx=Math.round(cd.displayMax);if(v>mx){cd.displayMin=mx;cd.displayMax=v;}else{cd.displayMin=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "fields.appendChild(ceMkRange('Max',0,5,'1',Math.round(cond.displayMax),function(v){ceSave(es,ci,function(cd){";
+    j += "var mn=Math.round(cd.displayMin);if(v<mn){cd.displayMax=mn;cd.displayMin=v;}else{cd.displayMax=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=Math.round(cond.displayMin);var mx=Math.round(cond.displayMax);";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' gears in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    // Kind 8: REAR_GEAR - two range sliders (int 0-1)
+    j += "if(ci===8){";
+    j += "fields.appendChild(ceMkRange('Min',0,1,'1',Math.round(cond.displayMin),function(v){ceSave(es,ci,function(cd){";
+    j += "var mx=Math.round(cd.displayMax);if(v>mx){cd.displayMin=mx;cd.displayMax=v;}else{cd.displayMin=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "fields.appendChild(ceMkRange('Max',0,1,'1',Math.round(cond.displayMax),function(v){ceSave(es,ci,function(cd){";
+    j += "var mn=Math.round(cd.displayMin);if(v<mn){cd.displayMax=mn;cd.displayMin=v;}else{cd.displayMax=v;}";
+    j += "cd.valueMin=cd.displayMin;cd.valueMax=cd.displayMax;});renderConditionEditor(es);}));";
+    j += "var ht=document.createElement('div');ht.className='ce-hint';";
+    j += "var mn=Math.round(cond.displayMin);var mx=Math.round(cond.displayMax);";
+    j += "ht.textContent='The car MUST have '+(mn===mx?'exactly '+mn:'between '+mn+' and '+mx)+' rear gears in the eval timeframe.';";
+    j += "fields.appendChild(ht);}";
+
+    j += "detail.appendChild(fields);";
+    j += "}"; // end renderConditionEditor
 
     return j;
 }
@@ -4150,7 +4827,7 @@ string BfDashJS_Status()
 
     // Status polling
     j += "function pollStatus(){";
-    j += "fetch('/api/bf/status').then(function(r){return r.json();}).then(function(d){pollOk=true;";
+    j += "fetch(apiBase+'/api/bf/status').then(function(r){return r.json();}).then(function(d){pollOk=true;";
     j += "var cn=document.getElementById('conn');cn.textContent='Connected';cn.style.background='#3fb95030';cn.style.color='#3fb950';";
     j += "var st=document.getElementById('bfState');st.textContent=d.running?'Running':'Idle';st.className='badge '+(d.running?'running':'idle');";
     j += "var ph=document.getElementById('bfPhase');ph.textContent=d.phase;ph.className='badge '+(d.phase==='Initial'?'initial':d.phase==='Search'?'search':'idle');";
@@ -4159,6 +4836,7 @@ string BfDashJS_Status()
     j += "setText('bfIter',fmtNum(d.iterations||0));";
     j += "setText('bfIterSec',(d.iterationsPerSec||0).toFixed(1));";
     j += "setText('bfRestarts',d.restarts||0);";
+    j += "setText('bfImpCount',d.improvements||0);";
     // Track bfIsRunning transitions
     j += "var wasRunning = bfIsRunning;";
     j += "bfIsRunning = d.running;";
@@ -4176,16 +4854,147 @@ string BfDashJS_Status()
     j += "}).catch(function(){";
     j += "if(pollOk){pollOk=false;var cn=document.getElementById('conn');cn.textContent='Disconnected';cn.style.background='#f8514930';cn.style.color='#f85149';}";
     j += "});}";
-    j += "setInterval(pollStatus,500);pollStatus();";
+    j += "setInterval(pollStatus,1000);pollStatus();";
 
     // Map
     j += "function loadMap(){";
-    j += "fetch('/api/map').then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/map').then(function(r){return r.json();}).then(function(d){";
     j += "setText('mapName',d.loaded?d.name:'No map');";
     j += "setText('mapAuthor',d.loaded?d.author:'-');";
     j += "setText('mapUid',d.loaded?d.uid:'-');";
     j += "}).catch(function(){});}";
     j += "loadMap();setInterval(loadMap,10000);";
+
+    // Multi-instance: resilient scanning with last-seen tracking
+    j += "var SCAN_START=8489,SCAN_END=8520;";
+    j += "var SCAN_TIMEOUT=2000;";  // 2s timeout for BF-busy servers
+    j += "var MISS_THRESHOLD=3;";   // remove after 3 consecutive misses (~9s)
+    j += "var DISCOVERY_INTERVAL=15000;";  // full port scan every 15s
+    j += "var KNOWN_INTERVAL=3000;";       // probe known instances every 3s
+    j += "var instanceLastSeen={};";  // port -> {data, missCount, lastSuccess}
+    j += "var lastFullScanTime=0;";
+
+    // Probe a single port, returns a Promise
+    j += "function probePort(port){";
+    j += "return new Promise(function(resolve){";
+    j += "var ctrl=new AbortController();var t=setTimeout(function(){ctrl.abort();},SCAN_TIMEOUT);";
+    j += "fetch('http://localhost:'+port+'/api/bf/status',{signal:ctrl.signal})";
+    j += ".then(function(r){clearTimeout(t);return r.json();})";
+    j += ".then(function(d){resolve({port:port,target:d.target||'-',running:d.running,ok:true});})";
+    j += ".catch(function(){clearTimeout(t);resolve({port:port,ok:false});});";
+    j += "});}";
+
+    // Scan known instances (fast, every 3s)
+    j += "function scanKnownInstances(){";
+    j += "var knownPorts=Object.keys(instanceLastSeen);";
+    j += "if(knownPorts.length===0)return Promise.resolve();";
+    j += "var probes=[];";
+    j += "for(var i=0;i<knownPorts.length;i++){probes.push(probePort(parseInt(knownPorts[i])));}";
+    j += "return Promise.all(probes).then(function(results){";
+    j += "for(var i=0;i<results.length;i++){var r=results[i];var pk=String(r.port);";
+    j += "if(r.ok){instanceLastSeen[pk]={data:{port:r.port,target:r.target,running:r.running},missCount:0,lastSuccess:Date.now()};}";
+    j += "else{if(instanceLastSeen[pk]){instanceLastSeen[pk].missCount++;";
+    j += "if(instanceLastSeen[pk].missCount>=MISS_THRESHOLD){delete instanceLastSeen[pk];}}}}";
+    j += "onScanDone();});}";
+
+    // Full discovery scan (slow, every 15s) - probes all ports
+    j += "function scanDiscovery(){";
+    j += "lastFullScanTime=Date.now();";
+    j += "var probes=[];";
+    j += "for(var p=SCAN_START;p<=SCAN_END;p++){probes.push(probePort(p));}";
+    j += "return Promise.all(probes).then(function(results){";
+    j += "for(var i=0;i<results.length;i++){var r=results[i];var pk=String(r.port);";
+    j += "if(r.ok){instanceLastSeen[pk]={data:{port:r.port,target:r.target,running:r.running},missCount:0,lastSuccess:Date.now()};}";
+    j += "else{if(instanceLastSeen[pk]){instanceLastSeen[pk].missCount++;";
+    j += "if(instanceLastSeen[pk].missCount>=MISS_THRESHOLD){delete instanceLastSeen[pk];}}}}";
+    j += "onScanDone();});}";
+
+    // Main scan dispatcher
+    j += "function scanInstances(){";
+    j += "var now=Date.now();";
+    j += "if(now-lastFullScanTime>=DISCOVERY_INTERVAL||Object.keys(instanceLastSeen).length===0){scanDiscovery();}";
+    j += "else{scanKnownInstances();}}";
+
+    j += "function onScanDone(){";
+    j += "var found=[];var keys=Object.keys(instanceLastSeen);";
+    j += "for(var i=0;i<keys.length;i++){found.push(instanceLastSeen[keys[i]].data);}";
+    j += "found.sort(function(a,b){return a.port-b.port;});";
+    j += "instances=found;";
+    j += "if(found.length>0){";
+    j += "var stillExists=false;for(var si=0;si<found.length;si++){if(found[si].port===activeInstancePort)stillExists=true;}";
+    j += "if(!stillExists||activeInstancePort===0){activeInstancePort=found[0].port;apiBase='http://localhost:'+found[0].port;}}";
+    j += "renderInstances();";
+    j += "updateLiveCards(found);}";
+
+    j += "var lastInstKey='';";
+    j += "function renderInstances(){";
+    j += "var bar=document.getElementById('instanceBar');";
+    j += "if(instances.length===0){while(bar.firstChild)bar.removeChild(bar.firstChild);lastInstKey='';return;}";
+    j += "bar.className='instance-bar';";
+    j += "var key=instances.map(function(i){return i.port;}).join(',');";
+    j += "if(key!==lastInstKey){";
+    j += "lastInstKey=key;";
+    j += "while(bar.firstChild)bar.removeChild(bar.firstChild);";
+    j += "for(var i=0;i<instances.length;i++){";
+    j += "(function(inst,idx){";
+    j += "var btn=document.createElement('button');btn.id='instBtn'+inst.port;";
+    j += "btn.addEventListener('click',function(){switchInstance(inst.port);});";
+    j += "bar.appendChild(btn);";
+    j += "})(instances[i],i);}}";
+    j += "for(var i=0;i<instances.length;i++){";
+    j += "var btn=document.getElementById('instBtn'+instances[i].port);if(!btn)continue;";
+    j += "btn.className='inst-btn'+(activeInstancePort===instances[i].port?' active':'');";
+    j += "var lbl=instances[i].running?'BF: '+instances[i].target:'Idle';";
+    j += "btn.textContent='Instance '+(i+1)+' :'+instances[i].port+' ('+lbl+')';}}";
+
+    j += "function switchInstance(port){";
+    j += "if(activeInstancePort>0){";
+    j += "perInstanceState[activeInstancePort]={";
+    j += "dirtyVars:dirtyVars,";
+    j += "serverSnapshot:serverSnapshot,";
+    j += "bfIsRunning:bfIsRunning,";
+    j += "lastLogLen:lastLogLen,";
+    j += "lastImpLen:lastImpLen,";
+    j += "activeSession:activeSession,";
+    j += "activeSubTab:activeSubTab,";
+    j += "prevTarget:prevTarget,";
+    j += "prevSlotAlgos:prevSlotAlgos,";
+    j += "lastSlotCount:lastSlotCount};}";
+    j += "activeInstancePort=port;";
+    j += "apiBase='http://localhost:'+port;";
+    j += "var saved=perInstanceState[port];";
+    j += "if(saved){";
+    j += "dirtyVars=saved.dirtyVars;";
+    j += "serverSnapshot=saved.serverSnapshot;";
+    j += "bfIsRunning=saved.bfIsRunning;";
+    j += "lastLogLen=saved.lastLogLen;";
+    j += "lastImpLen=saved.lastImpLen;";
+    j += "activeSession=saved.activeSession;";
+    j += "activeSubTab=saved.activeSubTab;";
+    j += "prevTarget=saved.prevTarget;";
+    j += "prevSlotAlgos=saved.prevSlotAlgos;";
+    j += "lastSlotCount=saved.lastSlotCount;";
+    j += "}else{";
+    j += "dirtyVars={};";
+    j += "serverSnapshot={};";
+    j += "bfIsRunning=null;";
+    j += "lastLogLen=-1;";
+    j += "lastImpLen=-1;";
+    j += "activeSession=null;";
+    j += "activeSubTab='imp';";
+    j += "prevTarget='';";
+    j += "prevSlotAlgos='';";
+    j += "lastSlotCount=-1;}";
+    j += "markAllClean();";
+    j += "updateApplyBar();";
+    j += "renderInstances();";
+    j += "pollStatus();";
+    j += "pollSettings();";
+    j += "pollSessions();";
+    j += "loadSessionData();";
+    j += "loadMap();}";
+
+    j += "setInterval(scanInstances,KNOWN_INTERVAL);scanInstances();";
 
     return j;
 }
@@ -4293,6 +5102,176 @@ string BfDashJS_Settings()
     j += "c.appendChild(mkFieldRow('Eval Time From',mkTime('bf_customtarget_eval_min_time')));";
     j += "c.appendChild(mkFieldRow('Eval Time To',mkTime('bf_customtarget_eval_max_time')));return;}";
 
+    // finetuner
+    j += "if(t==='finetuner'){";
+    j += "c.appendChild(mkFieldRow('Evaluate From',mkTime('finetuner_eval_from')));";
+    j += "c.appendChild(mkFieldRow('Evaluate To',mkTime('finetuner_eval_to')));";
+    j += "var chkGrp=mkCheck('finetuner_target_grouped','Grouped Target?');chkGrp.querySelector('input').id='ftGroupedChk';c.appendChild(chkGrp);";
+
+    // Grouped-specific fields wrapper
+    j += "var ftGrpDiv=document.createElement('div');ftGrpDiv.id='ftGroupedFields';";
+    j += "var grpOpts=[{value:'0',text:'Position'},{value:'1',text:'Rotation'},{value:'2',text:'Global Speed'},{value:'3',text:'Local Speed'},{value:'4',text:'Front Left Wheel'},{value:'5',text:'Front Right Wheel'},{value:'6',text:'Back Right Wheel'},{value:'7',text:'Back Left Wheel'}];";
+    j += "ftGrpDiv.appendChild(mkFieldRow('Target (Group)',mkSelect('finetuner_target_group',grpOpts)));";
+
+    // Scalar-specific fields wrapper
+    j += "var ftSclDiv=document.createElement('div');ftSclDiv.id='ftScalarFields';";
+    j += "var sclOpts=[{value:'0',text:'X Position'},{value:'1',text:'Y Position'},{value:'2',text:'Z Position'},{value:'3',text:'Yaw'},{value:'4',text:'Pitch'},{value:'5',text:'Roll'},{value:'6',text:'Global X Speed'},{value:'7',text:'Global Y Speed'},{value:'8',text:'Global Z Speed'},{value:'9',text:'Local X Speed (Sideways)'},{value:'10',text:'Local Y Speed (Upwards)'},{value:'11',text:'Local Z Speed (Forwards)'},{value:'12',text:'X Front Left Wheel'},{value:'13',text:'Y Front Left Wheel'},{value:'14',text:'Z Front Left Wheel'},{value:'15',text:'X Front Right Wheel'},{value:'16',text:'Y Front Right Wheel'},{value:'17',text:'Z Front Right Wheel'},{value:'18',text:'X Back Right Wheel'},{value:'19',text:'Y Back Right Wheel'},{value:'20',text:'Z Back Right Wheel'},{value:'21',text:'X Back Left Wheel'},{value:'22',text:'Y Back Left Wheel'},{value:'23',text:'Z Back Left Wheel'}];";
+    j += "ftSclDiv.appendChild(mkFieldRow('Target (Scalar)',mkSelect('finetuner_target_scalar',sclOpts)));";
+
+    // Target Towards (shared)
+    j += "c.appendChild(mkFieldRow('Target Towards',mkRange('finetuner_target_towards',-1,1,1)));";
+    // Dynamic hint under Target Towards
+    j += "var ftTowardsHint=document.createElement('span');ftTowardsHint.id='ftTowardsHint';ftTowardsHint.style.color='#8b949e';ftTowardsHint.style.fontSize='0.75rem';ftTowardsHint.style.display='block';ftTowardsHint.style.marginBottom='0.3rem';c.appendChild(ftTowardsHint);";
+
+    // Rotation warning
+    j += "var ftRotWarn=document.createElement('span');ftRotWarn.id='ftRotationWarn';ftRotWarn.style.color='#8b949e';ftRotWarn.style.fontSize='0.75rem';ftRotWarn.style.fontStyle='italic';ftRotWarn.style.display='none';ftRotWarn.style.marginBottom='0.3rem';ftRotWarn.textContent='WARNING: using grouped rotation is not recommended.';c.appendChild(ftRotWarn);";
+
+    // Scalar target value
+    j += "var ftTargetValRow=mkFieldRow('Target Value',mkNum('finetuner_target_value_display',null,null,0.1));ftTargetValRow.id='ftTargetValRow';ftSclDiv.appendChild(ftTargetValRow);";
+    j += "c.appendChild(ftSclDiv);";
+
+    // Grouped target values
+    j += "var ftTargetVecRow=mkFieldRow('Target Values',mkVec3('finetuner_target_vec3_display',false),true);ftTargetVecRow.id='ftTargetVecRow';ftGrpDiv.appendChild(ftTargetVecRow);";
+    // Print by component with tooltip
+    j += "var chkPrint=mkCheck('finetuner_print_by_component','Print By Component');";
+    j += "var printLabel=chkPrint.querySelector('label');";
+    j += "printLabel.setAttribute('title','Whether the values of the target group are to be printed by component (e.g. x y z), or as one value.');";
+    j += "var infoSpan=document.createElement('span');infoSpan.textContent=' (i)';infoSpan.style.color='#8b949e';infoSpan.style.cursor='help';infoSpan.setAttribute('title','Whether the values of the target group are to be printed by component (e.g. x y z), or as one value.');printLabel.appendChild(infoSpan);";
+    j += "ftGrpDiv.appendChild(chkPrint);";
+    j += "c.appendChild(ftGrpDiv);";
+
+    // Visibility function for grouped/scalar toggle and target towards disabled state (assigned to outer-scope var)
+    j += "updateFtGroupedVisibility=function(){";
+    j += "var chk=document.getElementById('ftGroupedChk');if(!chk)return;";
+    j += "var isGrouped=chk.checked;";
+    j += "var grpDiv=document.getElementById('ftGroupedFields');";
+    j += "var sclDiv=document.getElementById('ftScalarFields');";
+    j += "if(grpDiv)grpDiv.style.display=isGrouped?'':'none';";
+    j += "if(sclDiv)sclDiv.style.display=isGrouped?'none':'';";
+    // Update towards hint
+    j += "var towardsEl=document.querySelector('[data-var=\"finetuner_target_towards\"]');";
+    j += "var hint=document.getElementById('ftTowardsHint');";
+    j += "if(towardsEl&&hint){var tv=parseInt(towardsEl.value,10);";
+    j += "if(tv===-1)hint.textContent='Lower value is better.';";
+    j += "else if(tv===1)hint.textContent='Higher value is better.';";
+    j += "else hint.textContent='Custom:';}";
+    // Disable target value/vec3 when towards is -1 or 1
+    j += "var tv2=towardsEl?parseInt(towardsEl.value,10):0;";
+    j += "var disableTargets=(tv2===-1||tv2===1);";
+    j += "var sclInp=document.querySelector('#ftTargetValRow input[type=number]');";
+    j += "if(sclInp)sclInp.disabled=disableTargets;";
+    j += "var vecInps=document.querySelectorAll('#ftTargetVecRow input[type=number]');";
+    j += "for(var vi=0;vi<vecInps.length;vi++)vecInps[vi].disabled=disableTargets;";
+    // Rotation warning
+    j += "var rotWarn=document.getElementById('ftRotationWarn');";
+    j += "var grpSel=document.querySelector('[data-var=\"finetuner_target_group\"]');";
+    j += "if(rotWarn&&grpSel)rotWarn.style.display=(isGrouped&&grpSel.value==='1')?'block':'none';";
+    j += "};";
+
+    // Wire grouped checkbox to update visibility
+    j += "var ftGrpCb=document.getElementById('ftGroupedChk');";
+    j += "ftGrpCb.addEventListener('change',function(){updateFtGroupedVisibility();});";
+    // Wire towards slider to update hint+disabled
+    j += "var ftTowardsInp=document.querySelector('[data-var=\"finetuner_target_towards\"]');";
+    j += "if(ftTowardsInp){ftTowardsInp.addEventListener('input',function(){updateFtGroupedVisibility();});ftTowardsInp.addEventListener('change',function(){updateFtGroupedVisibility();});}";
+    // Wire group select to update rotation warning
+    j += "var ftGrpSel=document.querySelector('[data-var=\"finetuner_target_group\"]');";
+    j += "if(ftGrpSel)ftGrpSel.addEventListener('change',function(){updateFtGroupedVisibility();});";
+    // Initial call
+    j += "updateFtGroupedVisibility();";
+
+    // ---- Group Editor DOM ----
+    j += "var geWrap=document.createElement('div');geWrap.className='ge-wrap';";
+    j += "var geTitle=document.createElement('div');geTitle.className='ge-title';geTitle.textContent='Group Editor';";
+    j += "geWrap.appendChild(geTitle);";
+    j += "var geBody=document.createElement('div');geBody.className='ge-body';";
+    j += "geWrap.appendChild(geBody);";
+    j += "c.appendChild(geWrap);";
+
+    // Group selector row
+    j += "var geSelRow=document.createElement('div');geSelRow.className='ge-row';";
+    j += "var geSelLabel=document.createElement('label');geSelLabel.textContent='Group';geSelRow.appendChild(geSelLabel);";
+    j += "var geSel=document.createElement('select');geSel.id='geGroupSel';";
+    j += "var geHideOpt=document.createElement('option');geHideOpt.value='-1';geHideOpt.textContent='<Hide>';geSel.appendChild(geHideOpt);";
+    j += "for(var gi=0;gi<GE_GROUPS.length;gi++){var go=document.createElement('option');go.value=String(gi);go.textContent=GE_GROUPS[gi];geSel.appendChild(go);}";
+    j += "geSelRow.appendChild(geSel);";
+    j += "geBody.appendChild(geSelRow);";
+
+    // Detail container
+    j += "var geDetail=document.createElement('div');geDetail.id='geDetail';geBody.appendChild(geDetail);";
+
+    // Wire up select change and store es ref for polling refresh
+    j += "geLastEs=es;";
+    j += "geSel.addEventListener('change',function(){renderGroupEditor(geLastEs);});";
+
+    // Initial render
+    j += "renderGroupEditor(es);";
+
+    // ---- Condition Editor DOM ----
+    j += "var ceWrap=document.createElement('div');ceWrap.className='ce-wrap';";
+    j += "var ceTitle=document.createElement('div');ceTitle.className='ce-title';ceTitle.textContent='Condition Editor';";
+    j += "ceWrap.appendChild(ceTitle);";
+    j += "var ceBody=document.createElement('div');ceBody.className='ce-body';";
+    j += "ceWrap.appendChild(ceBody);";
+    j += "c.appendChild(ceWrap);";
+
+    // Condition selector row
+    j += "var ceSelRow=document.createElement('div');ceSelRow.className='ce-row';";
+    j += "var ceSelLabel=document.createElement('label');ceSelLabel.textContent='Condition';ceSelRow.appendChild(ceSelLabel);";
+    j += "var ceSel=document.createElement('select');ceSel.id='ceCondSel';";
+    j += "var ceHideOpt=document.createElement('option');ceHideOpt.value='-1';ceHideOpt.textContent='<Hide>';ceSel.appendChild(ceHideOpt);";
+    j += "for(var ci=0;ci<CE_CONDS.length;ci++){var co=document.createElement('option');co.value=String(ci);co.textContent=CE_CONDS[ci];ceSel.appendChild(co);}";
+    j += "ceSelRow.appendChild(ceSel);";
+    j += "ceBody.appendChild(ceSelRow);";
+
+    // Detail container for selected condition
+    j += "var ceDetail=document.createElement('div');ceDetail.id='ceDetail';ceBody.appendChild(ceDetail);";
+
+    // Wire up condition select change and store es ref for polling refresh
+    j += "ceLastEs=es;";
+    j += "ceSel.addEventListener('change',function(){renderConditionEditor(ceLastEs);});";
+
+    // Initial render
+    j += "renderConditionEditor(es);";
+
+    j += "return;}";
+
+    // nosepos_plus
+    j += "if(t==='nosepos_plus'){";
+    j += "c.appendChild(mkFieldRow('Eval time min',mkTime('shweetz_eval_time_min')));";
+    j += "c.appendChild(mkFieldRow('Eval time max',mkTime('shweetz_eval_time_max')));";
+    j += "c.appendChild(mkFieldRow('Target yaw (\\u00b0) (90 for left gs and uber, -90 for right)',mkNum('shweetz_yaw_deg',null,null,1)));";
+    j += "c.appendChild(mkFieldRow('Target pitch (\\u00b0) (85 to 90 for nosepos, 0 for gs, -25 for uber)',mkNum('shweetz_pitch_deg',null,null,1)));";
+    j += "c.appendChild(mkFieldRow('Target roll (\\u00b0) (usually 0)',mkNum('shweetz_roll_deg',null,null,1)));";
+    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180','');c.appendChild(mkFieldRow('Accept any yaw for nosepos (uncheck for yaw bruteforce)',chkYaw));";
+    j += "var chkNext=mkCheck('shweetz_next_eval_check','');c.appendChild(mkFieldRow('Change eval after nosepos is good enough',chkNext));";
+    // Conditional block: only shown when next_eval_check is true (matching in-game order: angle first, then combo + point)
+    j += "var npCondDiv=document.createElement('div');npCondDiv.id='npCondBlock';c.appendChild(npCondDiv);";
+    j += "c.appendChild(mkFieldRow('Min speed (km/h)',mkRange('shweetz_condition_speed',0,1000,0.1)));";
+    j += "c.appendChild(mkFieldRow('Min CP collected',mkNum('shweetz_min_cp',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Min wheels on ground',mkRange('shweetz_min_wheels_on_ground',0,4,1)));";
+    j += "c.appendChild(mkFieldRow('Gear (0 to disable)',mkRange('shweetz_gear',-1,6,1)));";
+    j += "c.appendChild(mkFieldRow('Trigger index (0 to disable)',mkNum('shweetz_trigger_index',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Anti-Trigger index (0 to disable)',mkNum('shweetz_antitrigger_index',0,null,1)));";
+    j += "c.appendChild(mkFieldRow('Tick to print if conditions are met (0 to disable)',mkTime('shweetz_debug')));";
+    j += "return;}";
+
+    // NoseposPlus conditional block updater (called from updateEvalValues)
+    j += "function updateNpCondBlock(es){";
+    j += "var blk=document.getElementById('npCondBlock');if(!blk)return;";
+    j += "while(blk.firstChild)blk.removeChild(blk.firstChild);";
+    j += "var nextCheck=es['shweetz_next_eval_check'];";
+    j += "if(!nextCheck)return;";
+    j += "blk.appendChild(mkFieldRow('Max angle from ideal (\\u00b0)',mkNum('shweetz_angle_min_deg',0,null,1)));";
+    j += "var nextOpts=[{value:'Point',text:'Point'},{value:'Speed',text:'Speed'},{value:'Time',text:'Time'},{value:'Hold',text:'Hold'}];";
+    j += "blk.appendChild(mkFieldRow('Next eval',mkSelect('shweetz_next_eval',nextOpts)));";
+    j += "var nextMode=es['shweetz_next_eval']||'Point';";
+    j += "var nSel=blk.querySelector('[data-var=\"shweetz_next_eval\"]');if(nSel)nSel.value=nextMode;";
+    j += "if(nextMode==='Point'){";
+    j += "blk.appendChild(mkFieldRow('Point',mkVec3('shweetz_point',true),true));}";
+    j += "var angleEl=blk.querySelector('[data-var=\"shweetz_angle_min_deg\"]');if(angleEl&&es['shweetz_angle_min_deg']!==undefined)angleEl.value=es['shweetz_angle_min_deg'];";
+    j += "}";
+
     j += "}";
 
     // Update eval fields with values from cfg
@@ -4315,7 +5294,16 @@ string BfDashJS_Settings()
     // Handle regular fields
     j += "var el=document.querySelector('[data-var=\"'+k+'\"]');";
     j += "if(el){setField(el,val);}";
-    j += "}}";
+    j += "}";
+    // Refresh group editor if present and no group editor element is focused
+    j += "if(document.getElementById('geDetail')){geLastEs=es;if(!document.getElementById('geDetail').contains(document.activeElement)){renderGroupEditor(es);}}";
+    // Refresh condition editor if present and no condition editor element is focused
+    j += "if(document.getElementById('ceDetail')){ceLastEs=es;if(!document.getElementById('ceDetail').contains(document.activeElement)){renderConditionEditor(es);}}";
+    // Refresh NoseposPlus conditional block
+    j += "if(document.getElementById('npCondBlock')){updateNpCondBlock(es);}";
+    // Refresh finetuner grouped visibility and hints
+    j += "if(updateFtGroupedVisibility)updateFtGroupedVisibility();";
+    j += "}";
 
     // Build slot UI
     j += "function buildSlots(cfg){";
@@ -4527,7 +5515,7 @@ string BfDashJS_Settings()
 
     // Main settings poll
     j += "function pollSettings(){";
-    j += "fetch('/api/bf/all-settings').then(function(r){return r.json();}).then(function(cfg){";
+    j += "fetch(apiBase+'/api/bf/all-settings').then(function(r){return r.json();}).then(function(cfg){";
     j += "allCfg=cfg;";
 
     // Build serverSnapshot from polled config
@@ -4537,7 +5525,8 @@ string BfDashJS_Settings()
     j += "serverSnapshot['bf_result_filename']=String(cfg.behavior.resultFilename);";
     j += "serverSnapshot['bf_iterations_before_restart']=String(cfg.behavior.iterationsBeforeRestart);";
     j += "serverSnapshot['bf_result_folder']=String(cfg.behavior.resultFolder);";
-    j += "serverSnapshot['bf_restart_condition_script']=String(cfg.behavior.restartConditionScript);}";
+    j += "serverSnapshot['bf_restart_condition_script']=String(cfg.behavior.restartConditionScript);";
+    j += "serverSnapshot['bf_dashboard_persist_logs']=String(cfg.behavior.persistLogs);}";
     j += "if(cfg.conditions){";
     j += "serverSnapshot['bf_condition_speed']=String(cfg.conditions.speed);";
     j += "serverSnapshot['bf_condition_cps']=String(cfg.conditions.cps);";
@@ -4584,6 +5573,7 @@ string BfDashJS_Settings()
     j += "setField(document.getElementById('behFile'),cfg.behavior.resultFilename);";
     j += "setField(document.getElementById('behIter'),cfg.behavior.iterationsBeforeRestart);";
     j += "setField(document.getElementById('behFolder'),cfg.behavior.resultFolder);";
+    j += "setField(document.getElementById('behPersist'),cfg.behavior.persistLogs);";
     j += "var behScript=document.getElementById('behRestartScript');";
     j += "if(!isFocused(behScript))behScript.value=scriptToDisplay(cfg.behavior.restartConditionScript);";
 
@@ -4610,13 +5600,14 @@ string BfDashJS_Settings()
     j += "updateSlotValues(cfg);";
 
     j += "}).catch(function(){});}";
-    j += "setInterval(pollSettings,500);pollSettings();";
+    j += "setInterval(pollSettings,2000);pollSettings();";
 
     // Wire up static settings change events
     j += "document.getElementById('optTarget').addEventListener('change',function(){setVar('bf_target',this.value);prevTarget='';});";
     j += "document.getElementById('behFile').addEventListener('blur',function(){setVar('bf_result_filename',this.value);});";
     j += "document.getElementById('behIter').addEventListener('blur',function(){setVar('bf_iterations_before_restart',this.value);});";
     j += "document.getElementById('behFolder').addEventListener('blur',function(){setVar('bf_result_folder',this.value);});";
+    j += "document.getElementById('behPersist').addEventListener('change',function(){setVar('bf_dashboard_persist_logs',this.checked?'true':'false');});";
     j += "document.getElementById('behRestartScript').addEventListener('blur',function(){setVar('bf_restart_condition_script',displayToScript(this.value));});";
     j += "document.getElementById('condSpeed').addEventListener('blur',function(){setVar('bf_condition_speed',this.value);});";
     j += "document.getElementById('condCps').addEventListener('blur',function(){setVar('bf_condition_cps',this.value);});";
@@ -4634,7 +5625,7 @@ string BfDashJS_Settings()
     j += "for (var i=0; i<keys.length; i++) {";
     j += "if (i > 0) body += '\\n';";
     j += "body += keys[i] + '=' + dirtyVars[keys[i]];}";
-    j += "fetch('/api/bf/set-batch', {method:'POST', body:body}).then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/bf/set-batch', {method:'POST', body:body}).then(function(r){return r.json();}).then(function(d){";
     j += "if (d.ok) { dirtyVars = {}; markAllClean(); updateApplyBar(); }";
     j += "}).catch(function(){});}";
 
@@ -4649,41 +5640,29 @@ string BfDashJS_Settings()
 }
 
 // ============================================================
-// JS: Session history (log, improvements, session tabs)
+// JS: Session history (log, improvements, session tabs) + Live BF cards
 // ============================================================
 
 string BfDashJS_Sessions()
 {
     string j = "";
 
-    j += "var activeSession='current',activeSubTab='imp',sessions=[];";
+    j += "var activeSession=null,activeSubTab='imp',sessions=[];";
+    j += "var lastLogLen=-1,lastImpLen=-1;";
 
-    // Current session log/improvements polling
-    j += "var lastLogLen=0,lastImpLen=0;";
-    j += "function pollCurrentLog(){";
-    j += "if(activeSession!=='current'||activeSubTab!=='log')return;";
-    j += "fetch('/api/bf/log').then(function(r){return r.json();}).then(function(arr){";
-    j += "if(arr.length!==lastLogLen){lastLogLen=arr.length;renderLog(arr);}";
-    j += "}).catch(function(){});}";
-
-    j += "function pollCurrentImp(){";
-    j += "if(activeSession!=='current'||activeSubTab!=='imp')return;";
-    j += "fetch('/api/bf/improvements').then(function(r){return r.json();}).then(function(arr){";
-    j += "if(arr.length!==lastImpLen){lastImpLen=arr.length;renderImp(arr);setText('bfImpCount',arr.length);}";
-    j += "}).catch(function(){});}";
-
-    j += "setInterval(pollCurrentLog,1000);setInterval(pollCurrentImp,2000);";
+    // Live cards state
+    j += "var liveCards={};";
 
     // Sessions polling
     j += "function pollSessions(){";
-    j += "fetch('/api/bf/sessions').then(function(r){return r.json();}).then(function(arr){sessions=arr;renderSessionTabs();}).catch(function(){});}";
+    j += "fetch(apiBase+'/api/bf/sessions').then(function(r){return r.json();}).then(function(arr){sessions=arr;renderSessionTabs();}).catch(function(){});}";
     j += "setInterval(pollSessions,5000);pollSessions();";
 
-    // Render session tabs (with X delete buttons on past sessions)
+    // Render session tabs (past sessions only, no "Current" tab)
     j += "function renderSessionTabs(){";
     j += "var bar=document.getElementById('sessionTabs');while(bar.firstChild)bar.removeChild(bar.firstChild);";
-    j += "var cur=document.createElement('button');cur.className='tab-btn'+(activeSession==='current'?' active':'');cur.textContent='Current';";
-    j += "cur.addEventListener('click',function(){activeSession='current';renderSessionTabs();loadSessionData();});bar.appendChild(cur);";
+    j += "if(sessions.length===0){var em=document.createElement('span');em.textContent='No past sessions';em.style.color='#8b949e';em.style.fontSize='0.8rem';bar.appendChild(em);return;}";
+    j += "if(activeSession===null&&sessions.length>0)activeSession=sessions[sessions.length-1].id;";
     j += "for(var i=sessions.length-1;i>=0;i--){";
     j += "(function(s){";
     j += "var btn=document.createElement('button');btn.className='tab-btn'+(activeSession===s.id?' active':'');";
@@ -4698,9 +5677,9 @@ string BfDashJS_Sessions()
     j += "del.addEventListener('click',function(e){";
     j += "e.stopPropagation();";
     j += "if(!e.shiftKey&&!confirm('Delete session #'+s.id+'?\\n(Hold Shift to bypass this confirmation)'))return;";
-    j += "fetch('/api/bf/delete-session',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+encodeURIComponent(s.id)}).then(function(r){return r.json();}).then(function(d){";
+    j += "fetch(apiBase+'/api/bf/delete-session',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+encodeURIComponent(s.id)}).then(function(r){return r.json();}).then(function(d){";
     j += "if(d.ok){";
-    j += "if(activeSession===s.id)activeSession='current';";
+    j += "if(activeSession===s.id){activeSession=null;}";
     j += "for(var j2=0;j2<sessions.length;j2++){if(sessions[j2].id===s.id){sessions.splice(j2,1);break;}}";
     j += "renderSessionTabs();";
     j += "loadSessionData();}});});";
@@ -4716,14 +5695,13 @@ string BfDashJS_Sessions()
     j += "document.getElementById('tabLog').addEventListener('click',function(){activeSubTab='log';";
     j += "document.getElementById('tabLog').className='sub-tab active';document.getElementById('tabImp').className='sub-tab';loadSessionData();});";
 
-    // Load data for selected session+tab
+    // Load data for selected session+tab (past sessions only)
     j += "function loadSessionData(){";
     j += "lastLogLen=-1;lastImpLen=-1;";
     j += "var hc=document.getElementById('historyContent');while(hc&&hc.firstChild)hc.removeChild(hc.firstChild);";
-    j += "if(activeSession==='current'){";
-    j += "if(activeSubTab==='log'){pollCurrentLog();}else{pollCurrentImp();}return;}";
+    j += "if(activeSession===null)return;";
     j += "var type=activeSubTab==='log'?'session-log':'session-imp';";
-    j += "fetch('/api/bf/'+type+'?id='+encodeURIComponent(activeSession)).then(function(r){return r.json();}).then(function(arr){";
+    j += "fetch(apiBase+'/api/bf/'+type+'?id='+encodeURIComponent(activeSession)).then(function(r){return r.json();}).then(function(arr){";
     j += "if(activeSubTab==='log'){renderLog(arr);}else{renderImp(arr);}";
     j += "}).catch(function(){});}";
 
@@ -4749,7 +5727,148 @@ string BfDashJS_Sessions()
     j += "var is2=document.createElement('span');is2.textContent=fmtNum(e.iteration||0);";
     j += "var rs=document.createElement('span');rs.textContent=e.restart||0;";
     j += "row.appendChild(ns);row.appendChild(ts);row.appendChild(ds);row.appendChild(is2);row.appendChild(rs);c.appendChild(row);}";
-    j += "if(activeSession==='current')setText('bfImpCount',arr.length);}";
+    j += "}";
+
+    // ---- Live BF Cards ----
+
+    j += "function updateLiveCards(found){";
+    j += "var running=found.filter(function(i){return i.running;});";
+    j += "var emptyMsg=document.getElementById('liveEmpty');";
+    j += "if(running.length===0){";
+    j += "if(emptyMsg)emptyMsg.style.display='';";
+    j += "var keys=Object.keys(liveCards);for(var k=0;k<keys.length;k++){clearInterval(liveCards[keys[k]].logTimer);clearInterval(liveCards[keys[k]].impTimer);var cardEl=liveCards[keys[k]].contentEl.parentNode;if(cardEl&&cardEl.parentNode)cardEl.parentNode.removeChild(cardEl);}";
+    j += "liveCards={};return;}";
+    j += "if(emptyMsg)emptyMsg.style.display='none';";
+
+    // Remove cards for instances no longer running
+    j += "var existingPorts=Object.keys(liveCards);";
+    j += "for(var ep=0;ep<existingPorts.length;ep++){";
+    j += "var still=false;for(var ri=0;ri<running.length;ri++){if(String(running[ri].port)===existingPorts[ep]){still=true;break;}}";
+    j += "if(!still){clearInterval(liveCards[existingPorts[ep]].logTimer);clearInterval(liveCards[existingPorts[ep]].impTimer);";
+    j += "var cardEl=liveCards[existingPorts[ep]].contentEl.parentNode;cardEl.parentNode.removeChild(cardEl);";
+    j += "delete liveCards[existingPorts[ep]];}}";
+
+    // Add cards for newly running instances
+    j += "var container=document.getElementById('liveCards');";
+    j += "for(var ri=0;ri<running.length;ri++){";
+    j += "(function(inst){";
+    j += "var portKey=String(inst.port);";
+    j += "if(liveCards[portKey])return;";
+
+    // Build card element
+    j += "var card=document.createElement('div');card.className='live-card';";
+
+    // Header
+    j += "var hdr=document.createElement('div');hdr.className='live-card-hdr';";
+    j += "var portSpan=document.createElement('span');portSpan.className='port';portSpan.textContent=':'+inst.port;hdr.appendChild(portSpan);";
+    j += "var targetSpan=document.createElement('span');targetSpan.className='target';targetSpan.textContent=inst.target||'-';hdr.appendChild(targetSpan);";
+    j += "card.appendChild(hdr);";
+
+    // Sub-tabs
+    j += "var tabs=document.createElement('div');tabs.className='live-card-tabs';";
+    j += "var tabImp=document.createElement('button');tabImp.className='live-card-tab active';tabImp.textContent='Imp';";
+    j += "var tabLog=document.createElement('button');tabLog.className='live-card-tab';tabLog.textContent='Log';";
+    j += "tabs.appendChild(tabImp);tabs.appendChild(tabLog);card.appendChild(tabs);";
+
+    // Body
+    j += "var body=document.createElement('div');body.className='live-card-body';";
+    j += "card.appendChild(body);container.appendChild(card);";
+
+    // State object
+    j += "var state={lastLogLen:-1,lastImpLen:-1,subTab:'imp',logTimer:null,impTimer:null,contentEl:body};";
+    j += "liveCards[portKey]=state;";
+
+    // Tab switching
+    j += "tabImp.addEventListener('click',function(){state.subTab='imp';tabImp.className='live-card-tab active';tabLog.className='live-card-tab';pollCardImp();});";
+    j += "tabLog.addEventListener('click',function(){state.subTab='log';tabLog.className='live-card-tab active';tabImp.className='live-card-tab';pollCardLog();});";
+
+    // Poll functions
+    j += "function pollCardLog(){";
+    j += "if(state.subTab!=='log')return;";
+    j += "fetch('http://localhost:'+inst.port+'/api/bf/log').then(function(r){return r.json();}).then(function(arr){";
+    j += "if(arr.length!==state.lastLogLen){state.lastLogLen=arr.length;renderCardLog(body,arr);}";
+    j += "}).catch(function(){});}";
+
+    j += "function pollCardImp(){";
+    j += "if(state.subTab!=='imp')return;";
+    j += "fetch('http://localhost:'+inst.port+'/api/bf/improvements').then(function(r){return r.json();}).then(function(arr){";
+    j += "if(arr.length!==state.lastImpLen){state.lastImpLen=arr.length;renderCardImp(body,arr);}";
+    j += "}).catch(function(){});}";
+
+    // Start timers
+    j += "state.logTimer=setInterval(pollCardLog,2000);";
+    j += "state.impTimer=setInterval(pollCardImp,2000);";
+    j += "pollCardImp();";
+
+    j += "})(running[ri]);}";
+    j += "}";
+
+    // Render helpers for live cards
+    j += "function renderCardLog(el,arr){";
+    j += "while(el.firstChild)el.removeChild(el.firstChild);";
+    j += "for(var i=0;i<arr.length;i++){var e=arr[i];var div=document.createElement('div');div.className='log-entry';";
+    j += "var ts=document.createElement('span');ts.className='lt';ts.textContent='['+fmtSec(e.t)+']';";
+    j += "var msg=document.createElement('span');msg.className='lm';msg.textContent=e.msg;";
+    j += "div.appendChild(ts);div.appendChild(msg);el.appendChild(div);}el.scrollTop=el.scrollHeight;}";
+
+    j += "function renderCardImp(el,arr){";
+    j += "while(el.firstChild)el.removeChild(el.firstChild);";
+    j += "for(var i=arr.length-1;i>=0;i--){var e=arr[i];var div=document.createElement('div');div.className='log-entry';";
+    j += "var txt=document.createElement('span');txt.className='lm';txt.textContent='#'+(i+1)+' '+fmtSec(e.t)+' '+(e.eval||'')+' '+(e.details||'');";
+    j += "div.appendChild(txt);el.appendChild(div);}}";
+
+    // ---- Base Run Inputs ----
+
+    j += "document.getElementById('btnApplyInputs').addEventListener('click', function() {";
+    j += "var script = document.getElementById('inputScript').value;";
+    j += "if (!script.trim()) return;";
+    j += "var res = document.getElementById('inputResult');";
+    j += "res.textContent = 'Sending...';";
+    j += "res.style.color = '#8b949e';";
+    j += "fetch(apiBase + '/api/bf/apply-inputs', {method:'POST', body:script})";
+    j += ".then(function(r) { return r.json(); })";
+    j += ".then(function(d) {";
+    j += "if (d.ok) {";
+    j += "res.textContent = 'Applied ' + d.commands + ' commands';";
+    j += "res.style.color = '#3fb950';";
+    j += "} else {";
+    j += "res.textContent = 'Error: ' + (d.error || 'unknown');";
+    j += "res.style.color = '#f85149';";
+    j += "}";
+    j += "})";
+    j += ".catch(function() {";
+    j += "res.textContent = 'Request failed';";
+    j += "res.style.color = '#f85149';";
+    j += "});";
+    j += "});";
+
+    // Apply to All instances
+    j += "document.getElementById('btnApplyAll').addEventListener('click',function(){";
+    j += "var script=document.getElementById('inputScript').value;";
+    j += "if(!script.trim())return;";
+    j += "var res=document.getElementById('inputResult');";
+    j += "if(instances.length===0){res.textContent='No instances found';res.style.color='#f85149';return;}";
+    j += "res.textContent='Sending to all instances...';res.style.color='#8b949e';";
+    j += "var sent=0,ok=0,fail=0;";
+    j += "for(var i=0;i<instances.length;i++){";
+    j += "(function(port){";
+    j += "sent++;";
+    j += "fetch('http://localhost:'+port+'/api/bf/apply-inputs',{method:'POST',body:script})";
+    j += ".then(function(r){return r.json();})";
+    j += ".then(function(d){if(d.ok)ok++;else fail++;})";
+    j += ".catch(function(){fail++;})";
+    j += ".finally(function(){if(ok+fail===sent){";
+    j += "res.textContent='Applied to '+ok+'/'+sent+' instances'+(fail>0?' ('+fail+' failed)':'');";
+    j += "res.style.color=fail===0?'#3fb950':'#d29922';}});";
+    j += "})(instances[i].port);}";
+    j += "});";
+
+    // Toggle base inputs overlay based on BF running state
+    j += "function updateBaseOverlay(){";
+    j += "var overlay=document.getElementById('baseDisabledOverlay');";
+    j += "if(!overlay)return;";
+    j += "overlay.style.display=bfIsRunning?'none':'flex';}";
+    j += "setInterval(updateBaseOverlay,500);updateBaseOverlay();";
 
     // Initial load
     j += "setTimeout(loadSessionData,500);";
@@ -4778,7 +5897,2364 @@ bool FileAppendLine(const string &in path, const string &in line)
     existing += line + "\n";
     return FileWrite(path, existing);
 }
-const uint MAX_BUFFER_SIZE = 8192;
+namespace FinetunerBf
+{
+
+// ============================================================================
+// smn_utils - Time
+// ============================================================================
+
+typedef int32 ms;
+
+const ms TICK = 10;
+
+ms TickToMs(const int tick)
+{
+    return tick * TICK;
+}
+
+int MsToTick(const ms time)
+{
+    return time / TICK;
+}
+
+bool ParseTime(const string &in raceTime, int &out value)
+{
+    value = Time::Parse(raceTime);
+    return value != -1;
+}
+
+
+// ============================================================================
+// smn_utils - String (PadRight, Repeat, StringBuilder)
+// ============================================================================
+
+string PadRight(const string &in str, const uint targetLength, const uint8 char = ' ')
+{
+    const uint len = str.Length;
+    if (len >= targetLength)
+        return str;
+
+    string s = str;
+    s.Resize(targetLength);
+
+    for (uint i = len; i < targetLength; i++)
+        s[i] = char;
+
+    return s;
+}
+
+string Repeat(const uint times, const uint8 char = ' ')
+{
+    string builder;
+    builder.Resize(times);
+    for (uint i = 0; i < times; i++)
+        builder[i] = char;
+    return builder;
+}
+
+class StringWrapper
+{
+    string str;
+
+    StringWrapper()
+    {}
+
+    StringWrapper(const string &in s)
+    {
+        str = s;
+    }
+}
+
+class StringBuilder
+{
+    protected string buffer;
+
+    StringBuilder@ Append(const bool value)   { const string s = value; AppendOne(s); return this; }
+    StringBuilder@ Append(const uint value)   { const string s = value; AppendOne(s); return this; }
+    StringBuilder@ Append(const uint64 value) { const string s = value; AppendOne(s); return this; }
+    StringBuilder@ Append(const int value)    { const string s = value; AppendOne(s); return this; }
+    StringBuilder@ Append(const int64 value)  { const string s = value; AppendOne(s); return this; }
+    StringBuilder@ Append(const float value)  { const string s = value; AppendOne(s); return this; }
+    StringBuilder@ Append(const double value) { const string s = value; AppendOne(s); return this; }
+
+    StringBuilder@ Append(const string &in value) { AppendOne(value); return this; }
+    StringBuilder@ Append(const array<string>@ strings) { AppendMany(strings); return this; }
+
+    StringBuilder@ AppendLine() { AppendOne("\n"); return this; }
+
+    StringBuilder@ AppendLine(const bool value)   { AppendMany({value, "\n"}); return this; }
+    StringBuilder@ AppendLine(const uint value)   { AppendMany({value, "\n"}); return this; }
+    StringBuilder@ AppendLine(const uint64 value) { AppendMany({value, "\n"}); return this; }
+    StringBuilder@ AppendLine(const int value)    { AppendMany({value, "\n"}); return this; }
+    StringBuilder@ AppendLine(const int64 value)  { AppendMany({value, "\n"}); return this; }
+    StringBuilder@ AppendLine(const float value)  { AppendMany({value, "\n"}); return this; }
+    StringBuilder@ AppendLine(const double value) { AppendMany({value, "\n"}); return this; }
+
+    StringBuilder@ AppendLine(const string &in value) { AppendMany({value, "\n"}); return this; }
+    StringBuilder@ AppendLine(const array<string>@ strings)
+    {
+        AppendMany(strings, 1);
+        buffer[buffer.Length - 1] = '\n';
+        return this;
+    }
+
+    protected void AppendOne(const string &in s)
+    {
+        const uint offset = buffer.Length;
+        buffer.Resize(offset + s.Length);
+        for (uint i = 0; i < s.Length; i++)
+            buffer[offset + i] = s[i];
+    }
+
+    protected void AppendMany(const array<string>@ strings, const uint extraLength = 0)
+    {
+        uint totalLength = extraLength;
+        for (uint i = 0; i < strings.Length; i++)
+            totalLength += strings[i].Length;
+
+        const uint offset = buffer.Length;
+        buffer.Resize(offset + totalLength);
+        uint bufferIndex = offset;
+        for (uint i = 0; i < strings.Length; i++)
+        {
+            for (uint j = 0; j < strings[i].Length; j++)
+                buffer[bufferIndex++] = strings[i][j];
+        }
+    }
+
+    void Clear()
+    {
+        buffer.Resize(0);
+    }
+
+    const string& ToString() const
+    {
+        return buffer;
+    }
+
+    StringWrapper@ ToStringWrapper() const
+    {
+        return StringWrapper(buffer);
+    }
+
+    uint GetLastLineLength() const
+    {
+        int right = buffer.Length - 1;
+        while (right != -1)
+        {
+            if (buffer[right--] == '\n')
+                break;
+        }
+
+        int left = right;
+        while (left != -1)
+        {
+            if (buffer[left] == '\n')
+                break;
+
+            left--;
+        }
+
+        return right - left;
+    }
+}
+
+
+// ============================================================================
+// smn_utils - Text (FormatPrecise)
+// ============================================================================
+
+string FormatPrecise(const double value, const uint precision = 12)
+{
+    return Text::FormatFloat(value, " ", 0, precision);
+}
+
+string FormatPrecise(const vec2 &in value, const uint precision = 12)
+{
+    const string x = FormatPrecise(value.x, precision);
+    const string y = FormatPrecise(value.y, precision);
+
+    string s;
+    s.Resize(x.Length + 1 + y.Length);
+
+    uint i = 0;
+    for (uint j = 0; j < x.Length; j++)
+        s[i++] = x[j];
+    s[i++] = ' ';
+    for (uint j = 0; j < y.Length; j++)
+        s[i++] = y[j];
+
+    return s;
+}
+
+string FormatPrecise(const vec3 &in value, const uint precision = 12)
+{
+    const string x = FormatPrecise(value.x, precision);
+    const string y = FormatPrecise(value.y, precision);
+    const string z = FormatPrecise(value.z, precision);
+
+    string s;
+    s.Resize(x.Length + 1 + y.Length + 1 + z.Length);
+
+    uint i = 0;
+    for (uint j = 0; j < x.Length; j++)
+        s[i++] = x[j];
+    s[i++] = ' ';
+    for (uint j = 0; j < y.Length; j++)
+        s[i++] = y[j];
+    s[i++] = ' ';
+    for (uint j = 0; j < z.Length; j++)
+        s[i++] = z[j];
+
+    return s;
+}
+
+
+// ============================================================================
+// smn_utils - Global (Var wrappers, SetVariable vec3 overload)
+// ============================================================================
+
+bool GetConVarBool(const string &in name)
+{
+    return GetVariableBool(name);
+}
+
+int GetConVarInt(const string &in name)
+{
+    return int(GetVariableDouble(name));
+}
+
+ms GetConVarTime(const string &in name)
+{
+    return ms(GetVariableDouble(name));
+}
+
+double GetConVarDouble(const string &in name)
+{
+    return GetVariableDouble(name);
+}
+
+string GetConVarString(const string &in name)
+{
+    return GetVariableString(name);
+}
+
+vec3 GetConVarVec3(const string &in name)
+{
+    return Text::ParseVec3(GetVariableString(name));
+}
+
+void SetVarVec3(const string &in name, const vec3 value)
+{
+    ::SetVariable(name, value.ToString());
+}
+
+
+// ============================================================================
+// smn_utils - UI (TooltipOnHover, ComboHelper with OnSelectIndex)
+// ============================================================================
+
+void TooltipOnHover(const string &in text)
+{
+    UI::SameLine();
+    UI::TextDimmed("(i)");
+    if (UI::IsItemHovered())
+    {
+        if (UI::BeginTooltip())
+        {
+            UI::Text(text);
+            UI::EndTooltip();
+        }
+    }
+}
+
+funcdef void OnSelectIndex(const uint index);
+
+bool ComboHelper(const string &in label, const array<string>@ names, const uint currentIndex, OnSelectIndex@ onSelect)
+{
+    const bool isOpen = UI::BeginCombo(label, names[currentIndex]);
+    if (isOpen)
+    {
+        const uint len = names.Length;
+        for (uint i = 0; i < len; i++)
+        {
+            const string name = names[i];
+            if (UI::Selectable(name, i == currentIndex))
+                onSelect(i);
+        }
+
+        UI::EndCombo();
+    }
+    return isOpen;
+}
+
+
+// ============================================================================
+// common.as - Separators and LogIfWrongCount
+// ============================================================================
+
+const string ITEM_SEP = ",";
+const string PAIR_SEP = ":";
+const string KIND_SEP = ";";
+const string VERSION_SEP = "|";
+
+void LogIfWrongCount()
+{
+    if (groupNames.Length != GroupKind::COUNT)         log("groupNames has wrong Length!",     Severity::Error);
+    if (scalarNames.Length != ScalarKind::COUNT)       log("scalarNames has wrong Length!",    Severity::Error);
+    if (conditionNames.Length != ConditionKind::COUNT) log("conditionNames has wrong Length!", Severity::Error);
+}
+
+
+// ============================================================================
+// common.as - Groups
+// ============================================================================
+
+enum GroupKind
+{
+    NONE = -1,
+
+    POSITION,
+    ROTATION,
+
+    SPEED_GLOBAL,
+    SPEED_LOCAL,
+
+    WHEEL_FRONT_LEFT,
+    WHEEL_FRONT_RIGHT,
+    WHEEL_BACK_RIGHT,
+    WHEEL_BACK_LEFT,
+
+    COUNT // amount of group kinds
+}
+
+const array<string> groupNames =
+{
+    "Position",
+    "Rotation",
+
+    "Global Speed",
+    "Local Speed",
+
+    "Front Left Wheel",
+    "Front Right Wheel",
+    "Back Right Wheel",
+    "Back Left Wheel"
+};
+
+class Group
+{
+    bool active;
+}
+
+array<Group> groups(GroupKind::COUNT);
+
+string SerializeGroups()
+{
+    array<string> kinds(GroupKind::COUNT);
+    for (uint i = 0; i < GroupKind::COUNT; i++)
+    {
+        const GroupKind groupKind = GroupKind(i);
+        kinds[i] = groupNames[groupKind] + PAIR_SEP + SerializeBool(groups[groupKind].active);
+    }
+    return Text::Join({ "v2.0.0", Text::Join(kinds, KIND_SEP) }, VERSION_SEP);
+}
+
+void DeserializeGroups(const string &in s)
+{
+    array<string>@ const versioned = s.Split(VERSION_SEP);
+    {
+        string error;
+        if (versioned.Length != 2)
+        {
+            error = "No version field detected";
+        }
+        else
+        {
+            const string version = versioned[0];
+            if (version.IsEmpty() || version[0] != 'v')
+            {
+                error = "No version detected";
+            }
+            else
+            {
+                if (version != "v2.0.0")
+                    error = "Unsupported version detected: " + version;
+            }
+        }
+
+        if (!error.IsEmpty())
+        {
+            log(error + ", generating groups...");
+            SaveGroups();
+            return;
+        }
+    }
+
+    array<string>@ const kinds = versioned[1].Split(KIND_SEP);
+    for (uint i = 0; i < kinds.Length; i++)
+    {
+        array<string>@ const kv = kinds[i].Split(PAIR_SEP);
+        if (kv.Length != 2)
+        {
+            log("Failed to deserialize group! Index: " + i, Severity::Error);
+            continue;
+        }
+
+        const string keyString = kv[0];
+        const GroupKind kind = GroupKind(groupNames.Find(keyString));
+        if (kind == GroupKind::NONE)
+        {
+            log("Could not find this group: " + keyString, Severity::Warning);
+            continue;
+        }
+
+        const string valueString = kv[1];
+        bool value;
+        if (!DeserializeBool(valueString, value))
+        {
+            log("Could not deserialize this group's value! String: " + valueString, Severity::Error);
+            continue;
+        }
+
+        groups[kind].active = value;
+    }
+}
+
+
+// ============================================================================
+// common.as - Scalars
+// ============================================================================
+
+enum ScalarKind
+{
+    NONE = -1,
+
+    POSITION_X, POSITION_Y, POSITION_Z,
+    ROTATION_YAW, ROTATION_PITCH, ROTATION_ROLL,
+
+    SPEED_GLOBAL_X, SPEED_GLOBAL_Y, SPEED_GLOBAL_Z,
+    SPEED_LOCAL_X, SPEED_LOCAL_Y, SPEED_LOCAL_Z,
+
+    WHEEL_FL_X, WHEEL_FL_Y, WHEEL_FL_Z,
+    WHEEL_FR_X, WHEEL_FR_Y, WHEEL_FR_Z,
+    WHEEL_BR_X, WHEEL_BR_Y, WHEEL_BR_Z,
+    WHEEL_BL_X, WHEEL_BL_Y, WHEEL_BL_Z,
+
+    COUNT // amount of scalar kinds
+}
+
+const array<string> scalarNames =
+{
+    "X Position", "Y Position", "Z Position",
+    "Yaw", "Pitch", "Roll",
+
+    "Global X Speed", "Global Y Speed", "Global Z Speed",
+    "Local X Speed (Sideways)", "Local Y Speed (Upwards)", "Local Z Speed (Forwards)",
+
+    "X Front Left Wheel", "Y Front Left Wheel", "Z Front Left Wheel",
+    "X Front Right Wheel", "Y Front Right Wheel", "Z Front Right Wheel",
+    "X Back Right Wheel", "Y Back Right Wheel", "Z Back Right Wheel",
+    "X Back Left Wheel", "Y Back Left Wheel", "Z Back Left Wheel"
+};
+
+class Scalar
+{
+    bool lower, upper;
+    double valueLower, valueUpper;
+    float displayLower, displayUpper;
+
+    void Reset()
+    {
+        lower = false;
+        upper = false;
+        valueLower = 0;
+        valueUpper = 0;
+        displayLower = 0;
+        displayUpper = 0;
+    }
+}
+
+array<Scalar> scalars(ScalarKind::COUNT);
+
+string SerializeScalars()
+{
+    array<string> kinds(ScalarKind::COUNT);
+    for (uint i = 0; i < ScalarKind::COUNT; i++)
+    {
+        const ScalarKind scalarKind = ScalarKind(i);
+        const Scalar@ const scalar = scalars[scalarKind];
+        const array<string> kind =
+        {
+            SerializeBool(scalar.lower),
+            SerializeBool(scalar.upper),
+            scalar.valueLower,
+            scalar.valueUpper,
+            scalar.displayLower,
+            scalar.displayUpper
+        };
+        kinds[i] = scalarNames[scalarKind] + PAIR_SEP + Text::Join(kind, ITEM_SEP);
+    }
+    return Text::Join({ "v2.0.0", Text::Join(kinds, KIND_SEP) }, VERSION_SEP);
+}
+
+void DeserializeScalars(const string &in s)
+{
+    array<string>@ const versioned = s.Split(VERSION_SEP);
+    {
+        string error;
+        if (versioned.Length != 2)
+        {
+            error = "No version field detected";
+        }
+        else
+        {
+            const string version = versioned[0];
+            if (version.IsEmpty() || version[0] != 'v')
+            {
+                error = "No version detected";
+            }
+            else
+            {
+                if (version != "v2.0.0")
+                    error = "Unsupported version detected: " + version;
+            }
+        }
+
+        if (!error.IsEmpty())
+        {
+            log(error + ", generating scalars...");
+            SaveScalars();
+            return;
+        }
+    }
+
+    array<string>@ const kinds = versioned[1].Split(KIND_SEP);
+    for (uint i = 0; i < kinds.Length; i++)
+    {
+        array<string>@ const kv = kinds[i].Split(PAIR_SEP);
+        if (kv.Length != 2)
+        {
+            log("Failed to deserialize scalar! Index: " + i, Severity::Error);
+            continue;
+        }
+
+        const string keyString = kv[0];
+        const ScalarKind kind = ScalarKind(scalarNames.Find(keyString));
+        if (kind == ScalarKind::NONE)
+        {
+            log("Could not find this scalar: " + keyString, Severity::Warning);
+            continue;
+        }
+
+        const string valueString = kv[1];
+        array<string>@ const values = valueString.Split(ITEM_SEP);
+        if (values.Length != 6)
+        {
+            log("Could not deserialize this scalar's values! String: " + valueString, Severity::Error);
+            continue;
+        }
+
+        bool lower;
+        bool upper;
+        if (!(DeserializeBool(values[0], lower) && DeserializeBool(values[1], upper)))
+        {
+            log("Could not deserialize this scalar's flags!", Severity::Error);
+            continue;
+        }
+
+        const double valueLower = Text::ParseFloat(values[2]);
+        const double valueUpper = Text::ParseFloat(values[3]);
+
+        const double displayLower = Text::ParseFloat(values[4]);
+        const double displayUpper = Text::ParseFloat(values[5]);
+
+        Scalar@ const scalar = scalars[kind];
+        scalar.lower = lower;
+        scalar.upper = upper;
+        scalar.valueLower = valueLower;
+        scalar.valueUpper = valueUpper;
+        scalar.displayLower = displayLower;
+        scalar.displayUpper = displayUpper;
+    }
+}
+
+
+// ============================================================================
+// common.as - Conditions
+// ============================================================================
+
+enum ConditionKind
+{
+    NONE = -1,
+
+    MIN_REAL_SPEED,
+    FREEWHEELING,
+    SLIDING,
+    WHEEL_TOUCHING,
+    WHEEL_CONTACTS,
+
+    CHECKPOINTS,
+
+    RPM,
+    GEAR,
+    REAR_GEAR,
+
+    GLITCHING,
+
+    COUNT // amount of condition kinds
+}
+
+const array<string> conditionNames =
+{
+    "Minimum Real Speed",
+    "Freewheeling",
+    "Sliding",
+    "Wheel Touching Wall",
+    "Wheel Contacts",
+
+    "Checkpoints",
+
+    "RPM",
+    "Gear",
+    "Rear Gear",
+
+    "Glitching"
+};
+
+class Condition
+{
+    bool active;
+    double value, valueMin, valueMax;
+    float display, displayMin, displayMax;
+
+    bool MatchBool(const bool otherValue) const
+    {
+        return otherValue == (value != 0);
+    }
+
+    bool MatchUInt(const uint otherValue) const
+    {
+        return otherValue == uint(value);
+    }
+
+    bool CompareInt(const int otherValue) const
+    {
+        return otherValue >= int(valueMin) && otherValue <= int(valueMax);
+    }
+
+    bool CompareDouble(const double otherValue) const
+    {
+        return otherValue >= valueMin && otherValue <= valueMax;
+    }
+
+    void Transfer()
+    {
+        value = display;
+    }
+
+    void TransferRange()
+    {
+        valueMin = displayMin;
+        valueMax = displayMax;
+    }
+
+    void Reset()
+    {
+        value = 0;
+        valueMin = 0;
+        valueMax = 0;
+
+        display = 0;
+        displayMin = 0;
+        displayMax = 0;
+    }
+}
+
+array<Condition> conditions(ConditionKind::COUNT);
+
+string SerializeConditions()
+{
+    array<string> kinds(ConditionKind::COUNT);
+    for (uint i = 0; i < ConditionKind::COUNT; i++)
+    {
+        const ConditionKind conditionKind = ConditionKind(i);
+        const Condition@ const condition = conditions[conditionKind];
+        const array<string> kind =
+        {
+            SerializeBool(condition.active),
+
+            condition.value,
+            condition.valueMin,
+            condition.valueMax,
+
+            condition.display,
+            condition.displayMin,
+            condition.displayMax
+        };
+        kinds[i] = conditionNames[conditionKind] + PAIR_SEP + Text::Join(kind, ITEM_SEP);
+    }
+    return Text::Join({ "v2.0.0", Text::Join(kinds, KIND_SEP) }, VERSION_SEP);
+}
+
+void DeserializeConditions(const string &in s)
+{
+    array<string>@ const versioned = s.Split(VERSION_SEP);
+    {
+        string error;
+        if (versioned.Length != 2)
+        {
+            error = "No version field detected";
+        }
+        else
+        {
+            const string version = versioned[0];
+            if (version.IsEmpty() || version[0] != 'v')
+            {
+                error = "No version detected";
+            }
+            else
+            {
+                if (version != "v2.0.0")
+                    error = "Unsupported version detected: " + version;
+            }
+        }
+
+        if (!error.IsEmpty())
+        {
+            log(error + ", generating conditions...");
+            SaveConditions();
+            return;
+        }
+    }
+
+    array<string>@ const kinds = versioned[1].Split(KIND_SEP);
+    for (uint i = 0; i < kinds.Length; i++)
+    {
+        array<string>@ const kv = kinds[i].Split(PAIR_SEP);
+        if (kv.Length != 2)
+        {
+            log("Failed to deserialize condition! Index: " + i, Severity::Error);
+            continue;
+        }
+
+        const string keyString = kv[0];
+        const ConditionKind kind = ConditionKind(conditionNames.Find(keyString));
+        if (kind == ConditionKind::NONE)
+        {
+            log("Could not find this condition: " + keyString, Severity::Warning);
+            continue;
+        }
+
+        const string valueString = kv[1];
+        array<string>@ const values = valueString.Split(ITEM_SEP);
+        if (values.Length != 7)
+        {
+            log("Could not deserialize this condition's values! String: " + valueString, Severity::Error);
+            continue;
+        }
+
+        bool active;
+        if (!DeserializeBool(values[0], active))
+        {
+            log("Could not deserialize this condition's active field! String: " + valueString, Severity::Error);
+            continue;
+        }
+
+        const double value = Text::ParseFloat(values[1]);
+        const double valueMin = Text::ParseFloat(values[2]);
+        const double valueMax = Text::ParseFloat(values[3]);
+
+        const float display = Text::ParseFloat(values[4]);
+        const float displayMin = Text::ParseFloat(values[5]);
+        const float displayMax = Text::ParseFloat(values[6]);
+
+        Condition@ const condition = conditions[kind];
+        condition.active = active;
+
+        condition.value = value;
+        condition.valueMin = valueMin;
+        condition.valueMax = valueMax;
+
+        condition.display = display;
+        condition.displayMin = displayMin;
+        condition.displayMax = displayMax;
+    }
+}
+
+
+// ============================================================================
+// common.as - Misc (serialization, conversion, formatting, mapping)
+// ============================================================================
+
+string SerializeBool(const bool b)
+{
+    return b ? "1" : "0";
+}
+
+bool DeserializeBool(const string &in s, bool &out b)
+{
+    bool ok;
+    if (s == "0")
+    {
+        b = false;
+        ok = true;
+    }
+    else if (s == "1")
+    {
+        b = true;
+        ok = true;
+    }
+    else
+    {
+        b = false;
+        ok = false;
+    }
+    return ok;
+}
+
+double ConvertDisplayToValue(const ScalarKind kind, const float display)
+{
+    return ConvertDisplayToValue(ScalarKindToGroupKind(kind), display);
+}
+
+double ConvertDisplayToValue(const GroupKind kind, const float display)
+{
+    double value;
+    switch (kind)
+    {
+    case GroupKind::ROTATION:
+        value = Math::ToRad(display);
+        break;
+    case GroupKind::SPEED_GLOBAL:
+    case GroupKind::SPEED_LOCAL:
+        value = display / 3.6;
+        break;
+    default:
+        value = display;
+        break;
+    }
+    return value;
+}
+
+vec3 ConvertDisplayToValue3(const ScalarKind kind, const vec3 &in display)
+{
+    return ConvertDisplayToValue3(ScalarKindToGroupKind(kind), display);
+}
+
+vec3 ConvertDisplayToValue3(const GroupKind kind, const vec3 &in display)
+{
+    vec3 value;
+    value.x = ConvertDisplayToValue(kind, display.x);
+    value.y = ConvertDisplayToValue(kind, display.y);
+    value.z = ConvertDisplayToValue(kind, display.z);
+    return value;
+}
+
+float ConvertValueToDisplay(const ScalarKind kind, const double value)
+{
+    return ConvertValueToDisplay(ScalarKindToGroupKind(kind), value);
+}
+
+float ConvertValueToDisplay(const GroupKind kind, const double value)
+{
+    float display;
+    switch (kind)
+    {
+    case GroupKind::ROTATION:
+        display = Math::ToDeg(value);
+        break;
+    case GroupKind::SPEED_GLOBAL:
+    case GroupKind::SPEED_LOCAL:
+        display = value * 3.6;
+        break;
+    default:
+        display = value;
+        break;
+    }
+    return display;
+}
+
+vec3 ConvertValueToDisplay3(const ScalarKind kind, const vec3 &in value)
+{
+    return ConvertValueToDisplay3(ScalarKindToGroupKind(kind), value);
+}
+
+vec3 ConvertValueToDisplay3(const GroupKind kind, const vec3 &in value)
+{
+    vec3 display;
+    display.x = ConvertValueToDisplay(kind, value.x);
+    display.y = ConvertValueToDisplay(kind, value.y);
+    display.z = ConvertValueToDisplay(kind, value.z);
+    return display;
+}
+
+string FormatVec3ByTargetGroup(const vec3 &in value, const uint precision = 12)
+{
+    string formatted;
+    if (printByComponent)
+    {
+        const vec3 display = ConvertValueToDisplay3(targetGroup, value);
+        formatted = FormatPrecise(display, precision);
+    }
+    else
+    {
+        formatted = FormatValueByGroup(targetGroup, value.Length(), precision);
+    }
+    return formatted;
+}
+
+string FormatValueByTarget(const double value, const uint precision = 12)
+{
+    const GroupKind groupKind = isTargetGrouped ? targetGroup : ScalarKindToGroupKind(targetScalar);
+    return FormatValueByGroup(groupKind, value, precision);
+}
+
+string FormatValueByGroup(const GroupKind groupKind, const double value, const uint precision = 12)
+{
+    return FormatPrecise(ConvertValueToDisplay(groupKind, value), precision);
+}
+
+string FormatValueByScalar(const ScalarKind scalarKind, const double value, const uint precision = 12)
+{
+    return FormatPrecise(ConvertValueToDisplay(scalarKind, value), precision);
+}
+
+array<ScalarKind>@ GroupKindToScalarKinds(const GroupKind groupKind)
+{
+    array<ScalarKind> scalarKinds;
+    switch (groupKind)
+    {
+    case POSITION:
+        scalarKinds =
+        {
+            ScalarKind::POSITION_X,
+            ScalarKind::POSITION_Y,
+            ScalarKind::POSITION_Z
+        };
+        break;
+    case ROTATION:
+        scalarKinds =
+        {
+            ScalarKind::ROTATION_YAW,
+            ScalarKind::ROTATION_PITCH,
+            ScalarKind::ROTATION_ROLL
+        };
+        break;
+    case SPEED_GLOBAL:
+        scalarKinds =
+        {
+            ScalarKind::SPEED_GLOBAL_X,
+            ScalarKind::SPEED_GLOBAL_Y,
+            ScalarKind::SPEED_GLOBAL_Z
+        };
+        break;
+    case SPEED_LOCAL:
+        scalarKinds =
+        {
+            ScalarKind::SPEED_LOCAL_X,
+            ScalarKind::SPEED_LOCAL_Y,
+            ScalarKind::SPEED_LOCAL_Z
+        };
+        break;
+    case WHEEL_FRONT_LEFT:
+        scalarKinds =
+        {
+            ScalarKind::WHEEL_FL_X,
+            ScalarKind::WHEEL_FL_Y,
+            ScalarKind::WHEEL_FL_Z
+        };
+        break;
+    case WHEEL_FRONT_RIGHT:
+        scalarKinds =
+        {
+            ScalarKind::WHEEL_FR_X,
+            ScalarKind::WHEEL_FR_Y,
+            ScalarKind::WHEEL_FR_Z
+        };
+        break;
+    case WHEEL_BACK_RIGHT:
+        scalarKinds =
+        {
+            ScalarKind::WHEEL_BR_X,
+            ScalarKind::WHEEL_BR_Y,
+            ScalarKind::WHEEL_BR_Z
+        };
+        break;
+    case WHEEL_BACK_LEFT:
+        scalarKinds =
+        {
+            ScalarKind::WHEEL_BL_X,
+            ScalarKind::WHEEL_BL_Y,
+            ScalarKind::WHEEL_BL_Z
+        };
+        break;
+    }
+    return scalarKinds;
+}
+
+GroupKind ScalarKindToGroupKind(const ScalarKind scalarKind)
+{
+    GroupKind groupKind;
+    switch (scalarKind)
+    {
+    case POSITION_X:
+    case POSITION_Y:
+    case POSITION_Z:
+        groupKind = GroupKind::POSITION;
+        break;
+    case ROTATION_YAW:
+    case ROTATION_PITCH:
+    case ROTATION_ROLL:
+        groupKind = GroupKind::ROTATION;
+        break;
+    case SPEED_GLOBAL_X:
+    case SPEED_GLOBAL_Y:
+    case SPEED_GLOBAL_Z:
+        groupKind = GroupKind::SPEED_GLOBAL;
+        break;
+    case SPEED_LOCAL_X:
+    case SPEED_LOCAL_Y:
+    case SPEED_LOCAL_Z:
+        groupKind = GroupKind::SPEED_LOCAL;
+        break;
+    case WHEEL_FL_X:
+    case WHEEL_FL_Y:
+    case WHEEL_FL_Z:
+        groupKind = GroupKind::WHEEL_FRONT_LEFT;
+        break;
+    case WHEEL_FR_X:
+    case WHEEL_FR_Y:
+    case WHEEL_FR_Z:
+        groupKind = GroupKind::WHEEL_FRONT_RIGHT;
+        break;
+    case WHEEL_BR_X:
+    case WHEEL_BR_Y:
+    case WHEEL_BR_Z:
+        groupKind = GroupKind::WHEEL_BACK_RIGHT;
+        break;
+    case WHEEL_BL_X:
+    case WHEEL_BL_Y:
+    case WHEEL_BL_Z:
+        groupKind = GroupKind::WHEEL_BACK_LEFT;
+        break;
+    default:
+        groupKind = GroupKind::NONE;
+        break;
+    }
+    return groupKind;
+}
+
+
+// ============================================================================
+// settings.as - Variables and Registration
+// ============================================================================
+
+const string ID = "finetuner";
+const string VAR = ID + "_";
+
+const string VAR_EVAL_FROM = VAR + "eval_from";
+const string VAR_EVAL_TO   = VAR + "eval_to";
+
+const string VAR_TARGET_GROUPED = VAR + "target_grouped";
+const string VAR_TARGET_SCALAR  = VAR + "target_scalar";
+const string VAR_TARGET_GROUP   = VAR + "target_group";
+const string VAR_TARGET_TOWARDS = VAR + "target_towards";
+
+const string VAR_TARGET_VALUE         = VAR + "target_value";
+const string VAR_TARGET_VALUE_DISPLAY = VAR + "target_value_display";
+
+const string VAR_TARGET_VEC3         = VAR + "target_vec3";
+const string VAR_TARGET_VEC3_DISPLAY = VAR + "target_vec3_display";
+
+const string VAR_PRINT_BY_COMPONENT = VAR + "print_by_component";
+
+const string VAR_COMMON_GROUPS     = VAR + "common_groups";
+const string VAR_COMMON_SCALARS    = VAR + "common_scalars";
+const string VAR_COMMON_CONDITIONS = VAR + "common_conditions";
+
+ms evalFrom;
+ms evalTo;
+
+bool isTargetGrouped;
+GroupKind targetGroup;
+ScalarKind targetScalar;
+int targetTowards;
+
+double targetValue;
+float targetValueDisplay;
+
+vec3 targetVec3;
+vec3 targetVec3Display;
+
+bool printByComponent;
+
+void RegisterSettings()
+{
+    RegisterVariable(VAR_EVAL_FROM, 0);
+    RegisterVariable(VAR_EVAL_TO,   0);
+
+    RegisterVariable(VAR_TARGET_GROUPED, true);
+    RegisterVariable(VAR_TARGET_SCALAR,  0);
+    RegisterVariable(VAR_TARGET_GROUP,   0);
+    RegisterVariable(VAR_TARGET_TOWARDS, 0);
+
+    RegisterVariable(VAR_TARGET_VALUE,           0);
+    RegisterVariable(VAR_TARGET_VALUE_DISPLAY,   0);
+
+    RegisterVariable(VAR_TARGET_VEC3,         vec3().ToString());
+    RegisterVariable(VAR_TARGET_VEC3_DISPLAY, vec3().ToString());
+
+    RegisterVariable(VAR_PRINT_BY_COMPONENT, false);
+
+    RegisterVariable(VAR_COMMON_GROUPS,     "");
+    RegisterVariable(VAR_COMMON_SCALARS,    "");
+    RegisterVariable(VAR_COMMON_CONDITIONS, "");
+
+    evalFrom = GetConVarTime(VAR_EVAL_FROM);
+    evalTo   = GetConVarTime(VAR_EVAL_TO);
+
+    isTargetGrouped = GetConVarBool(VAR_TARGET_GROUPED);
+    targetScalar    = ScalarKind(GetVariableDouble(VAR_TARGET_SCALAR));
+    targetGroup     = GroupKind(GetVariableDouble(VAR_TARGET_GROUP));
+    targetTowards   = GetConVarInt(VAR_TARGET_TOWARDS);
+
+    targetValue        = GetConVarDouble(VAR_TARGET_VALUE);
+    targetValueDisplay = GetConVarDouble(VAR_TARGET_VALUE_DISPLAY);
+
+    targetVec3        = GetConVarVec3(VAR_TARGET_VEC3);
+    targetVec3Display = GetConVarVec3(VAR_TARGET_VEC3_DISPLAY);
+
+    printByComponent = GetConVarBool(VAR_PRINT_BY_COMPONENT);
+
+    DeserializeGroups(    GetConVarString(VAR_COMMON_GROUPS));
+    DeserializeScalars(   GetConVarString(VAR_COMMON_SCALARS));
+    DeserializeConditions(GetConVarString(VAR_COMMON_CONDITIONS));
+}
+
+void SaveSettings()
+{
+    SaveGroups();
+    SaveScalars();
+    SaveConditions();
+}
+
+void SaveGroups()
+{
+    SetVariable(VAR_COMMON_GROUPS, SerializeGroups());
+}
+
+void SaveScalars()
+{
+    SetVariable(VAR_COMMON_SCALARS, SerializeScalars());
+}
+
+void SaveConditions()
+{
+    SetVariable(VAR_COMMON_CONDITIONS, SerializeConditions());
+}
+
+
+// ============================================================================
+// settings.as - RenderSettings (UI)
+// ============================================================================
+
+const string HIDDEN_EDITOR_LABEL = "<Hide>";
+
+int triggerPosEditorID = -1;
+int triggerPosEditorIndex = -1;
+
+GroupKind groupInEditor = GroupKind::NONE;
+ConditionKind conditionInEditor = ConditionKind::NONE;
+
+void RenderSettings()
+{
+    evalFrom = UI::InputTimeVar("Evaluate From", VAR_EVAL_FROM);
+    evalTo   = UI::InputTimeVar("Evaluate To",   VAR_EVAL_TO);
+    if (evalTo < evalFrom)
+        SetVariable(VAR_EVAL_TO, evalTo = evalFrom);
+
+    isTargetGrouped = UI::CheckboxVar("Grouped Target?", VAR_TARGET_GROUPED);
+    if (isTargetGrouped)
+    {
+        ComboHelper("Target (Group):", groupNames, targetGroup,
+            function(index)
+            {
+                targetGroup = GroupKind(index);
+                SetVariable(VAR_TARGET_GROUP, targetGroup);
+            }
+        );
+
+        if (targetGroup == GroupKind::ROTATION)
+            UI::TextDimmed("WARNING: using grouped rotation is not recommended.");
+    }
+    else
+    {
+        ComboHelper("Target (Scalar):", scalarNames, targetScalar,
+            function(index)
+            {
+                targetScalar = ScalarKind(index);
+                SetVariable(VAR_TARGET_SCALAR, targetScalar);
+            }
+        );
+    }
+
+    targetTowards = UI::SliderIntVar("Target Towards", VAR_TARGET_TOWARDS, -1, 1);
+
+    {
+        bool disableTarget;
+        string targetTowardsMessage;
+        switch (targetTowards)
+        {
+        case -1:
+            disableTarget = true;
+            targetTowardsMessage = "Lower value is better.";
+            break;
+        case 1:
+            disableTarget = true;
+            targetTowardsMessage = "Higher value is better.";
+            break;
+        default:
+            disableTarget = false;
+            targetTowardsMessage = "Custom:";
+            break;
+        }
+        UI::TextDimmed(targetTowardsMessage);
+
+        UI::BeginDisabled(disableTarget);
+        if (isTargetGrouped)
+        {
+            if (UI::DragFloat3Var("Target Values", VAR_TARGET_VEC3_DISPLAY))
+            {
+                targetVec3Display = GetConVarVec3(VAR_TARGET_VEC3_DISPLAY);
+                targetVec3 = ConvertDisplayToValue3(targetGroup, targetVec3Display);
+                SetVarVec3(VAR_TARGET_VEC3, targetVec3);
+            }
+        }
+        else
+        {
+            targetValueDisplay = UI::InputFloatVar("Target Value", VAR_TARGET_VALUE_DISPLAY);
+            targetValue = ConvertDisplayToValue(targetScalar, targetValueDisplay);
+            SetVariable(VAR_TARGET_VALUE, targetValue);
+        }
+        UI::EndDisabled();
+    }
+
+    if (isTargetGrouped)
+    {
+        printByComponent = UI::CheckboxVar("Print Group values by component?", VAR_PRINT_BY_COMPONENT);
+        TooltipOnHover("Whether the values of the target group are to be printed by component (e.g. x y z), or as one value.");
+
+        if (targetGroup == GroupKind::POSITION)
+        {
+            vec3 cameraPosition;
+            if (CameraPosOnClick("Use Cam Position", cameraPosition))
+                SetTargetVec3(cameraPosition);
+            UI::SameLine();
+            vec3 carPosition;
+            if (CarPosOnClick("Use Car Position", carPosition))
+                SetTargetVec3(carPosition);
+        }
+    }
+
+    UI::Separator();
+    UI::Separator();
+
+    {
+        const bool isHiddenGroupInEditor = groupInEditor == GroupKind::NONE;
+        const string currentGroup =
+            isHiddenGroupInEditor ? HIDDEN_EDITOR_LABEL : groupNames[groupInEditor];
+        if (UI::BeginCombo("Group Editor", currentGroup))
+        {
+            UI::PushID("group_editor");
+
+            if (UI::Selectable(HIDDEN_EDITOR_LABEL, isHiddenGroupInEditor))
+                groupInEditor = GroupKind::NONE;
+
+            for (uint i = 0; i < GroupKind::COUNT; i++)
+            {
+                const GroupKind kind = GroupKind(i);
+                UI::PushID("" + i);
+
+                Group@ const group = groups[kind];
+                group.active = UI::Checkbox("##active", group.active);
+                UI::SameLine();
+                if (UI::Selectable(groupNames[kind], groupInEditor == kind))
+                    groupInEditor = kind;
+
+                UI::PopID();
+            }
+
+            UI::PopID();
+            UI::EndCombo();
+        }
+    }
+
+    if (groupInEditor != GroupKind::NONE)
+    {
+        UI::PushID("group_in_editor_" + groupInEditor);
+
+        Group@ const group = groups[groupInEditor];
+        group.active = UI::Checkbox("Active", group.active);
+
+        const bool resetAll = UI::Button("Reset All");
+        UI::SameLine();
+        const bool toggleAll = UI::Button("Toggle All");
+        UI::SameLine();
+        const bool activateAll = UI::Button("Activate All");
+
+        const auto@ const scalarsToRender = GroupKindToScalarKinds(groupInEditor);
+        if (groupInEditor == GroupKind::POSITION)
+        {
+            TriggerCombo(triggerPosEditorID, triggerPosEditorIndex);
+
+            Trigger3D trigger;
+            if (GetTriggerOrReset(triggerPosEditorID, triggerPosEditorIndex, trigger))
+            {
+                const vec3 position = trigger.Position;
+                const vec3 size = trigger.Size;
+                for (uint i = 0; i < 3; i++)
+                {
+                    Scalar@ const scalar = scalars[scalarsToRender[i]];
+                    scalar.valueLower = position[i];
+                    scalar.valueUpper = position[i] + size[i];
+                    scalar.displayLower = scalar.valueLower;
+                    scalar.displayUpper = scalar.valueUpper;
+                }
+            }
+
+            vec3 cameraPosition;
+            if (CameraPosOnClick("Use Cam Position", cameraPosition))
+            {
+                ResetTriggerID(triggerPosEditorID, triggerPosEditorIndex);
+                BoundScalarsByVec3(scalarsToRender, cameraPosition);
+            }
+            UI::SameLine();
+            vec3 carPosition;
+            if (CarPosOnClick("Use Car Position", carPosition))
+            {
+                ResetTriggerID(triggerPosEditorID, triggerPosEditorIndex);
+                BoundScalarsByVec3(scalarsToRender, carPosition);
+            }
+        }
+
+        for (uint i = 0; i < scalarsToRender.Length; i++)
+        {
+            const ScalarKind scalarKind = scalarsToRender[i];
+            UI::PushID("" + i);
+
+            UI::Separator();
+
+            Scalar@ const scalar = scalars[scalarKind];
+            if (UI::Button("Reset") || resetAll)
+                scalar.Reset();
+            UI::SameLine();
+            UI::TextWrapped("Scalar: " + scalarNames[scalarKind]);
+
+            scalar.lower = UI::Checkbox("Lower Bound", scalar.lower) || activateAll;
+            UI::SameLine();
+            scalar.upper = UI::Checkbox("Upper Bound", scalar.upper) || activateAll;
+
+            if (toggleAll)
+            {
+                scalar.lower = !scalar.lower;
+                scalar.upper = !scalar.upper;
+            }
+
+            UI::PushItemWidth(192);
+            UI::BeginDisabled(!scalar.lower);
+
+            scalar.displayLower = UI::InputFloat("##lower", scalar.displayLower);
+            if (scalar.lower)
+                scalar.valueLower = ConvertDisplayToValue(groupInEditor, scalar.displayLower);
+
+            UI::EndDisabled();
+            UI::SameLine();
+            UI::BeginDisabled(!scalar.upper);
+
+            scalar.displayUpper = UI::InputFloat("##upper", scalar.displayUpper);
+            if (scalar.upper)
+                scalar.valueUpper = ConvertDisplayToValue(groupInEditor, scalar.displayUpper);
+
+            UI::EndDisabled();
+            UI::PopItemWidth();
+
+            UI::PopID();
+        }
+
+        UI::PopID();
+    }
+
+    UI::Separator();
+    UI::Separator();
+
+    {
+        const bool isHiddenConditionInEditor = conditionInEditor == ConditionKind::NONE;
+        const string currentCondition =
+            isHiddenConditionInEditor ? HIDDEN_EDITOR_LABEL : conditionNames[conditionInEditor];
+        if (UI::BeginCombo("Condition Editor", currentCondition))
+        {
+            UI::PushID("condition_editor");
+
+            if (UI::Selectable(HIDDEN_EDITOR_LABEL, isHiddenConditionInEditor))
+                conditionInEditor = ConditionKind::NONE;
+
+            for (uint i = 0; i < ConditionKind::COUNT; i++)
+            {
+                const ConditionKind kind = ConditionKind(i);
+                UI::PushID("" + i);
+
+                Condition@ const condition = conditions[kind];
+                condition.active = UI::Checkbox("##active", condition.active);
+                UI::SameLine();
+                if (UI::Selectable(conditionNames[kind], conditionInEditor == kind))
+                    conditionInEditor = kind;
+
+                UI::PopID();
+            }
+
+            UI::PopID();
+            UI::EndCombo();
+        }
+    }
+
+    if (conditionInEditor != ConditionKind::NONE)
+    {
+        UI::PushID("condition_in_editor_" + conditionInEditor);
+
+        Condition@ const condition = conditions[conditionInEditor];
+        condition.active = UI::Checkbox("Active", condition.active);
+
+        if (UI::Button("Reset"))
+            condition.Reset();
+
+        switch (conditionInEditor)
+        {
+        case ConditionKind::MIN_REAL_SPEED:
+            condition.display = UI::InputFloat("##min_real_speed", condition.display);
+            {
+                StringBuilder builder;
+                builder.Append("The car MUST have a real speed of at least ");
+                builder.Append(condition.display);
+                builder.Append(" km/h in the eval timeframe.");
+                UI::TextDimmed(builder.ToString());
+            }
+            condition.value = condition.display / 3.6;
+            break;
+        case ConditionKind::FREEWHEELING:
+            RenderConditionCheckbox(condition, "##freewheeling", "be free-wheeled");
+            break;
+        case ConditionKind::SLIDING:
+            RenderConditionCheckbox(condition, "##sliding", "be sliding");
+            break;
+        case ConditionKind::WHEEL_TOUCHING:
+            RenderConditionCheckbox(condition, "##wheel_touching", "have wheel(s) crashing into a wall");
+            break;
+        case ConditionKind::WHEEL_CONTACTS:
+            RenderConditionSliderInts(condition, "##wheel_contacts", 0, 4, "wheels contacting the ground");
+            break;
+        case ConditionKind::CHECKPOINTS:
+            RenderConditionInputInt(condition, "##checkpoints", "checkpoints");
+            break;
+        case ConditionKind::RPM:
+            RenderConditionInputFloats(condition, "##rpm", "RPM");
+            break;
+        case ConditionKind::GEAR:
+            RenderConditionSliderInts(condition, "##gear", 0, 5, "gears");
+            break;
+        case ConditionKind::REAR_GEAR:
+            RenderConditionSliderInts(condition, "##rear_gear", 0, 1, "rear gears");
+            break;
+        case ConditionKind::GLITCHING:
+            RenderConditionCheckbox(condition, "##glitching", "be glitching");
+            break;
+        default:
+            UI::TextWrapped("Corrupted condition index: " + conditionInEditor);
+            break;
+        }
+
+        UI::PopID();
+    }
+
+    SaveSettings();
+}
+
+bool CameraPosOnClick(const string &in label, vec3 &out position)
+{
+    if (UI::Button(label))
+    {
+        const auto@ const camera = GetCurrentCamera();
+        if (camera !is null)
+        {
+            position = camera.Location.Position;
+            return true;
+        }
+    }
+
+    position = vec3();
+    return false;
+}
+
+bool CarPosOnClick(const string &in label, vec3 &out position)
+{
+    if (UI::Button(label))
+    {
+        const auto@ const dyna = GetSimulationManager().Dyna;
+        if (dyna !is null)
+        {
+            position = dyna.RefStateCurrent.Location.Position;
+            return true;
+        }
+    }
+
+    position = vec3();
+    return false;
+}
+
+void SetTargetVec3(const vec3 &in value)
+{
+    targetVec3 = value;
+    SetVarVec3(VAR_TARGET_VEC3, targetVec3);
+    targetVec3Display = value;
+    SetVarVec3(VAR_TARGET_VEC3_DISPLAY, targetVec3Display);
+}
+
+void TriggerCombo(int& id, int& index)
+{
+    if (UI::BeginCombo("Triggers", (index + 1) + "."))
+    {
+        if (UI::Selectable("0.", id == -1))
+            ResetTriggerID(id, index);
+
+        const auto@ const ids = GetTriggerIds();
+        for (uint i = 0; i < ids.Length; i++)
+        {
+            const int triggerID = ids[i];
+            const Trigger3D trigger = GetTrigger(triggerID);
+            if (UI::Selectable((i + 1) + ". " + TriggerToString(trigger), id == triggerID))
+            {
+                id = triggerID;
+                index = i;
+            }
+        }
+
+        UI::EndCombo();
+    }
+}
+
+string TriggerToString(const Trigger3D &in trigger)
+{
+    return "[ " + trigger.Position.ToString() + " | " + trigger.Size.ToString() + " ]";
+}
+
+bool GetTriggerOrReset(int& id, int& index, Trigger3D &out trigger)
+{
+    trigger = GetTrigger(id);
+    if (trigger)
+        return true;
+
+    ResetTriggerID(id, index);
+    return false;
+}
+
+void ResetTriggerID(int& id, int& index)
+{
+    id = -1;
+    index = -1;
+}
+
+void BoundScalarsByVec3(const array<ScalarKind>@ scalarKinds, const vec3 &in v, const double offset = 2)
+{
+    if (scalarKinds.Length != 3)
+    {
+        UI::TextWrapped("ERROR: cannot bound scalars by vec3.");
+        return;
+    }
+
+    for (uint i = 0; i < 3; i++)
+    {
+        const ScalarKind kind = scalarKinds[i];
+        Scalar@ const scalar = scalars[kind];
+        scalar.lower = true;
+        scalar.upper = true;
+        scalar.valueLower = v[i] - offset;
+        scalar.valueUpper = v[i] + offset;
+        scalar.displayLower = ConvertValueToDisplay(kind, scalar.valueLower);
+        scalar.displayUpper = ConvertValueToDisplay(kind, scalar.valueUpper);
+    }
+}
+
+void RenderConditionCheckbox(Condition@ condition, const string &in id, const string &in what)
+{
+    const bool tempValue = UI::Checkbox(id, condition.display != 0);
+    condition.display = tempValue ? 1 : 0;
+
+    StringBuilder builder;
+    builder.Append("The car MUST");
+    builder.Append(tempValue ? " " : " NOT ");
+    builder.Append(what);
+    builder.Append(" in the eval timeframe.");
+    UI::TextDimmed(builder.ToString());
+
+    condition.Transfer();
+}
+
+void RenderConditionInputInt(Condition@ condition, const string &in id, const string &in what)
+{
+    condition.display = UI::InputInt(id, int(condition.display));
+
+    StringBuilder builder;
+    builder.Append("The car MUST have exactly ");
+    builder.Append(condition.display);
+    builder.Append(" ");
+    builder.Append(what);
+    builder.Append(" in the eval timeframe.");
+    UI::TextDimmed(builder.ToString());
+
+    condition.Transfer();
+}
+
+void RenderConditionInputFloats(Condition@ condition, const string &in id, const string &in what)
+{
+    const float inputMin = UI::InputFloat(id + "_min", condition.displayMin);
+    const float inputMax = UI::InputFloat(id + "_max", condition.displayMax);
+    condition.displayMin = Math::Min(inputMin, inputMax);
+    condition.displayMax = Math::Max(inputMin, inputMax);
+
+    StringBuilder builder;
+    BuildRangeText(builder, condition, what);
+    UI::TextDimmed(builder.ToString());
+
+    condition.TransferRange();
+}
+
+void RenderConditionSliderInts(Condition@ condition, const string &in id, const int min, const int max, const string &in what)
+{
+    const int sliderMin = UI::SliderInt(id + "_min", int(condition.displayMin), min, max);
+    const int sliderMax = UI::SliderInt(id + "_max", int(condition.displayMax), min, max);
+    condition.displayMin = Math::Min(sliderMin, sliderMax);
+    condition.displayMax = Math::Max(sliderMin, sliderMax);
+
+    StringBuilder builder;
+    BuildRangeText(builder, condition, what);
+    UI::TextDimmed(builder.ToString());
+
+    condition.TransferRange();
+}
+
+void BuildRangeText(StringBuilder@ builder, const Condition@ condition, const string &in what)
+{
+    const bool inexact = condition.displayMin != condition.displayMax;
+    builder.Append("The car MUST have ");
+    builder.Append(inexact ? "between " : "exactly ");
+    builder.Append(condition.displayMin);
+    if (inexact)
+    {
+        builder.Append(" and ");
+        builder.Append(condition.displayMax);
+    }
+    builder.Append(" ");
+    builder.Append(what);
+    builder.Append(" in the eval timeframe.");
+}
+
+
+// ============================================================================
+// main.as - State variables
+// ============================================================================
+
+bool customTargetTowards;
+
+bool valid;
+ms impTime;
+
+double diffCurrent;
+double diffBest;
+
+double current;
+vec3   current3;
+double best;
+vec3   best3;
+
+funcdef bool IsBetterTargeted(SimulationManager@ simManager);
+const IsBetterTargeted@ isBetter;
+
+funcdef bool IsBetterTargetedTowards();
+const IsBetterTargetedTowards@ isBetterTowards;
+
+bool met;
+
+array<ScalarKind> scalarIndices;
+array<ScalarKind> unmetScalarIndices;
+array<ms>         unmetScalarTimes;
+
+array<ConditionKind> conditionIndices;
+array<ConditionKind> unmetConditionIndices;
+array<ms>            unmetConditionTimes;
+
+
+// ============================================================================
+// Main - BfV2 entry point
+// ============================================================================
+
+void Main()
+{
+    LogIfWrongCount();
+    RegisterSettings();
+    auto eval = RegisterBruteforceEval("finetuner", "Finetuner", OnEvaluate, RenderSettings);
+    @eval.onSimBegin = @OnSimBegin;
+    @eval.onSimEnd = @OnSimEnd;
+}
+
+
+// ============================================================================
+// OnSimBegin - extracted from OnSimulationBegin (guard removed)
+// ============================================================================
+
+void OnSimBegin(SimulationManager@)
+{
+    customTargetTowards = targetTowards == 0;
+    if (isTargetGrouped)
+    {
+        switch (targetTowards)
+        {
+        case -1:
+            @isBetterTowards =
+                function()
+                {
+                    return current3.Length() < best3.Length();
+                };
+            break;
+        case 0:
+            @isBetterTowards =
+                function()
+                {
+                    diffCurrent = Math::Distance(current3, targetVec3);
+                    return diffCurrent < diffBest;
+                };
+            break;
+        case 1:
+            @isBetterTowards =
+                function()
+                {
+                    return current3.Length() > best3.Length();
+                };
+            break;
+        default:
+            @isBetterTowards = function() { return false; };
+            print("Bug with targetTowards...", Severity::Error);
+            break;
+        }
+
+        @isBetter =
+            function(simManager)
+            {
+                current3 = GetGroupValue(simManager, targetGroup);
+                return isBetterTowards();
+            };
+    }
+    else
+    {
+        switch (targetTowards)
+        {
+        case -1:
+            @isBetterTowards =
+                function()
+                {
+                    return current < best;
+                };
+            break;
+        case 0:
+            @isBetterTowards =
+                function()
+                {
+                    const double diff = current - targetValue;
+                    switch (targetScalar)
+                    {
+                    case ScalarKind::ROTATION_YAW:
+                    case ScalarKind::ROTATION_PITCH:
+                    case ScalarKind::ROTATION_ROLL:
+                        diffCurrent = Math::Min(Math::Abs(diff), Math::Abs(diff + Math::PI * 2));
+                        break;
+                    default:
+                        diffCurrent = Math::Abs(diff);
+                        break;
+                    }
+                    return diffCurrent < diffBest;
+                };
+            break;
+        case 1:
+            @isBetterTowards =
+                function()
+                {
+                    return current > best;
+                };
+            break;
+        default:
+            @isBetterTowards = function() { return false; };
+            print("Bug with targetTowards...", Severity::Error);
+            break;
+        }
+
+        @isBetter =
+            function(simManager)
+            {
+                current = GetScalarValue(simManager, targetScalar);
+                return isBetterTowards();
+            };
+    }
+
+    for (uint g = 0; g < GroupKind::COUNT; g++)
+    {
+        const GroupKind groupKind = GroupKind(g);
+        if (!groups[groupKind].active)
+            continue;
+
+        const auto@ const tempScalarKinds = GroupKindToScalarKinds(groupKind);
+        for (uint k = 0; k < tempScalarKinds.Length; k++)
+        {
+            const ScalarKind scalarKind = tempScalarKinds[k];
+            const Scalar@ const scalar = scalars[scalarKind];
+            if (scalar.lower || scalar.upper)
+                scalarIndices.Add(scalarKind);
+        }
+    }
+
+    for (uint c = 0; c < ConditionKind::COUNT; c++)
+    {
+        const ConditionKind kind = ConditionKind(c);
+        if (conditions[kind].active)
+            conditionIndices.Add(kind);
+    }
+
+    StringBuilder builder;
+    builder
+        .AppendLine()
+        .AppendLine("=========")
+        .AppendLine("Finetuner")
+        .AppendLine("=========")
+        .AppendLine();
+
+    {
+        builder.AppendLine("Target:");
+        if (isTargetGrouped)
+        {
+            builder.AppendLine({ "Group = ", groupNames[targetGroup] });
+            if (customTargetTowards)
+                builder.AppendLine({ "Values = ", FormatPrecise(targetVec3) });
+        }
+        else
+        {
+            builder.AppendLine({ "Scalar = ", scalarNames[targetScalar] });
+            if (customTargetTowards)
+                builder.AppendLine({ "Value = ", FormatPrecise(targetValue) });
+        }
+
+        builder.Append("Towards = ");
+        switch (targetTowards)
+        {
+        case -1:
+            builder.AppendLine("Lower value is better.");
+            break;
+        case 0:
+            builder.AppendLine("Custom.");
+            break;
+        case 1:
+            builder.AppendLine("Higher value is better.");
+            break;
+        default:
+            builder.AppendLine(targetTowards);
+            break;
+        }
+
+        builder
+            .AppendLine(Repeat(builder.GetLastLineLength(), '-'))
+            .AppendLine();
+    }
+
+    {
+        builder.AppendLine("Bounds: (actual values, so angles in radians and speeds in m/s)");
+        uint maxScalarNameLength = 0;
+        if (scalarIndices.IsEmpty())
+        {
+            const string NO_SCALARS = "None.";
+            builder.AppendLine(NO_SCALARS);
+            maxScalarNameLength = NO_SCALARS.Length;
+        }
+        else
+        {
+            for (uint i = 0; i < scalarIndices.Length; i++)
+            {
+                const uint len = scalarNames[scalarIndices[i]].Length;
+                if (maxScalarNameLength < len)
+                    maxScalarNameLength = len;
+            }
+
+            for (uint i = 0; i < scalarIndices.Length; i++)
+            {
+                const ScalarKind kind = scalarIndices[i];
+                const Scalar@ const scalar = scalars[kind];
+                builder.Append({ PadRight(scalarNames[kind], maxScalarNameLength), " => " });
+
+                if (scalar.lower)
+                    builder.Append({ "Lower: ", FormatPrecise(scalar.valueLower) });
+
+                if (scalar.lower && scalar.upper)
+                    builder.Append(", ");
+
+                if (scalar.upper)
+                    builder.Append({ "Upper: ", FormatPrecise(scalar.valueUpper) });
+
+                builder.AppendLine();
+            }
+        }
+
+        builder
+            .AppendLine(Repeat(maxScalarNameLength, '-'))
+            .AppendLine();
+    }
+
+    {
+        builder.AppendLine("Conditions: (actual values)");
+        uint maxConditionNameLength = 0;
+        if (conditionIndices.IsEmpty())
+        {
+            const string NO_CONDITIONS = "None.";
+            builder.AppendLine(NO_CONDITIONS);
+            maxConditionNameLength = NO_CONDITIONS.Length;
+        }
+        else
+        {
+            for (uint i = 0; i < conditionIndices.Length; i++)
+            {
+                const uint len = conditionNames[conditionIndices[i]].Length;
+                if (maxConditionNameLength < len)
+                    maxConditionNameLength = len;
+            }
+
+            for (uint i = 0; i < conditionIndices.Length; i++)
+            {
+                const ConditionKind kind = conditionIndices[i];
+                const Condition@ const condition = conditions[kind];
+                builder.Append({ PadRight(conditionNames[kind], maxConditionNameLength), " => " });
+                switch (kind)
+                {
+                case ConditionKind::WHEEL_CONTACTS:
+                case ConditionKind::GEAR:
+                case ConditionKind::REAR_GEAR:
+                    if (condition.valueMin == condition.valueMax)
+                        builder.AppendLine(condition.valueMin);
+                    else
+                        builder.AppendLine({ "[", condition.valueMin, ", ", condition.valueMax, "]" });
+                    break;
+                default:
+                    builder.AppendLine(condition.value);
+                    break;
+                }
+            }
+        }
+
+        builder
+            .AppendLine(Repeat(maxConditionNameLength, '-'))
+            .AppendLine();
+    }
+
+    print(builder.ToString());
+}
+
+
+// ============================================================================
+// OnSimEnd - extracted from OnSimulationEnd (guard removed)
+// ============================================================================
+
+void OnSimEnd(SimulationManager@, SimulationResult)
+{
+    valid = false;
+    met = false;
+
+    scalarIndices.Clear();
+    unmetScalarIndices.Clear();
+    unmetScalarTimes.Clear();
+
+    conditionIndices.Clear();
+    unmetConditionIndices.Clear();
+    unmetConditionTimes.Clear();
+}
+
+
+// ============================================================================
+// main.as - OnEvaluate (evaluation logic, kept exactly as-is)
+// ============================================================================
+
+BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluationInfo &in info)
+{
+    auto response = BFEvaluationResponse();
+
+    const ms time = simManager.RaceTime;
+    switch (info.Phase)
+    {
+    case BFPhase::Initial:
+        if (IsEvalTime(time))
+        {
+            if (IsBetter(simManager))
+            {
+                valid = true;
+                impTime = time;
+
+                best = current;
+                best3 = current3;
+                diffBest = diffCurrent;
+            }
+        }
+        else if (IsPastEvalTime(time))
+        {
+            met = true; // prevent memory leak in unmet* arrays
+
+            StringBuilder builder;
+            Severity severity;
+            if (valid)
+            {
+                if (isTargetGrouped)
+                    builder.Append({ groupNames[targetGroup], " | ", FormatVec3ByTargetGroup(best3, 6) });
+                else
+                    builder.Append({ scalarNames[targetScalar], " | ", FormatValueByScalar(targetScalar, best, 6) });
+
+                builder.Append({ " | Time: ", Time::Format(impTime) });
+
+                if (customTargetTowards)
+                    builder.Append({ " | Diff: ", FormatValueByTarget(diffBest) });
+
+                const uint iterations = info.Iterations;
+                if (iterations == 0)
+                {
+                    severity = Severity::Info;
+                }
+                else
+                {
+                    builder.Append({ " | Iterations: ", iterations });
+                    severity = Severity::Success;
+                }
+            }
+            else
+            {
+                builder.AppendLine("Base Run did not suffice...");
+
+                const uint unmetConditionLength = unmetConditionIndices.Length;
+                if (unmetConditionLength != 0)
+                {
+                    builder.AppendLine().AppendLine("Unmet conditions:");
+                    for (uint i = 0; i < unmetConditionLength; i++)
+                        builder.AppendLine({ unmetConditionTimes[i], " ", conditionNames[unmetConditionIndices[i]] });
+                }
+
+                const uint unmetScalarLength = unmetScalarIndices.Length;
+                if (unmetScalarLength != 0)
+                {
+                    builder.AppendLine().AppendLine("Unmet scalars:");
+                    for (uint i = 0; i < unmetScalarLength; i++)
+                        builder.AppendLine({ unmetScalarTimes[i], " ", scalarNames[unmetScalarIndices[i]] });
+                }
+
+                severity = Severity::Warning;
+            }
+
+            print(builder.ToString(), severity);
+            response.Decision = BFEvaluationDecision::Accept;
+        }
+        break;
+    case BFPhase::Search:
+        if (IsEvalTime(time))
+        {
+            if (IsBetter(simManager))
+                response.Decision = BFEvaluationDecision::Accept;
+        }
+        else if (IsPastEvalTime(time))
+        {
+            response.Decision = BFEvaluationDecision::Reject;
+        }
+        break;
+    }
+
+    return response;
+}
+
+
+// ============================================================================
+// main.as - Evaluation helpers (kept exactly as-is)
+// ============================================================================
+
+bool IsEvalTime(const ms time)
+{
+    return time >= evalFrom && time <= evalTo;
+}
+
+bool IsPastEvalTime(const ms time)
+{
+    return time > evalTo;
+}
+
+bool IsBetter(SimulationManager@ simManager)
+{
+    const auto@ const dyna = simManager.Dyna;
+    const auto@ const currentState = dyna.RefStateCurrent;
+    const auto@ const previousState = dyna.RefStatePrevious;
+    const double velocity = currentState.LinearSpeed.Length();
+
+    const auto@ const svc = simManager.SceneVehicleCar;
+    const auto@ const engine = svc.CarEngine;
+
+    const auto@ const playerInfo = simManager.PlayerInfo;
+
+    const ms time = simManager.RaceTime;
+    for (uint i = 0; i < conditionIndices.Length; i++)
+    {
+        const ConditionKind kind = conditionIndices[i];
+        const Condition@ const condition = conditions[kind];
+        bool ok;
+        switch (kind)
+        {
+        case ConditionKind::MIN_REAL_SPEED:
+            ok = velocity >= condition.value;
+            break;
+        case ConditionKind::FREEWHEELING:
+            ok = condition.MatchBool(svc.IsFreeWheeling);
+            break;
+        case ConditionKind::SLIDING:
+            ok = condition.MatchBool(svc.IsSliding);
+            break;
+        case ConditionKind::WHEEL_TOUCHING:
+            ok = condition.MatchBool(svc.HasAnyLateralContact);
+            break;
+        case ConditionKind::WHEEL_CONTACTS:
+            {
+                int contacts = 0;
+                const auto@ const wheels = simManager.Wheels;
+                for (uint w = 0; w < 4; w++)
+                {
+                    if (wheels[w].RTState.HasGroundContact)
+                        contacts++;
+                }
+
+                ok = condition.CompareInt(contacts);
+            }
+            break;
+        case ConditionKind::CHECKPOINTS:
+            ok = condition.MatchUInt(playerInfo.CurCheckpointCount);
+            break;
+        case ConditionKind::RPM:
+            ok = condition.CompareDouble(engine.ActualRPM);
+            break;
+        case ConditionKind::GEAR:
+            ok = condition.CompareInt(engine.Gear);
+            break;
+        case ConditionKind::REAR_GEAR:
+            ok = condition.CompareInt(engine.RearGear);
+            break;
+        case ConditionKind::GLITCHING:
+            {
+                const double positionalDifference = Math::Distance(
+                    previousState.Location.Position,
+                    currentState.Location.Position);
+                const bool isGlitching = positionalDifference > 0.1 && velocity / positionalDifference < 50.0;
+                ok = condition.MatchBool(isGlitching);
+            }
+            break;
+        default:
+            print("Corrupted condition index: " + kind, Severity::Error);
+            ok = false;
+            break;
+        }
+
+        if (!ok)
+        {
+            if (!met)
+            {
+                unmetConditionIndices.Add(kind);
+                unmetConditionTimes.Add(time);
+            }
+            return false;
+        }
+    }
+
+    for (uint i = 0; i < scalarIndices.Length; i++)
+    {
+        const ScalarKind kind = scalarIndices[i];
+        const double value = GetScalarValue(simManager, kind);
+
+        const Scalar@ const scalar = scalars[kind];
+        if (scalar.lower && value < scalar.valueLower || scalar.upper && value > scalar.valueUpper)
+        {
+            if (!met)
+            {
+                unmetScalarIndices.Add(kind);
+                unmetScalarTimes.Add(time);
+            }
+            return false;
+        }
+    }
+
+    return isBetter(simManager) || !valid;
+}
+
+
+// ============================================================================
+// main.as - GetGroupValue, GetScalarValue, AddOffsetToLocation (kept exactly as-is)
+// ============================================================================
+
+vec3 GetGroupValue(SimulationManager@ simManager, const GroupKind kind)
+{
+    vec3 value;
+
+    const auto@ const dyna = simManager.Dyna.RefStateCurrent;
+    const iso4 location = dyna.Location;
+    mat3 rotation = location.Rotation;
+
+    const auto@ const svc = simManager.SceneVehicleCar;
+
+    const auto@ const wheels = simManager.Wheels;
+
+    switch (kind)
+    {
+    case GroupKind::POSITION:
+        value = location.Position;
+        break;
+    case GroupKind::ROTATION:
+        rotation.GetYawPitchRoll(value.x, value.y, value.z);
+        break;
+    case GroupKind::SPEED_GLOBAL:
+        value = dyna.LinearSpeed;
+        break;
+    case GroupKind::SPEED_LOCAL:
+        value = svc.CurrentLocalSpeed;
+        break;
+    case GroupKind::WHEEL_FRONT_LEFT:
+        value = AddOffsetToLocation(wheels.FrontLeft,  location);
+        break;
+    case GroupKind::WHEEL_FRONT_RIGHT:
+        value = AddOffsetToLocation(wheels.FrontRight, location);
+        break;
+    case GroupKind::WHEEL_BACK_RIGHT:
+        value = AddOffsetToLocation(wheels.BackRight,  location);
+        break;
+    case GroupKind::WHEEL_BACK_LEFT:
+        value = AddOffsetToLocation(wheels.BackLeft,   location);
+        break;
+    default:
+        print("Corrupted group index: " + kind, Severity::Error);
+        break;
+    }
+
+    return value;
+}
+
+double GetScalarValue(SimulationManager@ simManager, const ScalarKind kind)
+{
+    double value = 0;
+
+    const auto@ const dyna = simManager.Dyna.RefStateCurrent;
+    const iso4 location = dyna.Location;
+    const vec3 position = location.Position;
+    mat3 rotation = location.Rotation;
+    const vec3 globalSpeed = dyna.LinearSpeed;
+
+    const auto@ const svc = simManager.SceneVehicleCar;
+    const vec3 localSpeed = svc.CurrentLocalSpeed;
+
+    const auto@ const wheels = simManager.Wheels;
+
+    switch (kind)
+    {
+    case ScalarKind::POSITION_X:
+        value = position.x;
+        break;
+    case ScalarKind::POSITION_Y:
+        value = position.y;
+        break;
+    case ScalarKind::POSITION_Z:
+        value = position.z;
+        break;
+    case ScalarKind::ROTATION_YAW:
+        { float y, _p, _r; rotation.GetYawPitchRoll(y, _p, _r); value = y; }
+        break;
+    case ScalarKind::ROTATION_PITCH:
+        { float _y, p, _r; rotation.GetYawPitchRoll(_y, p, _r); value = p; }
+        break;
+    case ScalarKind::ROTATION_ROLL:
+        { float _y, _p, r; rotation.GetYawPitchRoll(_y, _p, r); value = r; }
+        break;
+    case ScalarKind::SPEED_GLOBAL_X:
+        value = globalSpeed.x;
+        break;
+    case ScalarKind::SPEED_GLOBAL_Y:
+        value = globalSpeed.y;
+        break;
+    case ScalarKind::SPEED_GLOBAL_Z:
+        value = globalSpeed.z;
+        break;
+    case ScalarKind::SPEED_LOCAL_X:
+        value = localSpeed.x;
+        break;
+    case ScalarKind::SPEED_LOCAL_Y:
+        value = localSpeed.y;
+        break;
+    case ScalarKind::SPEED_LOCAL_Z:
+        value = localSpeed.z;
+        break;
+    case ScalarKind::WHEEL_FL_X:
+        value = AddOffsetToLocation(wheels.FrontLeft,  location).x;
+        break;
+    case ScalarKind::WHEEL_FL_Y:
+        value = AddOffsetToLocation(wheels.FrontLeft,  location).y;
+        break;
+    case ScalarKind::WHEEL_FL_Z:
+        value = AddOffsetToLocation(wheels.FrontLeft,  location).z;
+        break;
+    case ScalarKind::WHEEL_FR_X:
+        value = AddOffsetToLocation(wheels.FrontRight, location).x;
+        break;
+    case ScalarKind::WHEEL_FR_Y:
+        value = AddOffsetToLocation(wheels.FrontRight, location).y;
+        break;
+    case ScalarKind::WHEEL_FR_Z:
+        value = AddOffsetToLocation(wheels.FrontRight, location).z;
+        break;
+    case ScalarKind::WHEEL_BR_X:
+        value = AddOffsetToLocation(wheels.BackRight,  location).x;
+        break;
+    case ScalarKind::WHEEL_BR_Y:
+        value = AddOffsetToLocation(wheels.BackRight,  location).y;
+        break;
+    case ScalarKind::WHEEL_BR_Z:
+        value = AddOffsetToLocation(wheels.BackRight,  location).z;
+        break;
+    case ScalarKind::WHEEL_BL_X:
+        value = AddOffsetToLocation(wheels.BackLeft,   location).x;
+        break;
+    case ScalarKind::WHEEL_BL_Y:
+        value = AddOffsetToLocation(wheels.BackLeft,   location).y;
+        break;
+    case ScalarKind::WHEEL_BL_Z:
+        value = AddOffsetToLocation(wheels.BackLeft,   location).z;
+        break;
+    default:
+        print("Corrupted scalar index: " + kind, Severity::Error);
+        break;
+    }
+
+    return value;
+}
+
+vec3 AddOffsetToLocation(TM::SceneVehicleCar::SimulationWheel@ wheel, const iso4 &in location)
+{
+    const vec3 offset = wheel.SurfaceHandler.Location.Position;
+    const mat3 rot = location.Rotation;
+    const vec3 global = vec3(Math::Dot(offset, rot.x), Math::Dot(offset, rot.y), Math::Dot(offset, rot.z));
+    return location.Position + global;
+}
+
+} // namespace FinetunerBf
+const uint MAX_BUFFER_SIZE = 524288;
 const int MAX_WAIT_FRAMES = 30;
 
 Net::Socket@ listenSock = null;
@@ -4889,7 +8365,7 @@ string ExtractMethod(const string &in raw)
 
 // --- Server lifecycle ---
 
-void StartServer(const string &in host, uint16 port)
+void StartServer(const string &in host, uint16 port, bool silent = false)
 {
     @clientSock = null;
     @listenSock = null;
@@ -4900,12 +8376,12 @@ void StartServer(const string &in host, uint16 port)
     if (listenSock.Listen(host, port))
     {
         serverStatus = "Listening on " + host + ":" + Text::FormatUInt(port);
-        log("HTTP Server: " + serverStatus);
     }
     else
     {
         serverStatus = "FAILED to listen on " + host + ":" + Text::FormatUInt(port);
-        log("HTTP Server: " + serverStatus);
+        if (!silent)
+            log("HTTP Server: " + serverStatus);
         @listenSock = null;
     }
 }
@@ -4968,7 +8444,14 @@ void PollServer()
             int contentLength = ParseContentLength(requestBuffer);
             uint expectedTotal = uint(headerEnd + 4) + uint(contentLength);
             if (requestBuffer.Length < expectedTotal)
+            {
+                if (readWaitFrames > MAX_WAIT_FRAMES)
+                {
+                    @clientSock = null;
+                    requestBuffer = "";
+                }
                 return;
+            }
         }
 
         ParseRequest(requestBuffer);
@@ -5707,21 +9190,51 @@ namespace InputModification
         SortBufferManual(buffer, cachedStartIndex);
     }
 }
+const uint16 MASTER_PORT = 8489;
+const uint16 WORKER_PORT_START = 8490;
+const uint16 WORKER_PORT_END = 8520;
+
+bool isMaster = false;
+uint16 localPort = 0;
+uint instancePid = 0;
+
 PluginInfo @GetPluginInfo()
 {
     auto info = PluginInfo();
     info.Name = "Bruteforce V2 + Dashboard";
     info.Author = "Skycrafter";
-    info.Version = "2.0-dashboard-1";
+    info.Version = "2.0";
     info.Description = "Next generation bruteforce with web dashboard";
     return info;
 }
+
+void RegisterCommonRoutes()
+{
+    RegisterRoute("GET", "/api/bf/status", HandleGetBfStatus);
+    RegisterRoute("GET", "/api/bf/log", HandleGetBfLog);
+    RegisterRoute("GET", "/api/bf/improvements", HandleGetBfImprovements);
+    RegisterRoute("GET", "/api/bf/settings", HandleGetBfSettings);
+    RegisterRoute("GET", "/api/bf/all-settings", HandleGetAllSettings);
+    RegisterRoute("GET", "/api/bf/sessions", HandleGetBfSessions);
+    RegisterRoute("GET", "/api/bf/session-log", HandleGetSessionLog);
+    RegisterRoute("GET", "/api/bf/session-imp", HandleGetSessionImp);
+    RegisterRoute("POST", "/api/bf/set", HandlePostSetVar);
+    RegisterRoute("POST", "/api/bf/add-slot", HandlePostAddSlot);
+    RegisterRoute("POST", "/api/bf/remove-slot", HandlePostRemoveSlot);
+    RegisterRoute("POST", "/api/bf/copy-position", HandleCopyPosition);
+    RegisterRoute("POST", "/api/bf/delete-session", HandleDeleteSession);
+    RegisterRoute("POST", "/api/bf/set-batch", HandlePostSetBatch);
+    RegisterRoute("POST", "/api/bf/apply-inputs", HandleApplyInputs);
+    RegisterRoute("GET", "/api/map", HandleGetMap);
+}
+
 void Main()
 {
     InitializeInputModAlgorithms();
     RegisterValidationHandler("bfv2", "Bruteforce V2", BruteforceV2Settings);
     RegisterVariable("bf_iterations_before_restart", 0);
     RegisterVariable("bf_result_folder", "");
+    RegisterVariable("bf_dashboard_persist_logs", false);
     RegisterVariable("bf_condition_script", "");
     RegisterVariable("bf_condition_script_height", 26);
     RegisterVariable("bf_restart_condition_script", "");
@@ -5781,35 +9294,573 @@ void Main()
     CarLocationBf::Main();
     TimeBf::Main();
     CustomTargetBf::Main();
+    FinetunerBf::Main();
+    NoseposPlusBf::Main();
     RegisterSettingsPage("Scripting Docs", ScriptingReference::Render);
 
-    RegisterRoute("GET", "/api/bf/status", HandleGetBfStatus);
-    RegisterRoute("GET", "/api/bf/log", HandleGetBfLog);
-    RegisterRoute("GET", "/api/bf/improvements", HandleGetBfImprovements);
-    RegisterRoute("GET", "/api/bf/settings", HandleGetBfSettings);
-    RegisterRoute("GET", "/api/bf/all-settings", HandleGetAllSettings);
-    RegisterRoute("GET", "/api/bf/sessions", HandleGetBfSessions);
-    RegisterRoute("GET", "/api/bf/session-log", HandleGetSessionLog);
-    RegisterRoute("GET", "/api/bf/session-imp", HandleGetSessionImp);
-    RegisterRoute("POST", "/api/bf/set", HandlePostSetVar);
-    RegisterRoute("POST", "/api/bf/add-slot", HandlePostAddSlot);
-    RegisterRoute("POST", "/api/bf/remove-slot", HandlePostRemoveSlot);
-    RegisterRoute("POST", "/api/bf/copy-position", HandleCopyPosition);
-    RegisterRoute("POST", "/api/bf/delete-session", HandleDeleteSession);
-    RegisterRoute("POST", "/api/bf/set-batch", HandlePostSetBatch);
-    RegisterRoute("GET", "/api/map", HandleGetMap);
+    instancePid = IO::GetCurrentProcessId();
+
+    // Try master port first, then worker ports
+    routes.Resize(0);
+    RegisterCommonRoutes();
     RegisterRoute("GET", "/", HandleBfDashboard);
-    StartServer("127.0.0.1", 8081);
+    StartServer("127.0.0.1", MASTER_PORT, true);
+    if (@listenSock !is null)
+    {
+        isMaster = true;
+        localPort = MASTER_PORT;
+        log("BfV2Dashboard: === Started successfully on port " + Text::FormatUInt(MASTER_PORT) + " (PID " + Text::FormatUInt(instancePid) + ") — open http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/ ===");
+        return;
+    }
+
+    routes.Resize(0);
+    RegisterCommonRoutes();
+    RegisterRoute("GET", "/", HandleWorkerRedirect);
+    for (uint16 p = WORKER_PORT_START; p <= WORKER_PORT_END; p++)
+    {
+        StartServer("127.0.0.1", p, true);
+        if (@listenSock !is null)
+        {
+            localPort = p;
+            log("BfV2Dashboard: === Started successfully on port " + Text::FormatUInt(localPort) + " (PID " + Text::FormatUInt(instancePid) + ") — dashboard at http://localhost:" + Text::FormatUInt(MASTER_PORT) + "/ ===");
+            return;
+        }
+    }
+    log("BfV2Dashboard: ERROR — No free port found (all ports 8489-" + Text::FormatUInt(WORKER_PORT_END) + " taken)");
 }
+
 void Render()
 {
     PollServer();
     if (current !is null && current.onRender !is null)
         current.onRender();
 }
+
 void OnDisabled()
 {
     StopServer();
+}
+namespace NoseposPlusBf
+{
+    // === Globals from Shweetz.as ===
+    uint iterations = 0;
+    bool debugPrint = false;
+
+    // === Globals from Common.as ===
+    array<string> modes = { "Point", "Speed", "Time", "Hold" };
+    int prevTime = 0;
+    auto best = CarState();
+    auto curr = CarState();
+
+    // === CarState class from Common.as ===
+    class CarState
+    {
+        int time = -1;
+        double angle = -1;
+        double distance = -1;
+        double speed = -1;
+        int airTime = 0;
+        int noseposUntil = 0;
+
+        void ResetForNewTick()
+        {
+            time = -1;
+            angle = -1;
+            distance = -1;
+            speed = -1;
+        }
+    }
+
+    // === Point class from Common.as ===
+    class Point
+    {
+        string pstr;
+        vec3 pvec;
+
+        Point()
+        {
+            str("0 0 0");
+        }
+
+        Point(const string &in s)
+        {
+            str(s);
+        }
+
+        void str(const string &in s)
+        {
+            pstr = s;
+            array<string>@ splits = s.Split(" ");
+            pvec = vec3(Text::ParseFloat(splits[0]), Text::ParseFloat(splits[1]), Text::ParseFloat(splits[2]));
+            pvec.y = Text::ParseFloat(splits[1]);
+            pvec.z = Text::ParseFloat(splits[2]);
+        }
+
+        void vec(const vec3 &in v)
+        {
+            pvec = v;
+        }
+
+        string toStr()
+        {
+            return "" + pvec.x + " " + pvec.y + " " + pvec.z;
+        }
+
+        vec3 toVec3()
+        {
+            return pvec;
+        }
+    }
+
+    // === Utility functions from Common.as ===
+    bool GetB(const string &in str)
+    {
+        return GetVariableBool(str);
+    }
+
+    double GetD(const string &in str)
+    {
+        return GetVariableDouble(str);
+    }
+
+    string GetS(const string &in str)
+    {
+        return GetVariableString(str);
+    }
+
+    void Print(string str)
+    {
+        if (debugPrint) {
+            print(str);
+        }
+    }
+
+    bool IsEvalTime(int raceTime)
+    {
+        return GetD("shweetz_eval_time_min") <= raceTime && raceTime <= GetD("shweetz_eval_time_max");
+    }
+
+    bool IsPastEvalTime(int raceTime)
+    {
+        return GetD("shweetz_eval_time_max") <= raceTime;
+    }
+
+    bool IsMaxTime(int raceTime)
+    {
+        return GetD("shweetz_eval_time_max") == raceTime;
+    }
+
+    double DistanceToPoint(const vec3 &in pos)
+    {
+        Point point(GetS("shweetz_point"));
+        return Math::Distance(pos, point.pvec);
+    }
+
+    int CountWheelsOnGround(SimulationManager@ simManager)
+    {
+        int count = 0;
+        auto@ state = simManager.SaveState();
+        if (state.Wheels.FrontLeft.RTState.HasGroundContact) count++;
+        if (state.Wheels.FrontRight.RTState.HasGroundContact) count++;
+        if (state.Wheels.BackRight.RTState.HasGroundContact) count++;
+        if (state.Wheels.BackLeft.RTState.HasGroundContact) count++;
+
+        return count;
+    }
+
+    bool IsInTrigger(const vec3 &in pos, const string &in var)
+    {
+        auto trigger = GetTriggerVar(var);
+        return trigger.ContainsPoint(pos);
+    }
+
+    bool IsInTrigger(const vec3 &in pos)
+    {
+        return IsInTrigger(pos, "shweetz_trigger_index");
+    }
+
+    Trigger3D GetTriggerVar(const string &in var)
+    {
+        uint triggerIndex = int(GetD(var));
+        return GetTriggerByIndex(triggerIndex - 1);
+    }
+
+    // === Conditions from Conditions.as ===
+    void UIConditions()
+    {
+        UI::SliderFloatVar("Min speed (km/h)", "shweetz_condition_speed", 0.0f, 1000.0f);
+        UI::InputIntVar("Min CP collected", "shweetz_min_cp", 1);
+        UI::SliderIntVar("Min wheels on ground", "shweetz_min_wheels_on_ground", 0, 4);
+        UI::SliderIntVar("Gear (0 to disable)", "shweetz_gear", -1, 6);
+
+        // Trigger
+        UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger_index", 1);
+        Trigger3D trigger = GetTriggerVar("shweetz_trigger_index");
+        if (trigger.Size.x != -1) {
+            vec3 pos2 = trigger.Position + trigger.Size;
+            UI::TextDimmed("The car must be in the trigger of coordinates: ");
+            UI::TextDimmed("" + trigger.Position.ToString() + " " + pos2.ToString());
+        }
+
+        // Anti-Trigger
+        UI::InputIntVar("Anti-Trigger index (0 to disable)", "shweetz_antitrigger_index", 1);
+        trigger = GetTriggerVar("shweetz_antitrigger_index");
+        if (trigger.Size.x != -1) {
+            vec3 pos2 = trigger.Position + trigger.Size;
+            UI::TextDimmed("The car must never hit the trigger of coordinates: ");
+            UI::TextDimmed("" + trigger.Position.ToString() + " " + pos2.ToString());
+        }
+
+        UI::Dummy( vec2(0, 25) );
+
+        UI::InputTimeVar("Tick to print if conditions are met (0 to disable)", "shweetz_debug");
+
+        UI::Dummy( vec2(0, 25) );
+    }
+
+    bool AreConditionsMet(SimulationManager@ simManager)
+    {
+        // Choose a tick to print if a condition failed
+        int debugTick = int(GetD("shweetz_debug"));
+
+        float speedKmh = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
+        if (speedKmh < GetD("shweetz_condition_speed")) {
+            if (simManager.TickTime == debugTick) { print("Condition speed too low: " + speedKmh + " < " + GetD("shweetz_condition_speed")); }
+            return false;
+        }
+
+        int cpCount = int(simManager.PlayerInfo.CurCheckpointCount);
+        if (cpCount < GetD("shweetz_min_cp")) {
+            if (simManager.TickTime == debugTick) { print("Condition CPs not reached: " + cpCount + " < " + GetD("shweetz_min_cp")); }
+            return false;
+        }
+
+        int wheelCount = CountWheelsOnGround(simManager);
+        if (wheelCount < GetD("shweetz_min_wheels_on_ground")) {
+            if (simManager.TickTime == debugTick) { print("Condition wheels not reached: " + wheelCount + " < " + GetD("shweetz_min_wheels_on_ground")); }
+            return false;
+        }
+
+        int gear = simManager.SceneVehicleCar.CarEngine.Gear;
+        if (GetD("shweetz_gear") > 0 && GetD("shweetz_gear") != gear) {
+            if (simManager.TickTime == debugTick) { print("Condition gear not reached: " + gear + " != " + GetD("shweetz_gear")); }
+            return false;
+        }
+
+        vec3 pos = simManager.Dyna.CurrentState.Location.Position;
+        if (GetD("shweetz_trigger_index") > 0 && !IsInTrigger(pos, "shweetz_trigger_index")) {
+            if (simManager.TickTime == debugTick) { print("Condition trigger not reached"); }
+            return false;
+        }
+
+        if (simManager.TickTime == debugTick) { print("Conditions OK"); }
+
+        return true;
+    }
+
+    bool IsForceReject(SimulationManager@ simManager)
+    {
+        int debugTick = int(GetD("shweetz_debug"));
+
+        vec3 pos = simManager.Dyna.CurrentState.Location.Position;
+        if (GetD("shweetz_antitrigger_index") > 0 && IsInTrigger(pos, "shweetz_antitrigger_index")) {
+            if (debugTick > 0) { print("Antitrigger hit at " + curr.time + ", reject iteration " + iterations); }
+            return true;
+        }
+
+        return false;
+    }
+
+    // === UI from BfNoseposPlus.as ===
+    void UIBfNosePos()
+    {
+        UINosePos();
+        UI::Separator();
+        UIConditions();
+    }
+
+    void UINosePos()
+    {
+        // Eval time
+        UI::InputTimeVar("Eval time min", "shweetz_eval_time_min");
+        UI::InputTimeVar("Eval time max", "shweetz_eval_time_max");
+
+        // eval max >= eval min
+        SetVariable("shweetz_eval_time_max", Math::Max(GetD("shweetz_eval_time_min"), GetD("shweetz_eval_time_max")));
+
+        if (GetD("bf_inputs_max_time") != 0) {
+            // inputs max < eval max
+            SetVariable("bf_inputs_max_time", Math::Min(GetD("bf_inputs_max_time"), GetD("shweetz_eval_time_max") - 10));
+
+            // inputs max >= inputs min
+            SetVariable("bf_inputs_max_time", Math::Max(GetD("bf_inputs_max_time"), GetD("bf_inputs_min_time")));
+        }
+
+        UI::Dummy( vec2(0, 25) );
+
+        UI::InputIntVar("Target yaw (°) (90 for left gs and uber, -90 for right)", "shweetz_yaw_deg", 1);
+        UI::InputIntVar("Target pitch (°) (85 to 90 for nosepos, 0 for gs, -25 for uber)", "shweetz_pitch_deg", 1);
+        UI::InputIntVar("Target roll (°) (usually 0)", "shweetz_roll_deg", 1);
+        UI::CheckboxVar("Accept any yaw for nosepos (uncheck for yaw bruteforce)", "shweetz_allow_yaw_180");
+
+        // Change eval
+        if (UI::CheckboxVar("Change eval after nosepos is good enough", "shweetz_next_eval_check"))
+        {
+            UI::TextDimmed("Good enough means angle can be some degrees off from ideal nosepos.");
+            UI::InputIntVar("Max angle from ideal (°)", "shweetz_angle_min_deg", 1);
+
+            UINextEval();
+        }
+
+        UI::Dummy( vec2(0, 25) );
+    }
+
+    void UINextEval()
+    {
+        string next_eval = GetS("shweetz_next_eval");
+        if (UI::BeginCombo("Next eval", next_eval)) {
+            for (uint i = 0; i < modes.Length; i++)
+            {
+                string currentMode = modes[i];
+                if (UI::Selectable(currentMode, next_eval == currentMode))
+                {
+                    SetVariable("shweetz_next_eval", currentMode);
+                }
+            }
+
+            UI::EndCombo();
+        }
+
+        if (next_eval == "Point") {
+            UI::DragFloat3Var("Point", "shweetz_point");
+            UI::SameLine();
+            if (UI::Button("Copy coordinates")) {
+                auto camera = GetCurrentCamera();
+                if (@camera != null) {
+                    SetVariable("shweetz_point", camera.Location.Position.ToString());
+                }
+            }
+        }
+    }
+
+    // === Evaluation logic from BfNoseposPlus.as ===
+    BFEvaluationResponse@ OnEvaluateNosePos(SimulationManager@ simManager, const BFEvaluationInfo&in info)
+    {
+        int raceTime = simManager.TickTime;
+        prevTime = raceTime;
+
+        if (info.Rewinded) {
+            curr = CarState();
+        } else {
+            curr.ResetForNewTick();
+        }
+        curr.time = raceTime;
+
+        iterations = info.Iterations;
+
+        auto resp = BFEvaluationResponse();
+        resp.Decision = BFEvaluationDecision::DoNothing;
+
+        if (GetS("shweetz_next_eval") == "Hold") {
+            if (info.Phase == BFPhase::Initial) {
+                if (IsPastEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
+                    best = curr;
+                    PrintGreenTextNosePos(best);
+                }
+            }
+            else {
+                if (IsPastEvalTime(raceTime)) {
+                    if (IsBetterNosePos(simManager, curr)) {
+                        resp.Decision = BFEvaluationDecision::Accept;
+                        return resp;
+                    }
+                    if (!IsNosePos(simManager)) {
+                        resp.Decision = BFEvaluationDecision::Reject;
+                        return resp;
+                    }
+                }
+            }
+        }
+        else {
+            if (info.Phase == BFPhase::Initial) {
+                if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
+                    best = curr;
+                }
+
+                if (IsMaxTime(raceTime)) {
+                    PrintGreenTextNosePos(best);
+                }
+            }
+            else {
+                if (IsEvalTime(raceTime)) {
+                    if (IsForceReject(simManager)) {
+                        resp.Decision = BFEvaluationDecision::Reject;
+                        return resp;
+                    }
+                    if (IsBetterNosePos(simManager, curr)) {
+                        resp.Decision = BFEvaluationDecision::Accept;
+                        return resp;
+                    }
+                }
+
+                if (IsPastEvalTime(raceTime)) {
+                    resp.Decision = BFEvaluationDecision::Reject;
+                    return resp;
+                }
+            }
+        }
+
+        return resp;
+    }
+
+    /**
+     * Project an angle in degrees in [-180; 180[
+     */
+    double AngleProject180To180Deg(double angle_deg)
+    {
+        while (angle_deg < -180) {
+            angle_deg += 360;
+        }
+        while (angle_deg >= 180) {
+            angle_deg -= 360;
+        }
+        return angle_deg;
+    }
+
+    double ComputeCarAngleToTarget(SimulationManager@ simManager)
+    {
+        // Get values
+        vec3 speedVec = simManager.Dyna.CurrentState.LinearSpeed;
+        float carYaw, carPit, carRol;
+        simManager.Dyna.CurrentState.Location.Rotation.GetYawPitchRoll(carYaw, carPit, carRol);
+
+        // Do calculations
+        double targetYaw = GetD("shweetz_yaw_deg") + Math::ToDeg(Math::Atan2(speedVec.x, speedVec.z));
+        double targetPit = GetD("shweetz_pitch_deg");
+        double targetRol = GetD("shweetz_roll_deg");
+        targetYaw = AngleProject180To180Deg(targetYaw);
+        targetPit = AngleProject180To180Deg(targetPit);
+        targetRol = AngleProject180To180Deg(targetRol);
+
+        double diffYaw = Math::Abs(Math::ToDeg(carYaw) - targetYaw);
+        double diffPit = Math::Abs(Math::ToDeg(carPit) - targetPit);
+        double diffRol = Math::Abs(Math::ToDeg(carRol) - targetRol);
+        diffYaw = diffYaw > 180 ? 360 - diffYaw : diffYaw;
+        diffPit = diffPit > 180 ? 360 - diffPit : diffPit;
+        diffRol = diffRol > 180 ? 360 - diffRol : diffRol;
+
+        if (GetB("shweetz_allow_yaw_180")) {
+            diffYaw = Math::Max(diffYaw - 90, 0.0);
+        }
+
+        return diffYaw + diffPit + diffRol;
+    }
+
+    bool IsNosePos(SimulationManager@ simManager)
+    {
+        // Conditions
+        if (!AreConditionsMet(simManager)) {
+            return false;
+        }
+
+        return ComputeCarAngleToTarget(simManager) < GetD("shweetz_angle_min_deg");
+    }
+
+    bool IsBetterNosePos(SimulationManager@ simManager, CarState& curr)
+    {
+        Print("IsBetterNosePos");
+
+        // Conditions
+        if (!AreConditionsMet(simManager)) {
+            return false;
+        }
+
+        // Get values
+        vec3 pos = simManager.Dyna.CurrentState.Location.Position;
+        float speedKmh = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
+
+        curr.angle = ComputeCarAngleToTarget(simManager);
+        curr.distance = DistanceToPoint(pos);
+        curr.speed = Math::Min(speedKmh, 1000);
+        if (IsNosePos(simManager)) {
+            if (curr.noseposUntil == 0 || curr.noseposUntil == curr.time - 10) {
+                curr.noseposUntil = curr.time;
+            }
+        }
+
+        if (best.distance == -1) {
+            // Base run (past conditions)
+            return true;
+        }
+
+        if (GetB("shweetz_next_eval_check")) {
+            if (best.angle < GetD("shweetz_angle_min_deg") && curr.angle < GetD("shweetz_angle_min_deg")) {
+                // Best and current have a good angle, now check next eval
+                if (GetS("shweetz_next_eval") == "Point") {
+                    return curr.distance < best.distance;
+                }
+                if (GetS("shweetz_next_eval") == "Speed") {
+                    return curr.speed > best.speed;
+                }
+                if (GetS("shweetz_next_eval") == "Time") {
+                    return curr.time < best.time;
+                }
+            }
+            if (GetS("shweetz_next_eval") == "Hold") {
+                return curr.noseposUntil > best.noseposUntil;
+            }
+        }
+        Print("" + curr.angle + " vs " + best.angle);
+        return curr.angle < best.angle;
+    }
+
+    void PrintGreenTextNosePos(CarState best)
+    {
+        string greenText = "base at " + best.time + ": angle=" + best.angle;
+        if (GetS("shweetz_next_eval") == "Point") greenText += ", Distance=" + best.distance;
+        if (GetS("shweetz_next_eval") == "Speed") greenText += ", Speed=" + best.speed;
+        greenText += ", Iteration=" + iterations;
+        print(greenText);
+    }
+
+    // === OnSimBegin (BF-relevant reset only) ===
+    void OnSimBegin(SimulationManager@ simManager)
+    {
+        prevTime = 0;
+        best = CarState();
+    }
+
+    // === RegisterVariables (BF-relevant only) ===
+    void RegisterVariables()
+    {
+        RegisterVariable("shweetz_eval_time_min", 0);
+        RegisterVariable("shweetz_eval_time_max", 10000);
+        RegisterVariable("shweetz_next_eval_check", false);
+        RegisterVariable("shweetz_next_eval", modes[0]);
+        RegisterVariable("shweetz_point", "0 0 0");
+        RegisterVariable("shweetz_angle_min_deg", 10);
+        RegisterVariable("shweetz_yaw_deg", 0);
+        RegisterVariable("shweetz_pitch_deg", 85);
+        RegisterVariable("shweetz_roll_deg", 0);
+        RegisterVariable("shweetz_allow_yaw_180", true);
+
+        // Conditions
+        RegisterVariable("shweetz_condition_speed", 0);
+        RegisterVariable("shweetz_min_cp", 0);
+        RegisterVariable("shweetz_min_wheels_on_ground", 0);
+        RegisterVariable("shweetz_gear", -1);
+        RegisterVariable("shweetz_trigger_index", 0);
+        RegisterVariable("shweetz_antitrigger_index", 0);
+        RegisterVariable("shweetz_debug", 0);
+    }
+
+    // === Main (BfV2 pattern) ===
+    void Main()
+    {
+        RegisterVariables();
+        auto eval = RegisterBruteforceEval("nosepos_plus", "Nosepos+", OnEvaluateNosePos, UIBfNosePos);
+        @eval.onSimBegin = @OnSimBegin;
+    }
 }
 namespace PreciseCheckpointBf
 {
@@ -6043,19 +10094,6 @@ namespace PreciseFinishBf
                     PreciseFinish::Reset();
                     return resp;
                 }
-                if (simManager.PlayerInfo.RaceFinished && raceTime < bestTimeMsImprecise)
-                {
-                    if (GlobalConditionsMet(simManager))
-                    {
-                        resp.Decision = BFEvaluationDecision::Accept;
-                    }
-                    else
-                    {
-                        resp.Decision = BFEvaluationDecision::Reject;
-                    }
-                    PreciseFinish::Reset();
-                    return resp;
-                }
             }
         }
         bool targetReached = simManager.PlayerInfo.RaceFinished;
@@ -6113,6 +10151,16 @@ namespace PreciseFinishBf
         }
         else
         {
+            // Reject imprecise times (5+ zeroes after centisecond place)
+            double scaled = preciseTime * 10000.0;
+            double frac = scaled - int64(scaled);
+            if (frac < 0) frac = -frac;
+            if (frac < 1e-5 || frac > (1.0 - 1e-5))
+            {
+                resp.Decision = BFEvaluationDecision::Reject;
+                PreciseFinish::Reset();
+                return resp;
+            }
             if (!baseRunFinished)
             {
                 // First finish found in all-or-nothing mode
