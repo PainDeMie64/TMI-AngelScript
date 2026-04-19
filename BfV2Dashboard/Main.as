@@ -5,10 +5,6 @@ const uint16 WORKER_PORT_END = 8520;
 bool isMaster = false;
 uint16 localPort = 0;
 uint instancePid = 0;
-uint64 lastHeartbeatTime = 0;
-uint consecutiveHeartbeatFailures = 0;
-const uint HEARTBEAT_INTERVAL_MS = 5000;
-const uint MAX_HEARTBEAT_FAILURES = 3;
 
 PluginInfo @GetPluginInfo()
 {
@@ -37,18 +33,6 @@ void RegisterCommonRoutes()
     RegisterRoute("POST", "/api/bf/delete-session", HandleDeleteSession);
     RegisterRoute("POST", "/api/bf/set-batch", HandlePostSetBatch);
     RegisterRoute("GET", "/api/map", HandleGetMap);
-}
-
-void RegisterMasterRoutes()
-{
-    RegisterRoute("GET", "/api/instances", HandleGetInstances);
-    RegisterRoute("POST", "/api/internal/register", HandleInternalRegister);
-    RegisterRoute("GET", "/", HandleBfDashboard);
-}
-
-void RegisterWorkerRoutes()
-{
-    RegisterRoute("GET", "/", HandleWorkerRedirect);
 }
 
 void Main()
@@ -119,96 +103,39 @@ void Main()
     RegisterSettingsPage("Scripting Docs", ScriptingReference::Render);
 
     instancePid = IO::GetCurrentProcessId();
-    SetupAsRole();
-}
 
-void SetupAsRole()
-{
+    // Try master port first, then worker ports
     routes.Resize(0);
-    isMaster = false;
-
     RegisterCommonRoutes();
-    RegisterMasterRoutes();
+    RegisterRoute("GET", "/", HandleBfDashboard);
     StartServer("127.0.0.1", MASTER_PORT);
     if (@listenSock !is null)
     {
         isMaster = true;
         localPort = MASTER_PORT;
-        RegisterInstance(instancePid, MASTER_PORT);
-        log("BfV2Dashboard: MASTER on port " + Text::FormatUInt(MASTER_PORT) + " (PID " + Text::FormatUInt(instancePid) + ")");
+        log("BfV2Dashboard: Listening on port " + Text::FormatUInt(MASTER_PORT) + " (PID " + Text::FormatUInt(instancePid) + ")");
         return;
     }
 
     routes.Resize(0);
     RegisterCommonRoutes();
-    RegisterWorkerRoutes();
+    RegisterRoute("GET", "/", HandleWorkerRedirect);
     for (uint16 p = WORKER_PORT_START; p <= WORKER_PORT_END; p++)
     {
         StartServer("127.0.0.1", p);
         if (@listenSock !is null)
         {
             localPort = p;
-            log("BfV2Dashboard: Worker on port " + Text::FormatUInt(localPort) + " (PID " + Text::FormatUInt(instancePid) + ")");
+            log("BfV2Dashboard: Listening on port " + Text::FormatUInt(localPort) + " (PID " + Text::FormatUInt(instancePid) + ")");
             return;
         }
     }
-    log("BfV2Dashboard: No free port found (8489-" + Text::FormatUInt(WORKER_PORT_END) + " all taken)");
-}
-
-void SendHeartbeat()
-{
-    Net::Socket@ sock = Net::Socket();
-    if (sock.Connect("127.0.0.1", MASTER_PORT, 2000))
-    {
-        string body = "pid=" + Text::FormatUInt(instancePid) + "&port=" + Text::FormatUInt(localPort);
-        string req = "POST /api/internal/register HTTP/1.1\r\n";
-        req += "Host: 127.0.0.1\r\n";
-        req += "Content-Length: " + Text::FormatUInt(body.Length) + "\r\n";
-        req += "Connection: close\r\n\r\n";
-        req += body;
-        if (sock.Write(req))
-        {
-            consecutiveHeartbeatFailures = 0;
-            log("BfV2Dashboard: Heartbeat sent to master");
-        }
-        else
-        {
-            consecutiveHeartbeatFailures++;
-            log("BfV2Dashboard: Heartbeat write failed (" + Text::FormatUInt(consecutiveHeartbeatFailures) + "/" + Text::FormatUInt(MAX_HEARTBEAT_FAILURES) + ")");
-        }
-    }
-    else
-    {
-        consecutiveHeartbeatFailures++;
-        log("BfV2Dashboard: Heartbeat connect failed (" + Text::FormatUInt(consecutiveHeartbeatFailures) + "/" + Text::FormatUInt(MAX_HEARTBEAT_FAILURES) + ")");
-    }
-
-    if (consecutiveHeartbeatFailures >= MAX_HEARTBEAT_FAILURES)
-    {
-        log("BfV2Dashboard: Master unreachable, attempting promotion...");
-        StopServer();
-        SetupAsRole();
-        consecutiveHeartbeatFailures = 0;
-    }
+    log("BfV2Dashboard: No free port found");
 }
 
 void Render()
 {
     PollServer();
-
-    if (!isMaster && localPort > 0)
-    {
-        uint64 now = Time::Now;
-        if (now - lastHeartbeatTime >= HEARTBEAT_INTERVAL_MS)
-        {
-            lastHeartbeatTime = now;
-            SendHeartbeat();
-        }
-    }
-
-    if (isMaster)
-        CleanStaleInstances();
-
     if (current !is null && current.onRender !is null)
         current.onRender();
 }

@@ -489,15 +489,28 @@ string BfDashJS_Status()
     j += "}).catch(function(){});}";
     j += "loadMap();setInterval(loadMap,10000);";
 
-    // Multi-instance support
-    j += "function pollInstances(){";
-    j += "fetch('/api/instances').then(function(r){return r.json();}).then(function(arr){";
-    j += "instances=arr;";
-    j += "if(activeInstancePort===0&&instances.length>0){";
-    j += "activeInstancePort=instances[0].port;";
-    j += "apiBase=instances[0].isSelf?'':'http://localhost:'+instances[0].port;}";
-    j += "renderInstances();";
-    j += "}).catch(function(){});}";
+    // Multi-instance: browser probes all ports to discover instances
+    j += "var SCAN_START=8489,SCAN_END=8520;";
+
+    j += "function scanInstances(){";
+    j += "var found=[];var pending=SCAN_END-SCAN_START+1;";
+    j += "for(var p=SCAN_START;p<=SCAN_END;p++){";
+    j += "(function(port){";
+    j += "var ctrl=new AbortController();var t=setTimeout(function(){ctrl.abort();},500);";
+    j += "fetch('http://localhost:'+port+'/api/bf/status',{signal:ctrl.signal})";
+    j += ".then(function(r){clearTimeout(t);return r.json();})";
+    j += ".then(function(d){found.push({port:port,target:d.target||'-',running:d.running});})";
+    j += ".catch(function(){clearTimeout(t);})";
+    j += ".finally(function(){pending--;if(pending===0)onScanDone(found);});";
+    j += "})(p);}}";
+
+    j += "function onScanDone(found){";
+    j += "found.sort(function(a,b){return a.port-b.port;});";
+    j += "instances=found;";
+    j += "if(activeInstancePort===0&&found.length>0){";
+    j += "activeInstancePort=found[0].port;";
+    j += "apiBase='http://localhost:'+found[0].port;}";
+    j += "renderInstances();}";
 
     j += "function renderInstances(){";
     j += "var bar=document.getElementById('instanceBar');";
@@ -508,7 +521,8 @@ string BfDashJS_Status()
     j += "(function(inst,idx){";
     j += "var btn=document.createElement('button');";
     j += "btn.className='inst-btn'+(activeInstancePort===inst.port?' active':'');";
-    j += "btn.textContent='Instance '+(idx+1)+(inst.isSelf?' (master)':'')+' :'+inst.port;";
+    j += "var lbl=inst.running?'BF: '+inst.target:'Idle';";
+    j += "btn.textContent='Instance '+(idx+1)+' :'+inst.port+' ('+lbl+')';";
     j += "btn.addEventListener('click',function(){switchInstance(inst.port);});";
     j += "bar.appendChild(btn);";
     j += "})(instances[i],i);}}";
@@ -527,7 +541,7 @@ string BfDashJS_Status()
     j += "prevSlotAlgos:prevSlotAlgos,";
     j += "lastSlotCount:lastSlotCount};}";
     j += "activeInstancePort=port;";
-    j += "apiBase=(port===instances[0].port&&instances[0].isSelf)?'':'http://localhost:'+port;";
+    j += "apiBase='http://localhost:'+port;";
     j += "var saved=perInstanceState[port];";
     j += "if(saved){";
     j += "dirtyVars=saved.dirtyVars;";
@@ -560,7 +574,7 @@ string BfDashJS_Status()
     j += "loadSessionData();";
     j += "loadMap();}";
 
-    j += "setInterval(pollInstances,2000);pollInstances();";
+    j += "setInterval(scanInstances,3000);scanInstances();";
 
     return j;
 }
