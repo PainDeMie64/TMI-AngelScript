@@ -396,8 +396,8 @@ string BfDashJS_Helpers()
     j += "function mkRange(varName,min,max,step){";
     j += "var wrap=document.createElement('div');wrap.className='range-wrap';";
     j += "var inp=document.createElement('input');inp.type='range';inp.setAttribute('data-var',varName);";
-    j += "inp.min=min;inp.max=max;inp.step=step||'1';";
-    j += "var sp=document.createElement('span');sp.className='range-val';sp.textContent='0';";
+    j += "inp.min=min;inp.max=max;inp.step=step||'1';inp.value=min;";
+    j += "var sp=document.createElement('span');sp.className='range-val';sp.textContent=String(min);";
     j += "inp.addEventListener('input',function(){sp.textContent=this.value;});";
     j += "inp.addEventListener('change',function(){setVar(varName,this.value);});";
     j += "wrap.appendChild(inp);wrap.appendChild(sp);return wrap;}";
