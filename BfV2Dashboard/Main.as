@@ -78,9 +78,14 @@ void Main()
     RegisterRoute("GET", "/api/bf/log", HandleGetBfLog);
     RegisterRoute("GET", "/api/bf/improvements", HandleGetBfImprovements);
     RegisterRoute("GET", "/api/bf/settings", HandleGetBfSettings);
+    RegisterRoute("GET", "/api/bf/all-settings", HandleGetAllSettings);
     RegisterRoute("GET", "/api/bf/sessions", HandleGetBfSessions);
     RegisterRoute("GET", "/api/bf/session-log", HandleGetSessionLog);
     RegisterRoute("GET", "/api/bf/session-imp", HandleGetSessionImp);
+    RegisterRoute("POST", "/api/bf/set", HandlePostSetVar);
+    RegisterRoute("POST", "/api/bf/add-slot", HandlePostAddSlot);
+    RegisterRoute("POST", "/api/bf/remove-slot", HandlePostRemoveSlot);
+    RegisterRoute("POST", "/api/bf/copy-position", HandleCopyPosition);
     RegisterRoute("GET", "/api/map", HandleGetMap);
     RegisterRoute("GET", "/", HandleBfDashboard);
     StartServer("127.0.0.1", 8081);
