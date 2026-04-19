@@ -8,7 +8,20 @@ string HandleBfDashboard(const string &in body)
     h += "</head><body>";
     h += "<header><h1>BfV2 Dashboard</h1><span id='conn' class='badge'>Connecting...</span></header>";
     h += "<main>";
+
+    // Live Bruteforce panel (wide, always visible, at the very top)
+    h += "<section class='panel wide' id='liveBf'>";
+    h += "<h2>Live Bruteforce</h2>";
+    h += "<div id='liveCards' class='live-cards'></div>";
+    h += "<p id='liveEmpty' class='hint' style='color:#8b949e;padding:0.5rem 0;'>No instances currently running bruteforce.</p>";
+    h += "</section>";
+
+    // Instance switcher
+    h += "<div class='instance-switcher'>";
+    h += "<span class='instance-label'>Viewing instance:</span>";
     h += "<div id='instanceBar' class='instance-bar'></div>";
+    h += "<p class='instance-hint'>Switching changes all panels below (Status, Settings, Sessions, etc.)</p>";
+    h += "</div>";
 
     // Status panel
     h += "<section class='panel' id='status'>";
@@ -80,13 +93,6 @@ string HandleBfDashboard(const string &in body)
     h += "<button id='btnAddSlot' class='btn-action'>+ Add Slot</button>";
     h += "</div></details>";
 
-    h += "</section>";
-
-    // Live Bruteforce panel (wide, always visible)
-    h += "<section class='panel wide' id='liveBf'>";
-    h += "<h2>Live Bruteforce</h2>";
-    h += "<div id='liveCards' class='live-cards'></div>";
-    h += "<p id='liveEmpty' class='hint' style='color:#8b949e;padding:0.5rem 0;'>No instances currently running bruteforce.</p>";
     h += "</section>";
 
     // Past Sessions panel (wide)
@@ -240,7 +246,10 @@ string BfDashCSS()
     c += ".tab-del { background:none; border:none; color:#8b949e; font-size:0.7rem; cursor:pointer; margin-left:0.3rem; padding:0 0.2rem; line-height:1; }";
     c += ".tab-del:hover { color:#f85149; }";
 
-    c += ".instance-bar { display:flex; gap:0.3rem; margin-bottom:1rem; grid-column:1/-1; flex-wrap:wrap; }";
+    c += ".instance-switcher{grid-column:1/-1;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:0.8rem 1.2rem;margin-bottom:0}";
+    c += ".instance-label{color:#f0883e;font-weight:600;font-size:0.85rem;display:block;margin-bottom:0.4rem}";
+    c += ".instance-hint{color:#8b949e;font-size:0.7rem;margin-top:0.3rem;font-style:italic}";
+    c += ".instance-bar{display:flex;gap:0.3rem;flex-wrap:wrap}";
     c += ".inst-btn { background:#21262d; color:#8b949e; border:1px solid #30363d; padding:0.4rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem; }";
     c += ".inst-btn:hover { background:#30363d; }";
     c += ".inst-btn.active { background:#f0883e20; color:#f0883e; border-color:#f0883e40; }";
