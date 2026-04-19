@@ -641,6 +641,41 @@ string BfDashJS_Helpers()
     j += "setVar('finetuner_common_groups',ser);});";
     j += "gaRow.appendChild(gaCb);detail.appendChild(gaRow);";
 
+    // Bulk action buttons: Reset All, Toggle All, Activate All
+    j += "var bulkRow=document.createElement('div');bulkRow.className='ge-row';";
+    j += "var btnResetAll=document.createElement('button');btnResetAll.className='btn-sm';btnResetAll.textContent='Reset All';";
+    j += "btnResetAll.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=false;ss[idx].upper=false;ss[idx].displayLower=0;ss[idx].valueLower=0;ss[idx].displayUpper=0;ss[idx].valueUpper=0;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "bulkRow.appendChild(btnResetAll);";
+    j += "var btnToggleAll=document.createElement('button');btnToggleAll.className='btn-sm';btnToggleAll.textContent='Toggle All';";
+    j += "btnToggleAll.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=!ss[idx].lower;ss[idx].upper=!ss[idx].upper;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "bulkRow.appendChild(btnToggleAll);";
+    j += "var btnActivateAll=document.createElement('button');btnActivateAll.className='btn-sm';btnActivateAll.textContent='Activate All';";
+    j += "btnActivateAll.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=true;ss[idx].upper=true;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "bulkRow.appendChild(btnActivateAll);";
+    j += "detail.appendChild(bulkRow);";
+
+    // Copy Vehicle Position button (only for Position group, index 0)
+    j += "if(gi===0){";
+    j += "var cpRow=document.createElement('div');cpRow.className='ge-row';";
+    j += "var btnCopyPos=document.createElement('button');btnCopyPos.className='btn-sm';btnCopyPos.textContent='Copy Vehicle Position';";
+    j += "btnCopyPos.addEventListener('click',function(){";
+    j += "fetch(apiBase+'/api/bf/copy-position',{method:'POST'}).then(function(r){return r.json();}).then(function(d){";
+    j += "if(d.vehiclePosition){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "var coords=[d.vehiclePosition.x,d.vehiclePosition.y,d.vehiclePosition.z];";
+    j += "for(var k=0;k<3;k++){var idx=gi*3+k;ss[idx].lower=true;ss[idx].upper=true;ss[idx].displayLower=coords[k]-2;ss[idx].valueLower=coords[k]-2;ss[idx].displayUpper=coords[k]+2;ss[idx].valueUpper=coords[k]+2;}";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);}});});";
+    j += "cpRow.appendChild(btnCopyPos);detail.appendChild(cpRow);}";
+
     // Scalars for this group (3 per group, at indices gi*3 .. gi*3+2)
     j += "for(var si=0;si<3;si++){";
     j += "(function(si){";
@@ -649,6 +684,14 @@ string BfDashJS_Helpers()
     j += "var scDiv=document.createElement('div');scDiv.className='ge-scalar';";
     j += "var scName=document.createElement('div');scName.className='ge-scalar-name';scName.textContent=GE_SCALARS[scIdx];";
     j += "scDiv.appendChild(scName);";
+
+    // Per-scalar Reset button
+    j += "var scResetBtn=document.createElement('button');scResetBtn.className='btn-sm';scResetBtn.textContent='Reset';scResetBtn.style.marginBottom='0.3rem';";
+    j += "scResetBtn.addEventListener('click',function(){";
+    j += "var ss=geParseScalars(es.finetuner_common_scalars||'');";
+    j += "ss[scIdx].lower=false;ss[scIdx].upper=false;ss[scIdx].displayLower=0;ss[scIdx].valueLower=0;ss[scIdx].displayUpper=0;ss[scIdx].valueUpper=0;";
+    j += "var ser=geSerializeScalars(ss);es.finetuner_common_scalars=ser;setVar('finetuner_common_scalars',ser);renderGroupEditor(es);});";
+    j += "scDiv.appendChild(scResetBtn);";
 
     // Lower bound row
     j += "var lbRow=document.createElement('div');lbRow.className='ge-bound';";
@@ -709,6 +752,8 @@ string BfDashJS_Helpers()
     // Store the latest evalSettings ref for group/condition editor refresh from updateEvalValues
     j += "var geLastEs=null;";
     j += "var ceLastEs=null;";
+    // Finetuner grouped visibility function (assigned in buildEvalFields finetuner block)
+    j += "var updateFtGroupedVisibility=null;";
 
     // ---- Condition Editor globals ----
     // Constants: condition names (must match FinetunerBf.as ConditionKind enum exactly)
@@ -1174,15 +1219,79 @@ string BfDashJS_Settings()
     j += "if(t==='finetuner'){";
     j += "c.appendChild(mkFieldRow('Evaluate From',mkTime('finetuner_eval_from')));";
     j += "c.appendChild(mkFieldRow('Evaluate To',mkTime('finetuner_eval_to')));";
-    j += "var chkGrp=mkCheck('finetuner_target_grouped');c.appendChild(mkFieldRow('Grouped Target?',chkGrp));";
+    j += "var chkGrp=mkCheck('finetuner_target_grouped','Grouped Target?');chkGrp.querySelector('input').id='ftGroupedChk';c.appendChild(chkGrp);";
+
+    // Grouped-specific fields wrapper
+    j += "var ftGrpDiv=document.createElement('div');ftGrpDiv.id='ftGroupedFields';";
     j += "var grpOpts=[{value:'0',text:'Position'},{value:'1',text:'Rotation'},{value:'2',text:'Global Speed'},{value:'3',text:'Local Speed'},{value:'4',text:'Front Left Wheel'},{value:'5',text:'Front Right Wheel'},{value:'6',text:'Back Right Wheel'},{value:'7',text:'Back Left Wheel'}];";
-    j += "c.appendChild(mkFieldRow('Target (Group)',mkSelect('finetuner_target_group',grpOpts)));";
+    j += "ftGrpDiv.appendChild(mkFieldRow('Target (Group)',mkSelect('finetuner_target_group',grpOpts)));";
+
+    // Scalar-specific fields wrapper
+    j += "var ftSclDiv=document.createElement('div');ftSclDiv.id='ftScalarFields';";
     j += "var sclOpts=[{value:'0',text:'X Position'},{value:'1',text:'Y Position'},{value:'2',text:'Z Position'},{value:'3',text:'Yaw'},{value:'4',text:'Pitch'},{value:'5',text:'Roll'},{value:'6',text:'Global X Speed'},{value:'7',text:'Global Y Speed'},{value:'8',text:'Global Z Speed'},{value:'9',text:'Local X Speed (Sideways)'},{value:'10',text:'Local Y Speed (Upwards)'},{value:'11',text:'Local Z Speed (Forwards)'},{value:'12',text:'X Front Left Wheel'},{value:'13',text:'Y Front Left Wheel'},{value:'14',text:'Z Front Left Wheel'},{value:'15',text:'X Front Right Wheel'},{value:'16',text:'Y Front Right Wheel'},{value:'17',text:'Z Front Right Wheel'},{value:'18',text:'X Back Right Wheel'},{value:'19',text:'Y Back Right Wheel'},{value:'20',text:'Z Back Right Wheel'},{value:'21',text:'X Back Left Wheel'},{value:'22',text:'Y Back Left Wheel'},{value:'23',text:'Z Back Left Wheel'}];";
-    j += "c.appendChild(mkFieldRow('Target (Scalar)',mkSelect('finetuner_target_scalar',sclOpts)));";
+    j += "ftSclDiv.appendChild(mkFieldRow('Target (Scalar)',mkSelect('finetuner_target_scalar',sclOpts)));";
+
+    // Target Towards (shared)
     j += "c.appendChild(mkFieldRow('Target Towards',mkRange('finetuner_target_towards',-1,1,1)));";
-    j += "c.appendChild(mkFieldRow('Target Value',mkNum('finetuner_target_value_display',null,null,0.1)));";
-    j += "c.appendChild(mkFieldRow('Target Values',mkVec3('finetuner_target_vec3_display',true),true));";
-    j += "var chkPrint=mkCheck('finetuner_print_by_component');c.appendChild(mkFieldRow('Print Group values by component?',chkPrint));";
+    // Dynamic hint under Target Towards
+    j += "var ftTowardsHint=document.createElement('span');ftTowardsHint.id='ftTowardsHint';ftTowardsHint.style.color='#8b949e';ftTowardsHint.style.fontSize='0.75rem';ftTowardsHint.style.display='block';ftTowardsHint.style.marginBottom='0.3rem';c.appendChild(ftTowardsHint);";
+
+    // Rotation warning
+    j += "var ftRotWarn=document.createElement('span');ftRotWarn.id='ftRotationWarn';ftRotWarn.style.color='#8b949e';ftRotWarn.style.fontSize='0.75rem';ftRotWarn.style.fontStyle='italic';ftRotWarn.style.display='none';ftRotWarn.style.marginBottom='0.3rem';ftRotWarn.textContent='WARNING: using grouped rotation is not recommended.';c.appendChild(ftRotWarn);";
+
+    // Scalar target value
+    j += "var ftTargetValRow=mkFieldRow('Target Value',mkNum('finetuner_target_value_display',null,null,0.1));ftTargetValRow.id='ftTargetValRow';ftSclDiv.appendChild(ftTargetValRow);";
+    j += "c.appendChild(ftSclDiv);";
+
+    // Grouped target values
+    j += "var ftTargetVecRow=mkFieldRow('Target Values',mkVec3('finetuner_target_vec3_display',false),true);ftTargetVecRow.id='ftTargetVecRow';ftGrpDiv.appendChild(ftTargetVecRow);";
+    // Print by component with tooltip
+    j += "var chkPrint=mkCheck('finetuner_print_by_component','Print By Component');";
+    j += "var printLabel=chkPrint.querySelector('label');";
+    j += "printLabel.setAttribute('title','Whether the values of the target group are to be printed by component (e.g. x y z), or as one value.');";
+    j += "var infoSpan=document.createElement('span');infoSpan.textContent=' (i)';infoSpan.style.color='#8b949e';infoSpan.style.cursor='help';infoSpan.setAttribute('title','Whether the values of the target group are to be printed by component (e.g. x y z), or as one value.');printLabel.appendChild(infoSpan);";
+    j += "ftGrpDiv.appendChild(chkPrint);";
+    j += "c.appendChild(ftGrpDiv);";
+
+    // Visibility function for grouped/scalar toggle and target towards disabled state (assigned to outer-scope var)
+    j += "updateFtGroupedVisibility=function(){";
+    j += "var chk=document.getElementById('ftGroupedChk');if(!chk)return;";
+    j += "var isGrouped=chk.checked;";
+    j += "var grpDiv=document.getElementById('ftGroupedFields');";
+    j += "var sclDiv=document.getElementById('ftScalarFields');";
+    j += "if(grpDiv)grpDiv.style.display=isGrouped?'':'none';";
+    j += "if(sclDiv)sclDiv.style.display=isGrouped?'none':'';";
+    // Update towards hint
+    j += "var towardsEl=document.querySelector('[data-var=\"finetuner_target_towards\"]');";
+    j += "var hint=document.getElementById('ftTowardsHint');";
+    j += "if(towardsEl&&hint){var tv=parseInt(towardsEl.value,10);";
+    j += "if(tv===-1)hint.textContent='Lower value is better.';";
+    j += "else if(tv===1)hint.textContent='Higher value is better.';";
+    j += "else hint.textContent='Custom:';}";
+    // Disable target value/vec3 when towards is -1 or 1
+    j += "var tv2=towardsEl?parseInt(towardsEl.value,10):0;";
+    j += "var disableTargets=(tv2===-1||tv2===1);";
+    j += "var sclInp=document.querySelector('#ftTargetValRow input[type=number]');";
+    j += "if(sclInp)sclInp.disabled=disableTargets;";
+    j += "var vecInps=document.querySelectorAll('#ftTargetVecRow input[type=number]');";
+    j += "for(var vi=0;vi<vecInps.length;vi++)vecInps[vi].disabled=disableTargets;";
+    // Rotation warning
+    j += "var rotWarn=document.getElementById('ftRotationWarn');";
+    j += "var grpSel=document.querySelector('[data-var=\"finetuner_target_group\"]');";
+    j += "if(rotWarn&&grpSel)rotWarn.style.display=(isGrouped&&grpSel.value==='1')?'block':'none';";
+    j += "};";
+
+    // Wire grouped checkbox to update visibility
+    j += "var ftGrpCb=document.getElementById('ftGroupedChk');";
+    j += "ftGrpCb.addEventListener('change',function(){updateFtGroupedVisibility();});";
+    // Wire towards slider to update hint+disabled
+    j += "var ftTowardsInp=document.querySelector('[data-var=\"finetuner_target_towards\"]');";
+    j += "if(ftTowardsInp){ftTowardsInp.addEventListener('input',function(){updateFtGroupedVisibility();});ftTowardsInp.addEventListener('change',function(){updateFtGroupedVisibility();});}";
+    // Wire group select to update rotation warning
+    j += "var ftGrpSel=document.querySelector('[data-var=\"finetuner_target_group\"]');";
+    j += "if(ftGrpSel)ftGrpSel.addEventListener('change',function(){updateFtGroupedVisibility();});";
+    // Initial call
+    j += "updateFtGroupedVisibility();";
 
     // ---- Group Editor DOM ----
     j += "var geWrap=document.createElement('div');geWrap.className='ge-wrap';";
@@ -1305,6 +1414,8 @@ string BfDashJS_Settings()
     j += "if(document.getElementById('ceDetail')){ceLastEs=es;if(!document.getElementById('ceDetail').contains(document.activeElement)){renderConditionEditor(es);}}";
     // Refresh NoseposPlus conditional block
     j += "if(document.getElementById('npCondBlock')){updateNpCondBlock(es);}";
+    // Refresh finetuner grouped visibility and hints
+    j += "if(updateFtGroupedVisibility)updateFtGroupedVisibility();";
     j += "}";
 
     // Build slot UI
