@@ -696,7 +696,172 @@ void InitializeInputModAlgorithms()
         RegisterInputModAlgorithm("range", "Range", RangeAlgorithm_Mutate, RangeAlgorithm_RenderUI);
         RegisterInputModAlgorithm("advanced_basic", "Advanced Basic", AdvancedBasicAlgorithm_Mutate, AdvancedBasicAlgorithm_RenderUI);
         RegisterInputModAlgorithm("advanced_range", "Advanced Range", AdvancedRangeAlgorithm_Mutate, AdvancedRangeAlgorithm_RenderUI);
+        RegisterInputModAlgorithm("smooth_steering", "Smooth Steering", SmoothSteering_Mutate, SmoothSteering_RenderUI);
     }
+}
+void FillMissingSteerInputs(TM::InputEventBuffer@ buffer, int minTime, int maxTime)
+{
+    // Find all existing steer events and collect their times/values
+    auto steerIndices = buffer.Find(-1, InputType::Steer);
+    array<int> originalTimes;
+    array<int> originalValues;
+    for (uint i = 0; i < steerIndices.Length; i++)
+    {
+        int evTime = int(buffer[steerIndices[i]].Time);
+        originalTimes.Add(evTime);
+        originalValues.Add(buffer[steerIndices[i]].Value.Analog);
+    }
+
+    // If no steer event exists at or before minTime, insert a zero at minTime
+    if (originalTimes.Length == 0 || originalTimes[0] > minTime)
+    {
+        originalTimes.InsertAt(0, minTime);
+        originalValues.InsertAt(0, 0);
+        buffer.Add(minTime, InputType::Steer, 0);
+    }
+
+    // Iterate from maxTime down to minTime, filling gaps with carry-forward values
+    int currentIdx = int(originalTimes.Length) - 1;
+    for (int t = maxTime; t >= minTime; t -= 10)
+    {
+        // Advance to the correct original event index
+        while (currentIdx > 0 && originalTimes[currentIdx] > t)
+            currentIdx--;
+        if (originalTimes[currentIdx] == t)
+            continue; // already has an event at this tick
+        if (originalTimes[currentIdx] < t)
+        {
+            // No event at this tick; fill with the value from the most recent event before it
+            buffer.Add(t, InputType::Steer, originalValues[currentIdx]);
+        }
+    }
+}
+void SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    int minTime = int(GetVariableDouble("don_bf_modify_steering_min_time" + varSuffix));
+    int maxTime = int(GetVariableDouble("don_bf_modify_steering_max_time" + varSuffix));
+    int minAmount = int(GetVariableDouble("don_bf_modify_steering_min_amount" + varSuffix));
+    int maxAmount = int(GetVariableDouble("don_bf_modify_steering_max_amount" + varSuffix));
+    int maxRadius = int(GetVariableDouble("don_bf_steering_modification_radius" + varSuffix)) / 10;
+    int minDiff = int(GetVariableDouble("don_bf_modify_steering_min_diff" + varSuffix));
+    int maxDiff = int(GetVariableDouble("don_bf_modify_steering_max_diff" + varSuffix));
+
+    // Fill missing steer inputs in the active time range
+    FillMissingSteerInputs(buffer, minTime, maxTime);
+
+    // Pick N bumps
+    int n = Math::Rand(minAmount, maxAmount);
+
+    for (int bump = 0; bump < n; bump++)
+    {
+        // Random center tick in [minTime, maxTime] aligned to 10ms
+        int center = int(Math::Rand(minTime / 10, maxTime / 10)) * 10;
+        // Random radius in [0, maxRadius] ticks
+        int radius = Math::Rand(0, maxRadius);
+        // Random h in [minDiff, maxDiff] with random sign
+        int h = Math::Rand(minDiff, maxDiff) * (Math::Rand(0, 1) == 0 ? -1 : 1);
+
+        for (int i = -radius; i <= radius; i++)
+        {
+            int currentTime = center + i * 10;
+            if (currentTime < minTime || currentTime > maxTime)
+                continue;
+
+            auto modifyIndex = buffer.Find(currentTime, InputType::Steer);
+            if (modifyIndex.Length == 0)
+                continue;
+
+            int steeringDiff = int(Math::Round(h * Math::Pow(Math::Cos((Math::PI * i) / (2.0 * (radius + 1))), 2)));
+
+            int oldValue = buffer[modifyIndex[0]].Value.Analog;
+            int newValue = Math::Clamp(oldValue + steeringDiff, -65536, 65536);
+            buffer[modifyIndex[0]].Value.Analog = newValue;
+
+            // Track earliest mutation time
+            InputModification::g_earliestMutationTime = Math::Min(InputModification::g_earliestMutationTime, currentTime);
+        }
+    }
+}
+void SmoothSteering_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    UI::PushID("smooth_steering_" + settingsIndex);
+
+    // Time Range
+    UI::Text("Time Range");
+    UI::Dummy(vec2(0, 2));
+    UI::Text("From");
+    UI::SameLine();
+    UI::Dummy(vec2(18, 0));
+    UI::SameLine();
+    UI::PushItemWidth(195);
+    UI::InputTimeVar("##don_bf_modify_steering_min_time" + suffix, "don_bf_modify_steering_min_time" + varSuffix, 10);
+    UI::PopItemWidth();
+    UI::Text("To");
+    UI::SameLine();
+    UI::Dummy(vec2(37, 0));
+    UI::SameLine();
+    UI::PushItemWidth(195);
+    int ssMaxTime = UI::InputTimeVar("##don_bf_modify_steering_max_time" + suffix, "don_bf_modify_steering_max_time" + varSuffix, 10);
+    UI::PopItemWidth();
+    // enforce max >= min
+    int ssMinTime = int(GetVariableDouble("don_bf_modify_steering_min_time" + varSuffix));
+    if (ssMaxTime < ssMinTime)
+        SetVariable("don_bf_modify_steering_max_time" + varSuffix, ssMinTime);
+
+    UI::Dummy(vec2(0, 5));
+    UI::Separator();
+    UI::Dummy(vec2(0, 2));
+
+    // Number of Modifications
+    UI::Text("Number of Steering Modifications");
+    UI::Dummy(vec2(0, 2));
+    UI::PushItemWidth(120);
+    int ssMinAmount = Math::Max(UI::InputIntVar("Min Amount" + suffix, "don_bf_modify_steering_min_amount" + varSuffix, 1), 1);
+    SetVariable("don_bf_modify_steering_min_amount" + varSuffix, ssMinAmount);
+    int ssMaxAmount = Math::Max(UI::InputIntVar("Max Amount" + suffix, "don_bf_modify_steering_max_amount" + varSuffix, 1), 1);
+    // enforce max >= min
+    if (ssMaxAmount < ssMinAmount)
+    {
+        ssMaxAmount = ssMinAmount;
+        SetVariable("don_bf_modify_steering_max_amount" + varSuffix, ssMaxAmount);
+    }
+    if (ssMinAmount > ssMaxAmount)
+    {
+        SetVariable("don_bf_modify_steering_min_amount" + varSuffix, ssMaxAmount);
+    }
+    UI::PopItemWidth();
+
+    UI::Dummy(vec2(0, 5));
+    UI::Separator();
+    UI::Dummy(vec2(0, 2));
+
+    // Radius
+    UI::Text("Max Radius of Steering Modification");
+    UI::Dummy(vec2(0, 2));
+    UI::PushItemWidth(160);
+    UI::InputTimeVar("##don_bf_steering_modification_radius" + suffix, "don_bf_steering_modification_radius" + varSuffix, 10, 0);
+    UI::PopItemWidth();
+
+    UI::Dummy(vec2(0, 5));
+    UI::Separator();
+    UI::Dummy(vec2(0, 2));
+
+    // Steer Diff Range
+    UI::Text("Steering Modification Value Range");
+    UI::Dummy(vec2(0, 2));
+    UI::PushItemWidth(400);
+    int ssMinDiff = UI::SliderIntVar("Min Steer Diff" + suffix, "don_bf_modify_steering_min_diff" + varSuffix, 1, 131072);
+    int ssMaxDiff = UI::SliderIntVar("Max Steer Diff" + suffix, "don_bf_modify_steering_max_diff" + varSuffix, 1, 131072);
+    UI::PopItemWidth();
+    // enforce max >= min
+    if (ssMinDiff > ssMaxDiff)
+        SetVariable("don_bf_modify_steering_max_diff" + varSuffix, ssMinDiff);
+    if (ssMaxDiff < ssMinDiff)
+        SetVariable("don_bf_modify_steering_min_diff" + varSuffix, ssMaxDiff);
+
+    UI::Dummy(vec2(0, 5));
+    UI::PopID();
 }
 void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {

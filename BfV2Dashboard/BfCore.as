@@ -371,6 +371,13 @@ void BruteforceV2Settings()
             RegisterVariable("bf_advr_brake_max_time" + varSuffix, 0);
             RegisterVariable("bf_advr_brake_min_time_diff" + varSuffix, 0);
             RegisterVariable("bf_advr_brake_max_time_diff" + varSuffix, 0);
+            RegisterVariable("don_bf_modify_steering_min_time" + varSuffix, 0);
+            RegisterVariable("don_bf_modify_steering_max_time" + varSuffix, 5);
+            RegisterVariable("don_bf_modify_steering_min_amount" + varSuffix, 1);
+            RegisterVariable("don_bf_modify_steering_max_amount" + varSuffix, 5);
+            RegisterVariable("don_bf_steering_modification_radius" + varSuffix, 0);
+            RegisterVariable("don_bf_modify_steering_min_diff" + varSuffix, 1);
+            RegisterVariable("don_bf_modify_steering_max_diff" + varSuffix, 10000);
         }
     }
     for (uint im = 0; im < g_inputModSettings.Length; im++)

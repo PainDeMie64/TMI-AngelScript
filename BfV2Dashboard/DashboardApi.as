@@ -234,6 +234,13 @@ void EnsureSlotVariablesRegistered(int slotCount)
         RegisterVariable("bf_advr_brake_max_time" + vs, 0);
         RegisterVariable("bf_advr_brake_min_time_diff" + vs, 0);
         RegisterVariable("bf_advr_brake_max_time_diff" + vs, 0);
+        RegisterVariable("don_bf_modify_steering_min_time" + vs, 0);
+        RegisterVariable("don_bf_modify_steering_max_time" + vs, 5);
+        RegisterVariable("don_bf_modify_steering_min_amount" + vs, 1);
+        RegisterVariable("don_bf_modify_steering_max_amount" + vs, 5);
+        RegisterVariable("don_bf_steering_modification_radius" + vs, 0);
+        RegisterVariable("don_bf_modify_steering_min_diff" + vs, 1);
+        RegisterVariable("don_bf_modify_steering_max_diff" + vs, 10000);
     }
 }
 
@@ -350,6 +357,16 @@ string HandleGetAllSettings(const string &in body)
         slots += "," + JsonInt("brakeMaxTime", int(GetVariableDouble("bf_advr_brake_max_time" + vs)));
         slots += "," + JsonInt("brakeMinTimeDiff", int(GetVariableDouble("bf_advr_brake_min_time_diff" + vs)));
         slots += "," + JsonInt("brakeMaxTimeDiff", int(GetVariableDouble("bf_advr_brake_max_time_diff" + vs)));
+        slots += "}";
+
+        slots += ",\"smooth_steering\":{";
+        slots += JsonInt("minTime", int(GetVariableDouble("don_bf_modify_steering_min_time" + vs)));
+        slots += "," + JsonInt("maxTime", int(GetVariableDouble("don_bf_modify_steering_max_time" + vs)));
+        slots += "," + JsonInt("minAmount", int(GetVariableDouble("don_bf_modify_steering_min_amount" + vs)));
+        slots += "," + JsonInt("maxAmount", int(GetVariableDouble("don_bf_modify_steering_max_amount" + vs)));
+        slots += "," + JsonInt("radius", int(GetVariableDouble("don_bf_steering_modification_radius" + vs)));
+        slots += "," + JsonInt("minDiff", int(GetVariableDouble("don_bf_modify_steering_min_diff" + vs)));
+        slots += "," + JsonInt("maxDiff", int(GetVariableDouble("don_bf_modify_steering_max_diff" + vs)));
         slots += "}";
 
         slots += "}";

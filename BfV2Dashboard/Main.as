@@ -92,6 +92,13 @@ void Main()
     RegisterVariable("bf_advr_brake_max_time", 0);
     RegisterVariable("bf_advr_brake_min_time_diff", 0);
     RegisterVariable("bf_advr_brake_max_time_diff", 0);
+    RegisterVariable("don_bf_modify_steering_min_time", 0);
+    RegisterVariable("don_bf_modify_steering_max_time", 5);
+    RegisterVariable("don_bf_modify_steering_min_amount", 1);
+    RegisterVariable("don_bf_modify_steering_max_amount", 5);
+    RegisterVariable("don_bf_steering_modification_radius", 0);
+    RegisterVariable("don_bf_modify_steering_min_diff", 1);
+    RegisterVariable("don_bf_modify_steering_max_diff", 10000);
     PreciseFinishBf::Main();
     PreciseCheckpointBf::Main();
     PreciseTriggerBf::Main();

@@ -1513,6 +1513,17 @@ string BfDashJS_Settings()
     j += "else{var label=fn.replace(/_/g,' ');label=label.charAt(0).toUpperCase()+label.slice(1);sg.appendChild(mkFieldRow(label,mkNum(vn,0)));}}";
     j += "sec.appendChild(sg);body.appendChild(sec);}return;}";
 
+    // smooth_steering
+    j += "if(algoId==='smooth_steering'){";
+    j += "body.appendChild(mkFieldRow('Time From',mkTime('don_bf_modify_steering_min_time'+vs)));";
+    j += "body.appendChild(mkFieldRow('Time To',mkTime('don_bf_modify_steering_max_time'+vs)));";
+    j += "body.appendChild(mkFieldRow('Min Modifications',mkNum('don_bf_modify_steering_min_amount'+vs,1,null,1)));";
+    j += "body.appendChild(mkFieldRow('Max Modifications',mkNum('don_bf_modify_steering_max_amount'+vs,1,null,1)));";
+    j += "body.appendChild(mkFieldRow('Max Radius',mkTime('don_bf_steering_modification_radius'+vs)));";
+    j += "body.appendChild(mkFieldRow('Min Steer Diff',mkRange('don_bf_modify_steering_min_diff'+vs,1,131072,1)));";
+    j += "body.appendChild(mkFieldRow('Max Steer Diff',mkRange('don_bf_modify_steering_max_diff'+vs,1,131072,1)));";
+    j += "return;}";
+
     j += "}";
 
     // Update all slot field values from config
@@ -1522,7 +1533,7 @@ string BfDashJS_Settings()
     j += "var s=slots[si];var vs=si===0?'':'_'+si;";
     j += "var algoKey=s.algorithm;var data=s[algoKey];";
     // Also grab basic/range/advanced_basic/advanced_range sub-objects
-    j += "var allSubs=['basic','range','advanced_basic','advanced_range'];";
+    j += "var allSubs=['basic','range','advanced_basic','advanced_range','smooth_steering'];";
     j += "for(var sbi=0;sbi<allSubs.length;sbi++){";
     j += "var sub=s[allSubs[sbi]];if(!sub)continue;";
     j += "var keys=Object.keys(sub);";
@@ -1617,7 +1628,15 @@ string BfDashJS_Settings()
     j += "'bf_advr_brake_min_time':['advanced_range','brakeMinTime'],";
     j += "'bf_advr_brake_max_time':['advanced_range','brakeMaxTime'],";
     j += "'bf_advr_brake_min_time_diff':['advanced_range','brakeMinTimeDiff'],";
-    j += "'bf_advr_brake_max_time_diff':['advanced_range','brakeMaxTimeDiff']";
+    j += "'bf_advr_brake_max_time_diff':['advanced_range','brakeMaxTimeDiff'],";
+    // smooth_steering keys
+    j += "'don_bf_modify_steering_min_time':['smooth_steering','minTime'],";
+    j += "'don_bf_modify_steering_max_time':['smooth_steering','maxTime'],";
+    j += "'don_bf_modify_steering_min_amount':['smooth_steering','minAmount'],";
+    j += "'don_bf_modify_steering_max_amount':['smooth_steering','maxAmount'],";
+    j += "'don_bf_steering_modification_radius':['smooth_steering','radius'],";
+    j += "'don_bf_modify_steering_min_diff':['smooth_steering','minDiff'],";
+    j += "'don_bf_modify_steering_max_diff':['smooth_steering','maxDiff']";
     j += "};";
     j += "var m=maps[base];if(!m)return undefined;";
     j += "var sub=s[m[0]];if(!sub)return undefined;";
@@ -1652,7 +1671,7 @@ string BfDashJS_Settings()
     j += "if(cfg.slots){for(var si=0;si<cfg.slots.length;si++){var sl=cfg.slots[si];var vs=si===0?'':'_'+si;";
     j += "serverSnapshot['bf_input_mod_algorithm'+vs]=sl.algorithm;";
     j += "if(si>0)serverSnapshot['bf_input_mod_enabled'+vs]=String(sl.enabled);";
-    j += "var algos=['basic','range','advanced_basic','advanced_range'];";
+    j += "var algos=['basic','range','advanced_basic','advanced_range','smooth_steering'];";
     j += "for(var ai=0;ai<algos.length;ai++){var ao=sl[algos[ai]];if(!ao)continue;var ak=Object.keys(ao);";
     j += "for(var aki=0;aki<ak.length;aki++){var varN=findVarName(algos[ai],ak[aki],vs);if(varN)serverSnapshot[varN]=String(ao[ak[aki]]);}}}}";
 
@@ -1661,7 +1680,8 @@ string BfDashJS_Settings()
     j += "var m={'basic':{'modifyCount':'bf_modify_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time','maxSteerDiff':'bf_max_steer_diff','maxTimeDiff':'bf_max_time_diff','fillSteer':'bf_inputs_fill_steer'},";
     j += "'range':{'minInputCount':'bf_range_min_input_count','maxInputCount':'bf_range_max_input_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time','minSteer':'bf_range_min_steer','maxSteer':'bf_range_max_steer','minTimeDiff':'bf_range_min_time_diff','maxTimeDiff':'bf_range_max_time_diff','fillSteer':'bf_range_fill_steer'},";
     j += "'advanced_basic':{'steerModifyCount':'bf_adv_steer_modify_count','steerMinTime':'bf_adv_steer_min_time','steerMaxTime':'bf_adv_steer_max_time','steerMaxDiff':'bf_adv_steer_max_diff','steerMaxTimeDiff':'bf_adv_steer_max_time_diff','steerFill':'bf_adv_steer_fill','accelModifyCount':'bf_adv_accel_modify_count','accelMinTime':'bf_adv_accel_min_time','accelMaxTime':'bf_adv_accel_max_time','accelMaxTimeDiff':'bf_adv_accel_max_time_diff','brakeModifyCount':'bf_adv_brake_modify_count','brakeMinTime':'bf_adv_brake_min_time','brakeMaxTime':'bf_adv_brake_max_time','brakeMaxTimeDiff':'bf_adv_brake_max_time_diff'},";
-    j += "'advanced_range':{'steerMinInputCount':'bf_advr_steer_min_input_count','steerMaxInputCount':'bf_advr_steer_max_input_count','steerMinTime':'bf_advr_steer_min_time','steerMaxTime':'bf_advr_steer_max_time','steerMinSteer':'bf_advr_steer_min_steer','steerMaxSteer':'bf_advr_steer_max_steer','steerMinTimeDiff':'bf_advr_steer_min_time_diff','steerMaxTimeDiff':'bf_advr_steer_max_time_diff','steerFill':'bf_advr_steer_fill','accelMinInputCount':'bf_advr_accel_min_input_count','accelMaxInputCount':'bf_advr_accel_max_input_count','accelMinTime':'bf_advr_accel_min_time','accelMaxTime':'bf_advr_accel_max_time','accelMinTimeDiff':'bf_advr_accel_min_time_diff','accelMaxTimeDiff':'bf_advr_accel_max_time_diff','brakeMinInputCount':'bf_advr_brake_min_input_count','brakeMaxInputCount':'bf_advr_brake_max_input_count','brakeMinTime':'bf_advr_brake_min_time','brakeMaxTime':'bf_advr_brake_max_time','brakeMinTimeDiff':'bf_advr_brake_min_time_diff','brakeMaxTimeDiff':'bf_advr_brake_max_time_diff'}};";
+    j += "'advanced_range':{'steerMinInputCount':'bf_advr_steer_min_input_count','steerMaxInputCount':'bf_advr_steer_max_input_count','steerMinTime':'bf_advr_steer_min_time','steerMaxTime':'bf_advr_steer_max_time','steerMinSteer':'bf_advr_steer_min_steer','steerMaxSteer':'bf_advr_steer_max_steer','steerMinTimeDiff':'bf_advr_steer_min_time_diff','steerMaxTimeDiff':'bf_advr_steer_max_time_diff','steerFill':'bf_advr_steer_fill','accelMinInputCount':'bf_advr_accel_min_input_count','accelMaxInputCount':'bf_advr_accel_max_input_count','accelMinTime':'bf_advr_accel_min_time','accelMaxTime':'bf_advr_accel_max_time','accelMinTimeDiff':'bf_advr_accel_min_time_diff','accelMaxTimeDiff':'bf_advr_accel_max_time_diff','brakeMinInputCount':'bf_advr_brake_min_input_count','brakeMaxInputCount':'bf_advr_brake_max_input_count','brakeMinTime':'bf_advr_brake_min_time','brakeMaxTime':'bf_advr_brake_max_time','brakeMinTimeDiff':'bf_advr_brake_min_time_diff','brakeMaxTimeDiff':'bf_advr_brake_max_time_diff'},";
+    j += "'smooth_steering':{'minTime':'don_bf_modify_steering_min_time','maxTime':'don_bf_modify_steering_max_time','minAmount':'don_bf_modify_steering_min_amount','maxAmount':'don_bf_modify_steering_max_amount','radius':'don_bf_steering_modification_radius','minDiff':'don_bf_modify_steering_min_diff','maxDiff':'don_bf_modify_steering_max_diff'}};";
     j += "var map=m[algo];if(!map||!map[key])return null;return map[key]+vs;}";
 
     // Controller badge
