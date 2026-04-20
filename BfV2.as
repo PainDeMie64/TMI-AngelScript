@@ -4301,6 +4301,8 @@ string BfDashCSS()
     c += ".btn-danger:hover{background:#f8514940}";
     c += ".btn-sm{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:0.2rem 0.5rem;cursor:pointer;font-size:0.7rem}";
     c += ".btn-sm:hover{background:#30363d}";
+    c += "#btnAddSlot{grid-column:1/-1;justify-self:start;margin-top:0.2rem}";
+    c += "#slotsContainer{grid-column:1/-1}";
 
     // Range display
     c += ".range-wrap{display:flex;align-items:center;gap:0.4rem;min-width:0}";
@@ -5608,8 +5610,8 @@ string BfDashJS_Settings()
     j += "body.appendChild(mkFieldRow('Min Amount',mkNum('don_bf_modify_steering_min_amount'+vs,1,null,1)));";
     j += "body.appendChild(mkFieldRow('Max Amount',mkNum('don_bf_modify_steering_max_amount'+vs,1,null,1)));";
     j += "body.appendChild(mkFieldRow('Max Radius',mkTime('don_bf_steering_modification_radius'+vs)));";
-    j += "body.appendChild(mkFieldRow('Min Steer Diff',mkRange('don_bf_modify_steering_min_diff'+vs,1,131072,1)));";
-    j += "body.appendChild(mkFieldRow('Max Steer Diff',mkRange('don_bf_modify_steering_max_diff'+vs,1,131072,1)));";
+    j += "body.appendChild(mkFieldRow('Min Steer Diff',mkRange('don_bf_modify_steering_min_diff'+vs,1,131072,1),true));";
+    j += "body.appendChild(mkFieldRow('Max Steer Diff',mkRange('don_bf_modify_steering_max_diff'+vs,1,131072,1),true));";
     j += "return;}";
 
     j += "}";
