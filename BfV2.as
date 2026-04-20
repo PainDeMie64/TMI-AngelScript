@@ -371,6 +371,13 @@ void BruteforceV2Settings()
             RegisterVariable("bf_advr_brake_max_time" + varSuffix, 0);
             RegisterVariable("bf_advr_brake_min_time_diff" + varSuffix, 0);
             RegisterVariable("bf_advr_brake_max_time_diff" + varSuffix, 0);
+            RegisterVariable("don_bf_modify_steering_min_time" + varSuffix, 0);
+            RegisterVariable("don_bf_modify_steering_max_time" + varSuffix, 5);
+            RegisterVariable("don_bf_modify_steering_min_amount" + varSuffix, 1);
+            RegisterVariable("don_bf_modify_steering_max_amount" + varSuffix, 5);
+            RegisterVariable("don_bf_steering_modification_radius" + varSuffix, 0);
+            RegisterVariable("don_bf_modify_steering_min_diff" + varSuffix, 1);
+            RegisterVariable("don_bf_modify_steering_max_diff" + varSuffix, 10000);
         }
     }
     for (uint im = 0; im < g_inputModSettings.Length; im++)
@@ -1185,7 +1192,176 @@ void InitializeInputModAlgorithms()
         RegisterInputModAlgorithm("range", "Range", RangeAlgorithm_Mutate, RangeAlgorithm_RenderUI);
         RegisterInputModAlgorithm("advanced_basic", "Advanced Basic", AdvancedBasicAlgorithm_Mutate, AdvancedBasicAlgorithm_RenderUI);
         RegisterInputModAlgorithm("advanced_range", "Advanced Range", AdvancedRangeAlgorithm_Mutate, AdvancedRangeAlgorithm_RenderUI);
+        RegisterInputModAlgorithm("smooth_steering", "Smooth Steering", SmoothSteering_Mutate, SmoothSteering_RenderUI);
     }
+}
+void FillMissingSteerInputs(TM::InputEventBuffer@ buffer, int minTime, int maxTime)
+{
+    // Find all existing steer events and collect their times/values
+    auto steerIndices = buffer.Find(-1, InputType::Steer);
+    array<int> originalTimes;
+    array<int> originalValues;
+    for (uint i = 0; i < steerIndices.Length; i++)
+    {
+        int evTime = int(buffer[steerIndices[i]].Time) - 100010;
+        originalTimes.Add(evTime);
+        originalValues.Add(buffer[steerIndices[i]].Value.Analog);
+    }
+
+    // If no steer event exists at or before minTime, insert a zero at minTime
+    if (originalTimes.Length == 0 || originalTimes[0] > minTime)
+    {
+        originalTimes.InsertAt(0, minTime);
+        originalValues.InsertAt(0, 0);
+        buffer.Add(minTime, InputType::Steer, 0);
+    }
+
+    // Iterate from maxTime down to minTime, filling gaps with carry-forward values
+    int currentIdx = int(originalTimes.Length) - 1;
+    for (int t = maxTime; t >= minTime; t -= 10)
+    {
+        // Advance to the correct original event index
+        while (currentIdx > 0 && originalTimes[currentIdx] > t)
+            currentIdx--;
+        if (originalTimes[currentIdx] == t)
+            continue; // already has an event at this tick
+        if (originalTimes[currentIdx] < t)
+        {
+            // No event at this tick; fill with the value from the most recent event before it
+            buffer.Add(t, InputType::Steer, originalValues[currentIdx]);
+        }
+    }
+}
+void SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    int minTime = int(GetVariableDouble("don_bf_modify_steering_min_time" + varSuffix));
+    int maxTime = int(GetVariableDouble("don_bf_modify_steering_max_time" + varSuffix));
+    int minAmount = int(GetVariableDouble("don_bf_modify_steering_min_amount" + varSuffix));
+    int maxAmount = int(GetVariableDouble("don_bf_modify_steering_max_amount" + varSuffix));
+    int maxRadius = int(GetVariableDouble("don_bf_steering_modification_radius" + varSuffix)) / 10;
+    int minDiff = int(GetVariableDouble("don_bf_modify_steering_min_diff" + varSuffix));
+    int maxDiff = int(GetVariableDouble("don_bf_modify_steering_max_diff" + varSuffix));
+
+    // Fill missing steer inputs in the active time range
+    FillMissingSteerInputs(buffer, minTime, maxTime);
+
+    // Pick N bumps
+    if (minAmount < 1) minAmount = 1;
+    if (maxAmount < minAmount) maxAmount = minAmount;
+    int n = Math::Rand(minAmount, maxAmount);
+
+    for (int bump = 0; bump < n; bump++)
+    {
+        // Random center tick in [minTime, maxTime] aligned to 10ms
+        int center = int(Math::Rand(minTime / 10, maxTime / 10)) * 10;
+        // Random radius in [0, maxRadius] ticks
+        int radius = Math::Rand(0, maxRadius);
+        // Random h in [minDiff, maxDiff] with random sign
+        int h = Math::Rand(minDiff, maxDiff) * (Math::Rand(0, 1) == 0 ? -1 : 1);
+
+        for (int i = -radius; i <= radius; i++)
+        {
+            int currentTime = center + i * 10;
+            if (currentTime < minTime || currentTime > maxTime)
+                continue;
+
+            auto modifyIndex = buffer.Find(currentTime, InputType::Steer);
+            if (modifyIndex.Length == 0)
+                continue;
+
+            int steeringDiff = int(Math::Round(h * Math::Pow(Math::Cos((Math::PI * i) / (2.0 * (radius + 1))), 2)));
+
+            int oldValue = buffer[modifyIndex[0]].Value.Analog;
+            int newValue = Math::Clamp(oldValue + steeringDiff, -65536, 65536);
+            buffer[modifyIndex[0]].Value.Analog = newValue;
+
+            // Track earliest mutation time
+            InputModification::g_earliestMutationTime = Math::Min(InputModification::g_earliestMutationTime, currentTime);
+        }
+    }
+}
+void SmoothSteering_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    UI::PushID("smooth_steering_" + settingsIndex);
+
+    // Time Range
+    UI::Text("Time Range");
+    UI::Dummy(vec2(0, 2));
+    UI::Text("From");
+    UI::SameLine();
+    UI::Dummy(vec2(18, 0));
+    UI::SameLine();
+    UI::PushItemWidth(195);
+    UI::InputTimeVar("##don_bf_modify_steering_min_time" + suffix, "don_bf_modify_steering_min_time" + varSuffix, 10);
+    UI::PopItemWidth();
+    UI::Text("To");
+    UI::SameLine();
+    UI::Dummy(vec2(37, 0));
+    UI::SameLine();
+    UI::PushItemWidth(195);
+    int ssMaxTime = UI::InputTimeVar("##don_bf_modify_steering_max_time" + suffix, "don_bf_modify_steering_max_time" + varSuffix, 10);
+    UI::PopItemWidth();
+    // enforce max >= min
+    int ssMinTime = int(GetVariableDouble("don_bf_modify_steering_min_time" + varSuffix));
+    if (ssMaxTime < ssMinTime)
+        SetVariable("don_bf_modify_steering_max_time" + varSuffix, ssMinTime);
+
+    UI::Dummy(vec2(0, 5));
+    UI::Separator();
+    UI::Dummy(vec2(0, 2));
+
+    // Number of Modifications
+    UI::Text("Number of Steering Modifications");
+    UI::Dummy(vec2(0, 2));
+    UI::PushItemWidth(120);
+    int ssMinAmount = Math::Max(UI::InputIntVar("Min Amount" + suffix, "don_bf_modify_steering_min_amount" + varSuffix, 1), 1);
+    SetVariable("don_bf_modify_steering_min_amount" + varSuffix, ssMinAmount);
+    int ssMaxAmount = Math::Max(UI::InputIntVar("Max Amount" + suffix, "don_bf_modify_steering_max_amount" + varSuffix, 1), 1);
+    SetVariable("don_bf_modify_steering_max_amount" + varSuffix, ssMaxAmount);
+    // enforce max >= min
+    if (ssMaxAmount < ssMinAmount)
+    {
+        ssMaxAmount = ssMinAmount;
+        SetVariable("don_bf_modify_steering_max_amount" + varSuffix, ssMaxAmount);
+    }
+    else if (ssMinAmount > ssMaxAmount)
+    {
+        ssMinAmount = ssMaxAmount;
+        SetVariable("don_bf_modify_steering_min_amount" + varSuffix, ssMinAmount);
+    }
+    UI::PopItemWidth();
+
+    UI::Dummy(vec2(0, 5));
+    UI::Separator();
+    UI::Dummy(vec2(0, 2));
+
+    // Radius
+    UI::Text("Max Radius of Steering Modification");
+    UI::Dummy(vec2(0, 2));
+    UI::PushItemWidth(160);
+    UI::InputTimeVar("##don_bf_steering_modification_radius" + suffix, "don_bf_steering_modification_radius" + varSuffix, 10, 0);
+    UI::PopItemWidth();
+
+    UI::Dummy(vec2(0, 5));
+    UI::Separator();
+    UI::Dummy(vec2(0, 2));
+
+    // Steer Diff Range
+    UI::Text("Steering Modification Value Range");
+    UI::Dummy(vec2(0, 2));
+    UI::PushItemWidth(400);
+    int ssMinDiff = UI::SliderIntVar("Min Steer Diff" + suffix, "don_bf_modify_steering_min_diff" + varSuffix, 1, 131072);
+    int ssMaxDiff = UI::SliderIntVar("Max Steer Diff" + suffix, "don_bf_modify_steering_max_diff" + varSuffix, 1, 131072);
+    UI::PopItemWidth();
+    // enforce max >= min
+    if (ssMinDiff > ssMaxDiff)
+        SetVariable("don_bf_modify_steering_max_diff" + varSuffix, ssMinDiff);
+    else if (ssMaxDiff < ssMinDiff)
+        SetVariable("don_bf_modify_steering_min_diff" + varSuffix, ssMaxDiff);
+
+    UI::Dummy(vec2(0, 5));
+    UI::PopID();
 }
 void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
@@ -3359,6 +3535,13 @@ void EnsureSlotVariablesRegistered(int slotCount)
         RegisterVariable("bf_advr_brake_max_time" + vs, 0);
         RegisterVariable("bf_advr_brake_min_time_diff" + vs, 0);
         RegisterVariable("bf_advr_brake_max_time_diff" + vs, 0);
+        RegisterVariable("don_bf_modify_steering_min_time" + vs, 0);
+        RegisterVariable("don_bf_modify_steering_max_time" + vs, 5);
+        RegisterVariable("don_bf_modify_steering_min_amount" + vs, 1);
+        RegisterVariable("don_bf_modify_steering_max_amount" + vs, 5);
+        RegisterVariable("don_bf_steering_modification_radius" + vs, 0);
+        RegisterVariable("don_bf_modify_steering_min_diff" + vs, 1);
+        RegisterVariable("don_bf_modify_steering_max_diff" + vs, 10000);
     }
 }
 
@@ -3475,6 +3658,16 @@ string HandleGetAllSettings(const string &in body)
         slots += "," + JsonInt("brakeMaxTime", int(GetVariableDouble("bf_advr_brake_max_time" + vs)));
         slots += "," + JsonInt("brakeMinTimeDiff", int(GetVariableDouble("bf_advr_brake_min_time_diff" + vs)));
         slots += "," + JsonInt("brakeMaxTimeDiff", int(GetVariableDouble("bf_advr_brake_max_time_diff" + vs)));
+        slots += "}";
+
+        slots += ",\"smooth_steering\":{";
+        slots += JsonInt("minTime", int(GetVariableDouble("don_bf_modify_steering_min_time" + vs)));
+        slots += "," + JsonInt("maxTime", int(GetVariableDouble("don_bf_modify_steering_max_time" + vs)));
+        slots += "," + JsonInt("minAmount", int(GetVariableDouble("don_bf_modify_steering_min_amount" + vs)));
+        slots += "," + JsonInt("maxAmount", int(GetVariableDouble("don_bf_modify_steering_max_amount" + vs)));
+        slots += "," + JsonInt("radius", int(GetVariableDouble("don_bf_steering_modification_radius" + vs)));
+        slots += "," + JsonInt("minDiff", int(GetVariableDouble("don_bf_modify_steering_min_diff" + vs)));
+        slots += "," + JsonInt("maxDiff", int(GetVariableDouble("don_bf_modify_steering_max_diff" + vs)));
         slots += "}";
 
         slots += "}";
@@ -4071,6 +4264,7 @@ string BfDashCSS()
     c += ".field-row textarea{font-family:monospace;resize:vertical;min-height:2.5rem}";
     c += ".field-row input[type=number]{-moz-appearance:textfield}";
     c += ".field-row input[type=range]{padding:0;height:1.2rem}";
+    c += "input:disabled,select:disabled,textarea:disabled{opacity:0.5;cursor:not-allowed}";
 
     // Vec3 row
     c += ".vec3-row{display:flex;gap:0.3rem;align-items:center}";
@@ -4090,6 +4284,9 @@ string BfDashCSS()
     c += ".slot-card{background:#0d1117;border:1px solid #30363d;border-radius:6px;margin-bottom:0.5rem;overflow:hidden}";
     c += ".slot-hdr{display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;background:#161b22;border-bottom:1px solid #21262d}";
     c += ".slot-hdr .slot-title{font-size:0.85rem;font-weight:600;color:#c9d1d9;flex:1}";
+    c += ".slot-hdr select{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;font-family:inherit}";
+    c += ".slot-hdr select:focus{outline:none;border-color:#f0883e}";
+    c += ".slot-hdr input[type=checkbox]{width:1rem;height:1rem;accent-color:#f0883e}";
     c += ".slot-body{padding:0.6rem;display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem}";
 
     // Sub-section within a slot (for advanced algorithm sub-types)
@@ -4161,6 +4358,7 @@ string BfDashCSS()
 
     // Base Run Inputs
     c += ".code-input { width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:0.5rem; font-family:monospace; font-size:0.8rem; resize:vertical; }";
+    c += ".code-input:focus{outline:none;border-color:#f0883e}";
     c += ".hint { color:#8b949e; font-size:0.75rem; margin-bottom:0.5rem; }";
     c += ".base-actions { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap; }";
     c += "#baseInputs{position:relative}";
@@ -4185,7 +4383,7 @@ string BfDashCSS()
     c += ".ge-hint{color:#8b949e;font-size:0.7rem;font-style:italic;padding:0.3rem 0}";
     c += ".ge-row input:focus,.ge-row select:focus{outline:none;border-color:#f0883e}";
     c += ".ge-bound input:focus{outline:none;border-color:#f0883e}";
-    c += ".ge-bound input{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;width:6rem}";
+    c += ".ge-bound input{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;font-family:inherit;width:6rem}";
 
     // Condition Editor
     c += ".ce-wrap{grid-column:1/-1;border:1px solid #30363d;border-radius:6px;margin-top:0.4rem;background:#0d1117}";
@@ -4201,10 +4399,10 @@ string BfDashCSS()
     c += ".ce-hint{color:#8b949e;font-size:0.7rem;font-style:italic;padding:0.3rem 0}";
     c += ".ce-row input:focus,.ce-row select:focus{outline:none;border-color:#f0883e}";
     c += ".ce-fields input:focus{outline:none;border-color:#f0883e}";
-    c += ".ce-fields input[type=number]{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;width:6rem}";
+    c += ".ce-fields input[type=number]{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:0.3rem 0.5rem;font-size:0.8rem;font-family:inherit;width:6rem}";
     c += ".ce-range-row{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.2rem}";
     c += ".ce-range-row label{color:#8b949e;font-size:0.7rem;min-width:3rem}";
-    c += ".ce-range-row input[type=range]{flex:1;min-width:4rem}";
+    c += ".ce-range-row input[type=range]{flex:1;min-width:4rem;padding:0;height:1.2rem}";
     c += ".ce-range-row .ce-range-val{font-size:0.8rem;color:#c9d1d9;min-width:2rem;text-align:right;font-family:monospace}";
     c += ".ce-reset{background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.7rem;cursor:pointer;margin-left:auto}";
     c += ".ce-reset:hover{background:#f8514920;color:#f85149;border-color:#f8514940}";
@@ -4290,7 +4488,7 @@ string BfDashJS_Helpers()
     j += "for (var i=0; i<keys.length; i++) {";
     j += "if (keys[i].indexOf('bf_modify') === 0 || keys[i].indexOf('bf_inputs') === 0 ||";
     j += "keys[i].indexOf('bf_max_') === 0 || keys[i].indexOf('bf_range') === 0 ||";
-    j += "keys[i].indexOf('bf_adv') === 0 || keys[i].indexOf('bf_input_mod') === 0) {";
+    j += "keys[i].indexOf('bf_adv') === 0 || keys[i].indexOf('bf_input_mod') === 0 || keys[i].indexOf('don_bf_') === 0) {";
     j += "var row = document.querySelector('[data-var=\"'+keys[i]+'\"]');";
     j += "if (row) { var r2 = row.closest('.field-row')||row.closest('.chk-row'); if(r2) r2.classList.remove('dirty'); }";
     j += "delete dirtyVars[keys[i]];}}";
@@ -4361,7 +4559,7 @@ string BfDashJS_Helpers()
     j += "if(vidx!=='0')continue;";
     j += "var row=els[i].closest('.vec3-row');if(!row)continue;";
     j += "var inps=row.querySelectorAll('input[type=number]');";
-    j += "val=inps[0].value+' '+inps[1].value+' '+inps[2].value;";
+    j += "val=parseFloat(inps[0].value).toFixed(3)+' '+parseFloat(inps[1].value).toFixed(3)+' '+parseFloat(inps[2].value).toFixed(3);";
     j += "}else val=els[i].value;";
     j += "pairs[vn]=val;}";
     j += "var body='';var keys=Object.keys(pairs);";
@@ -4437,7 +4635,7 @@ string BfDashJS_Helpers()
     j += "inp.placeholder=labels[i];";
     j += "inp.addEventListener('blur',function(){";
     j += "var inps=this.parentNode.querySelectorAll('input[type=number]');";
-    j += "var v=inps[0].value+' '+inps[1].value+' '+inps[2].value;";
+    j += "var v=parseFloat(inps[0].value).toFixed(3)+' '+parseFloat(inps[1].value).toFixed(3)+' '+parseFloat(inps[2].value).toFixed(3);";
     j += "setVar(varName,v);});";
     j += "wrap.appendChild(inp);}";
     j += "if(withCopy){var btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Copy Vehicle';";
@@ -4445,7 +4643,7 @@ string BfDashJS_Helpers()
     j += "fetch(apiBase+'/api/bf/copy-position',{method:'POST'}).then(function(r){return r.json();}).then(function(d){";
     j += "if(d.vehiclePosition){var inps=wrap.querySelectorAll('input[type=number]');";
     j += "inps[0].value=d.vehiclePosition.x.toFixed(3);inps[1].value=d.vehiclePosition.y.toFixed(3);inps[2].value=d.vehiclePosition.z.toFixed(3);";
-    j += "setVar(varName,d.vehiclePosition.x+' '+d.vehiclePosition.y+' '+d.vehiclePosition.z);}});});";
+    j += "setVar(varName,d.vehiclePosition.x.toFixed(3)+' '+d.vehiclePosition.y.toFixed(3)+' '+d.vehiclePosition.z.toFixed(3));}});});";
     j += "wrap.appendChild(btn);}";
     j += "return wrap;}";
 
@@ -5024,7 +5222,7 @@ string BfDashJS_Settings()
 
     // precisecheckpoint
     j += "if(t==='precisecheckpoint'){";
-    j += "c.appendChild(mkFieldRow('Target CP',mkNum('bf_target_cp',0)));return;}";
+    j += "c.appendChild(mkFieldRow('Target Checkpoint Index',mkNum('bf_target_cp',0)));return;}";
 
     // precisetrigger
     j += "if(t==='precisetrigger'){";
@@ -5073,21 +5271,21 @@ string BfDashJS_Settings()
     j += "c.appendChild(mkFieldRow('Mode',mkSelect('uber_bf_uberbug_mode',modeOpts)));";
     j += "var findOpts=[{value:'Single',text:'Single'},{value:'Collect many',text:'Collect many'},{value:'Keep best',text:'Keep best'}];";
     j += "c.appendChild(mkFieldRow('Find Mode',mkSelect('uber_bf_uberbug_find_mode',findOpts)));";
-    j += "c.appendChild(mkFieldRow('Amount',mkNum('uber_bf_uberbug_amount',1)));";
+    j += "c.appendChild(mkFieldRow('Amount',mkNum('uber_bf_uberbug_amount',1,null,10)));";
     j += "c.appendChild(mkFieldRow('Result File',mkText('uber_bf_uberbug_result_file')));";
     j += "c.appendChild(mkFieldRow('Point1',mkVec3('uber_bf_uberbug_point1',false),true));";
     j += "c.appendChild(mkFieldRow('Point2',mkVec3('uber_bf_uberbug_point2',false),true));";
-    j += "c.appendChild(mkFieldRow('Threshold',mkNum('uber_bf_uberbug_threshold',null,null,'0.001')));";
+    j += "c.appendChild(mkFieldRow('Threshold',mkNum('uber_bf_uberbug_threshold',null,null,'0.05')));";
     j += "c.appendChild(mkFieldRow('Time From',mkTime('uber_bf_bf_time_from')));";
     j += "c.appendChild(mkFieldRow('Time To',mkTime('uber_bf_bf_time_to')));";
-    j += "c.appendChild(mkFieldRow('Min Speed',mkNum('uber_bf_uberbug_min_speed',null,null,'0.1')));return;}";
+    j += "c.appendChild(mkFieldRow('Min Speed',mkNum('uber_bf_uberbug_min_speed',null,null,10)));return;}";
 
     // clbf
     j += "if(t==='clbf'){";
     j += "c.appendChild(mkFieldRow('Target Position',mkVec3('clbf_bf_target_position',true),true));";
-    j += "c.appendChild(mkFieldRow('Yaw',mkRange('clbf_bf_target_rotation_yaw',-180,180)));";
-    j += "c.appendChild(mkFieldRow('Pitch',mkRange('clbf_bf_target_rotation_pitch',-180,180)));";
-    j += "c.appendChild(mkFieldRow('Roll',mkRange('clbf_bf_target_rotation_roll',-180,180)));";
+    j += "c.appendChild(mkFieldRow('Yaw',mkRange('clbf_bf_target_rotation_yaw',-180,180,0.01)));";
+    j += "c.appendChild(mkFieldRow('Pitch',mkRange('clbf_bf_target_rotation_pitch',-180,180,0.01)));";
+    j += "c.appendChild(mkFieldRow('Roll',mkRange('clbf_bf_target_rotation_roll',-180,180,0.01)));";
     j += "c.appendChild(mkFieldRow('Weight',mkRange('clbf_bf_weight',0,100)));";
     j += "c.appendChild(mkFieldRow('Eval Time From',mkTime('clbf_bf_eval_min_time')));";
     j += "c.appendChild(mkFieldRow('Eval Time To',mkTime('clbf_bf_eval_max_time')));return;}";
@@ -5243,8 +5441,8 @@ string BfDashJS_Settings()
     j += "c.appendChild(mkFieldRow('Target yaw (\\u00b0) (90 for left gs and uber, -90 for right)',mkNum('shweetz_yaw_deg',null,null,1)));";
     j += "c.appendChild(mkFieldRow('Target pitch (\\u00b0) (85 to 90 for nosepos, 0 for gs, -25 for uber)',mkNum('shweetz_pitch_deg',null,null,1)));";
     j += "c.appendChild(mkFieldRow('Target roll (\\u00b0) (usually 0)',mkNum('shweetz_roll_deg',null,null,1)));";
-    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180','');c.appendChild(mkFieldRow('Accept any yaw for nosepos (uncheck for yaw bruteforce)',chkYaw));";
-    j += "var chkNext=mkCheck('shweetz_next_eval_check','');c.appendChild(mkFieldRow('Change eval after nosepos is good enough',chkNext));";
+    j += "var chkYaw=mkCheck('shweetz_allow_yaw_180','Accept any yaw for nosepos (uncheck for yaw bruteforce)');chkYaw.className+=' full';c.appendChild(chkYaw);";
+    j += "var chkNext=mkCheck('shweetz_next_eval_check','Change eval after nosepos is good enough');chkNext.className+=' full';c.appendChild(chkNext);";
     // Conditional block: only shown when next_eval_check is true (matching in-game order: angle first, then combo + point)
     j += "var npCondDiv=document.createElement('div');npCondDiv.id='npCondBlock';c.appendChild(npCondDiv);";
     j += "c.appendChild(mkFieldRow('Min speed (km/h)',mkRange('shweetz_condition_speed',0,1000,0.1)));";
@@ -5259,6 +5457,7 @@ string BfDashJS_Settings()
     // NoseposPlus conditional block updater (called from updateEvalValues)
     j += "function updateNpCondBlock(es){";
     j += "var blk=document.getElementById('npCondBlock');if(!blk)return;";
+    j += "if(blk.contains(document.activeElement))return;";
     j += "while(blk.firstChild)blk.removeChild(blk.firstChild);";
     j += "var nextCheck=es['shweetz_next_eval_check'];";
     j += "if(!nextCheck)return;";
@@ -5347,58 +5546,71 @@ string BfDashJS_Settings()
 
     // basic
     j += "if(algoId==='basic'){";
-    j += "body.appendChild(mkFieldRow('Modify Count',mkNum('bf_modify_count'+vs,0)));";
+    j += "body.appendChild(mkFieldRow('Input Modify Count',mkNum('bf_modify_count'+vs,0)));";
     j += "body.appendChild(mkFieldRow('Time From',mkTime('bf_inputs_min_time'+vs)));";
     j += "body.appendChild(mkFieldRow('Time To',mkTime('bf_inputs_max_time'+vs)));";
-    j += "body.appendChild(mkFieldRow('Max Steer Diff',mkRange('bf_max_steer_diff'+vs,0,131072)));";
-    j += "body.appendChild(mkFieldRow('Max Time Diff',mkNum('bf_max_time_diff'+vs,0)));";
-    j += "var chk=mkCheck('bf_inputs_fill_steer'+vs,'Fill Steer');chk.className+=' full';body.appendChild(chk);return;}";
+    j += "body.appendChild(mkFieldRow('Maximum Steering Difference',mkRange('bf_max_steer_diff'+vs,0,131072)));";
+    j += "body.appendChild(mkFieldRow('Maximum Time Difference',mkTime('bf_max_time_diff'+vs)));";
+    j += "var chk=mkCheck('bf_inputs_fill_steer'+vs,'Fill Missing Steering Input');chk.className+=' full';body.appendChild(chk);return;}";
 
     // range
     j += "if(algoId==='range'){";
-    j += "body.appendChild(mkFieldRow('Min Input Count',mkNum('bf_range_min_input_count'+vs,1)));";
-    j += "body.appendChild(mkFieldRow('Max Input Count',mkNum('bf_range_max_input_count'+vs,1)));";
+    j += "body.appendChild(mkFieldRow('Min Input Count',mkNum('bf_range_min_input_count'+vs,0)));";
+    j += "body.appendChild(mkFieldRow('Max Input Count',mkNum('bf_range_max_input_count'+vs,0)));";
     j += "body.appendChild(mkFieldRow('Time From',mkTime('bf_inputs_min_time'+vs)));";
     j += "body.appendChild(mkFieldRow('Time To',mkTime('bf_inputs_max_time'+vs)));";
-    j += "body.appendChild(mkFieldRow('Steer Range Min',mkNum('bf_range_min_steer'+vs,-65536,65536)));";
-    j += "body.appendChild(mkFieldRow('Steer Range Max',mkNum('bf_range_max_steer'+vs,-65536,65536)));";
-    j += "body.appendChild(mkFieldRow('Time Diff Range Min',mkNum('bf_range_min_time_diff'+vs)));";
-    j += "body.appendChild(mkFieldRow('Time Diff Range Max',mkNum('bf_range_max_time_diff'+vs)));";
-    j += "var chk=mkCheck('bf_range_fill_steer'+vs,'Fill Steer');chk.className+=' full';body.appendChild(chk);return;}";
+    j += "body.appendChild(mkFieldRow('Min Steer',mkNum('bf_range_min_steer'+vs,-65536,65536)));";
+    j += "body.appendChild(mkFieldRow('Max Steer',mkNum('bf_range_max_steer'+vs,-65536,65536)));";
+    j += "body.appendChild(mkFieldRow('Min Time Diff',mkTime('bf_range_min_time_diff'+vs)));";
+    j += "body.appendChild(mkFieldRow('Max Time Diff',mkTime('bf_range_max_time_diff'+vs)));";
+    j += "var chk=mkCheck('bf_range_fill_steer'+vs,'Fill Missing Steering Input');chk.className+=' full';body.appendChild(chk);return;}";
 
     // advanced_basic
     j += "if(algoId==='advanced_basic'){";
-    j += "var types=[{name:'Steer',pre:'bf_adv_steer_',fields:['modify_count','min_time','max_time','max_diff','max_time_diff','fill']},";
-    j += "{name:'Accel',pre:'bf_adv_accel_',fields:['modify_count','min_time','max_time','max_time_diff']},";
-    j += "{name:'Brake',pre:'bf_adv_brake_',fields:['modify_count','min_time','max_time','max_time_diff']}];";
+    j += "var types=[{name:'Steering Settings',pre:'bf_adv_steer_',fields:['modify_count','min_time','max_time','max_diff','max_time_diff','fill']},";
+    j += "{name:'Acceleration Settings',pre:'bf_adv_accel_',fields:['modify_count','min_time','max_time','max_time_diff']},";
+    j += "{name:'Brake Settings',pre:'bf_adv_brake_',fields:['modify_count','min_time','max_time','max_time_diff']}];";
+    j += "var fieldLabels={'modify_count':'Modify Count','min_time':'Time From','max_time':'Time To','max_diff':'Maximum Steering Difference','max_time_diff':'Maximum Time Difference','fill':'Fill Missing Steering'};";
     j += "for(var ti=0;ti<types.length;ti++){";
     j += "var sec=document.createElement('div');sec.className='sub-sec';";
     j += "var st=document.createElement('div');st.className='sub-sec-title';st.textContent=types[ti].name;sec.appendChild(st);";
     j += "var sg=document.createElement('div');sg.className='sub-sec-grid';";
     j += "var pre=types[ti].pre;var ff=types[ti].fields;";
-    j += "for(var fi=0;fi<ff.length;fi++){var fn=ff[fi];var vn=pre+fn+vs;";
-    j += "if(fn==='fill'){var chk=mkCheck(vn,'Fill Steer');chk.className+=' full';sg.appendChild(chk);}";
-    j += "else if(fn==='min_time'||fn==='max_time'){sg.appendChild(mkFieldRow(fn==='min_time'?'Time From':'Time To',mkTime(vn)));}";
-    j += "else if(fn==='max_diff'){sg.appendChild(mkFieldRow('Max Steer Diff',mkRange(vn,0,131072)));}";
-    j += "else{var label=fn.replace(/_/g,' ');label=label.charAt(0).toUpperCase()+label.slice(1);sg.appendChild(mkFieldRow(label,mkNum(vn,0)));}}";
+    j += "for(var fi=0;fi<ff.length;fi++){var fn=ff[fi];var vn=pre+fn+vs;var tl=fieldLabels[fn]||fn;";
+    j += "if(fn==='fill'){var chk=mkCheck(vn,tl);chk.className+=' full';sg.appendChild(chk);}";
+    j += "else if(fn==='min_time'||fn==='max_time'||fn==='max_time_diff'){sg.appendChild(mkFieldRow(tl,mkTime(vn)));}";
+    j += "else if(fn==='max_diff'){sg.appendChild(mkFieldRow(tl,mkRange(vn,0,131072)));}";
+    j += "else{sg.appendChild(mkFieldRow(tl,mkNum(vn,0)));}}";
     j += "sec.appendChild(sg);body.appendChild(sec);}return;}";
 
     // advanced_range
     j += "if(algoId==='advanced_range'){";
-    j += "var types=[{name:'Steer',pre:'bf_advr_steer_',fields:['min_input_count','max_input_count','min_time','max_time','min_steer','max_steer','min_time_diff','max_time_diff','fill']},";
-    j += "{name:'Accel',pre:'bf_advr_accel_',fields:['min_input_count','max_input_count','min_time','max_time','min_time_diff','max_time_diff']},";
-    j += "{name:'Brake',pre:'bf_advr_brake_',fields:['min_input_count','max_input_count','min_time','max_time','min_time_diff','max_time_diff']}];";
+    j += "var types=[{name:'Steering Settings',pre:'bf_advr_steer_',fields:['min_input_count','max_input_count','min_time','max_time','min_steer','max_steer','min_time_diff','max_time_diff','fill']},";
+    j += "{name:'Acceleration Settings',pre:'bf_advr_accel_',fields:['min_input_count','max_input_count','min_time','max_time','min_time_diff','max_time_diff']},";
+    j += "{name:'Brake Settings',pre:'bf_advr_brake_',fields:['min_input_count','max_input_count','min_time','max_time','min_time_diff','max_time_diff']}];";
+    j += "var fieldLabels={'min_input_count':'Min Input Count','max_input_count':'Max Input Count','min_time':'Time From','max_time':'Time To','min_steer':'Min Steer','max_steer':'Max Steer','min_time_diff':'Min Time Diff','max_time_diff':'Max Time Diff','fill':'Fill Missing Steering'};";
     j += "for(var ti=0;ti<types.length;ti++){";
     j += "var sec=document.createElement('div');sec.className='sub-sec';";
     j += "var st=document.createElement('div');st.className='sub-sec-title';st.textContent=types[ti].name;sec.appendChild(st);";
     j += "var sg=document.createElement('div');sg.className='sub-sec-grid';";
     j += "var pre=types[ti].pre;var ff=types[ti].fields;";
-    j += "for(var fi=0;fi<ff.length;fi++){var fn=ff[fi];var vn=pre+fn+vs;";
-    j += "if(fn==='fill'){var chk=mkCheck(vn,'Fill Steer');chk.className+=' full';sg.appendChild(chk);}";
-    j += "else if(fn==='min_time'||fn==='max_time'){sg.appendChild(mkFieldRow(fn==='min_time'?'Time From':'Time To',mkTime(vn)));}";
-    j += "else if(fn==='min_steer'||fn==='max_steer'){sg.appendChild(mkFieldRow(fn==='min_steer'?'Steer Min':'Steer Max',mkNum(vn,-65536,65536)));}";
-    j += "else{var label=fn.replace(/_/g,' ');label=label.charAt(0).toUpperCase()+label.slice(1);sg.appendChild(mkFieldRow(label,mkNum(vn,0)));}}";
+    j += "for(var fi=0;fi<ff.length;fi++){var fn=ff[fi];var vn=pre+fn+vs;var tl=fieldLabels[fn]||fn;";
+    j += "if(fn==='fill'){var chk=mkCheck(vn,tl);chk.className+=' full';sg.appendChild(chk);}";
+    j += "else if(fn==='min_time'||fn==='max_time'||fn==='min_time_diff'||fn==='max_time_diff'){sg.appendChild(mkFieldRow(tl,mkTime(vn)));}";
+    j += "else if(fn==='min_steer'||fn==='max_steer'){sg.appendChild(mkFieldRow(tl,mkNum(vn,-65536,65536)));}";
+    j += "else{sg.appendChild(mkFieldRow(tl,mkNum(vn,0)));}}";
     j += "sec.appendChild(sg);body.appendChild(sec);}return;}";
+
+    // smooth_steering
+    j += "if(algoId==='smooth_steering'){";
+    j += "body.appendChild(mkFieldRow('Time From',mkTime('don_bf_modify_steering_min_time'+vs)));";
+    j += "body.appendChild(mkFieldRow('Time To',mkTime('don_bf_modify_steering_max_time'+vs)));";
+    j += "body.appendChild(mkFieldRow('Min Amount',mkNum('don_bf_modify_steering_min_amount'+vs,1,null,1)));";
+    j += "body.appendChild(mkFieldRow('Max Amount',mkNum('don_bf_modify_steering_max_amount'+vs,1,null,1)));";
+    j += "body.appendChild(mkFieldRow('Max Radius',mkTime('don_bf_steering_modification_radius'+vs)));";
+    j += "body.appendChild(mkFieldRow('Min Steer Diff',mkRange('don_bf_modify_steering_min_diff'+vs,1,131072,1)));";
+    j += "body.appendChild(mkFieldRow('Max Steer Diff',mkRange('don_bf_modify_steering_max_diff'+vs,1,131072,1)));";
+    j += "return;}";
 
     j += "}";
 
@@ -5407,27 +5619,7 @@ string BfDashJS_Settings()
     j += "var slots=cfg.slots||[];";
     j += "for(var si=0;si<slots.length;si++){";
     j += "var s=slots[si];var vs=si===0?'':'_'+si;";
-    j += "var algoKey=s.algorithm;var data=s[algoKey];";
-    // Also grab basic/range/advanced_basic/advanced_range sub-objects
-    j += "var allSubs=['basic','range','advanced_basic','advanced_range'];";
-    j += "for(var sbi=0;sbi<allSubs.length;sbi++){";
-    j += "var sub=s[allSubs[sbi]];if(!sub)continue;";
-    j += "var keys=Object.keys(sub);";
-    j += "for(var ki=0;ki<keys.length;ki++){";
-    j += "var k=keys[ki];var val=sub[k];";
-    // Map JSON key to variable name
-    j += "var varMap={";
-    // basic
-    j += "'modifyCount':'bf_modify_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time',";
-    j += "'maxSteerDiff':'bf_max_steer_diff','maxTimeDiff':'bf_max_time_diff','fillSteer':'bf_inputs_fill_steer',";
-    // range
-    j += "'minInputCount':'bf_range_min_input_count','maxInputCount':'bf_range_max_input_count',";
-    j += "'minSteer':'bf_range_min_steer','maxSteer':'bf_range_max_steer',";
-    j += "'minTimeDiff':'bf_range_min_time_diff','maxTimeDiff2':'bf_range_max_time_diff'};";
-    // We need a different approach - use data-var attribute directly
-    j += "}}";
 
-    // Actually, update by iterating all data-var elements in the slot body
     j += "var body=document.querySelector('[data-slot=\"'+si+'\"]');if(!body)continue;";
     j += "var els=body.querySelectorAll('[data-var]');";
     j += "for(var ei=0;ei<els.length;ei++){";
@@ -5436,13 +5628,13 @@ string BfDashJS_Settings()
     j += "var val=findSlotValue(s,vn,vs);";
     j += "if(val===undefined)continue;";
     j += "if(el.getAttribute('data-time')){setField(el,fmtTime(val));}";
-    j += "else if(el.type==='checkbox'){if(!isFocused(el))el.checked=!!val;}";
+    j += "else if(el.type==='checkbox'){setField(el,val);}";
     j += "else{setField(el,val);}";
     j += "}";
 
     // Update enabled checkbox and algo select in header
     j += "if(si>0){var enEl=document.querySelector('.slot-hdr input[data-var=\"bf_input_mod_enabled'+vs+'\"]');";
-    j += "if(enEl&&!isFocused(enEl))enEl.checked=s.enabled;}";
+    j += "if(enEl)setField(enEl,s.enabled);}";
     j += "var algoEl=document.querySelector('.slot-hdr select[data-var=\"bf_input_mod_algorithm'+vs+'\"]');";
     j += "if(algoEl&&!isFocused(algoEl))algoEl.value=s.algorithm;";
 
@@ -5504,7 +5696,15 @@ string BfDashJS_Settings()
     j += "'bf_advr_brake_min_time':['advanced_range','brakeMinTime'],";
     j += "'bf_advr_brake_max_time':['advanced_range','brakeMaxTime'],";
     j += "'bf_advr_brake_min_time_diff':['advanced_range','brakeMinTimeDiff'],";
-    j += "'bf_advr_brake_max_time_diff':['advanced_range','brakeMaxTimeDiff']";
+    j += "'bf_advr_brake_max_time_diff':['advanced_range','brakeMaxTimeDiff'],";
+    // smooth_steering keys
+    j += "'don_bf_modify_steering_min_time':['smooth_steering','minTime'],";
+    j += "'don_bf_modify_steering_max_time':['smooth_steering','maxTime'],";
+    j += "'don_bf_modify_steering_min_amount':['smooth_steering','minAmount'],";
+    j += "'don_bf_modify_steering_max_amount':['smooth_steering','maxAmount'],";
+    j += "'don_bf_steering_modification_radius':['smooth_steering','radius'],";
+    j += "'don_bf_modify_steering_min_diff':['smooth_steering','minDiff'],";
+    j += "'don_bf_modify_steering_max_diff':['smooth_steering','maxDiff']";
     j += "};";
     j += "var m=maps[base];if(!m)return undefined;";
     j += "var sub=s[m[0]];if(!sub)return undefined;";
@@ -5539,7 +5739,7 @@ string BfDashJS_Settings()
     j += "if(cfg.slots){for(var si=0;si<cfg.slots.length;si++){var sl=cfg.slots[si];var vs=si===0?'':'_'+si;";
     j += "serverSnapshot['bf_input_mod_algorithm'+vs]=sl.algorithm;";
     j += "if(si>0)serverSnapshot['bf_input_mod_enabled'+vs]=String(sl.enabled);";
-    j += "var algos=['basic','range','advanced_basic','advanced_range'];";
+    j += "var algos=['basic','range','advanced_basic','advanced_range','smooth_steering'];";
     j += "for(var ai=0;ai<algos.length;ai++){var ao=sl[algos[ai]];if(!ao)continue;var ak=Object.keys(ao);";
     j += "for(var aki=0;aki<ak.length;aki++){var varN=findVarName(algos[ai],ak[aki],vs);if(varN)serverSnapshot[varN]=String(ao[ak[aki]]);}}}}";
 
@@ -5548,7 +5748,8 @@ string BfDashJS_Settings()
     j += "var m={'basic':{'modifyCount':'bf_modify_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time','maxSteerDiff':'bf_max_steer_diff','maxTimeDiff':'bf_max_time_diff','fillSteer':'bf_inputs_fill_steer'},";
     j += "'range':{'minInputCount':'bf_range_min_input_count','maxInputCount':'bf_range_max_input_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time','minSteer':'bf_range_min_steer','maxSteer':'bf_range_max_steer','minTimeDiff':'bf_range_min_time_diff','maxTimeDiff':'bf_range_max_time_diff','fillSteer':'bf_range_fill_steer'},";
     j += "'advanced_basic':{'steerModifyCount':'bf_adv_steer_modify_count','steerMinTime':'bf_adv_steer_min_time','steerMaxTime':'bf_adv_steer_max_time','steerMaxDiff':'bf_adv_steer_max_diff','steerMaxTimeDiff':'bf_adv_steer_max_time_diff','steerFill':'bf_adv_steer_fill','accelModifyCount':'bf_adv_accel_modify_count','accelMinTime':'bf_adv_accel_min_time','accelMaxTime':'bf_adv_accel_max_time','accelMaxTimeDiff':'bf_adv_accel_max_time_diff','brakeModifyCount':'bf_adv_brake_modify_count','brakeMinTime':'bf_adv_brake_min_time','brakeMaxTime':'bf_adv_brake_max_time','brakeMaxTimeDiff':'bf_adv_brake_max_time_diff'},";
-    j += "'advanced_range':{'steerMinInputCount':'bf_advr_steer_min_input_count','steerMaxInputCount':'bf_advr_steer_max_input_count','steerMinTime':'bf_advr_steer_min_time','steerMaxTime':'bf_advr_steer_max_time','steerMinSteer':'bf_advr_steer_min_steer','steerMaxSteer':'bf_advr_steer_max_steer','steerMinTimeDiff':'bf_advr_steer_min_time_diff','steerMaxTimeDiff':'bf_advr_steer_max_time_diff','steerFill':'bf_advr_steer_fill','accelMinInputCount':'bf_advr_accel_min_input_count','accelMaxInputCount':'bf_advr_accel_max_input_count','accelMinTime':'bf_advr_accel_min_time','accelMaxTime':'bf_advr_accel_max_time','accelMinTimeDiff':'bf_advr_accel_min_time_diff','accelMaxTimeDiff':'bf_advr_accel_max_time_diff','brakeMinInputCount':'bf_advr_brake_min_input_count','brakeMaxInputCount':'bf_advr_brake_max_input_count','brakeMinTime':'bf_advr_brake_min_time','brakeMaxTime':'bf_advr_brake_max_time','brakeMinTimeDiff':'bf_advr_brake_min_time_diff','brakeMaxTimeDiff':'bf_advr_brake_max_time_diff'}};";
+    j += "'advanced_range':{'steerMinInputCount':'bf_advr_steer_min_input_count','steerMaxInputCount':'bf_advr_steer_max_input_count','steerMinTime':'bf_advr_steer_min_time','steerMaxTime':'bf_advr_steer_max_time','steerMinSteer':'bf_advr_steer_min_steer','steerMaxSteer':'bf_advr_steer_max_steer','steerMinTimeDiff':'bf_advr_steer_min_time_diff','steerMaxTimeDiff':'bf_advr_steer_max_time_diff','steerFill':'bf_advr_steer_fill','accelMinInputCount':'bf_advr_accel_min_input_count','accelMaxInputCount':'bf_advr_accel_max_input_count','accelMinTime':'bf_advr_accel_min_time','accelMaxTime':'bf_advr_accel_max_time','accelMinTimeDiff':'bf_advr_accel_min_time_diff','accelMaxTimeDiff':'bf_advr_accel_max_time_diff','brakeMinInputCount':'bf_advr_brake_min_input_count','brakeMaxInputCount':'bf_advr_brake_max_input_count','brakeMinTime':'bf_advr_brake_min_time','brakeMaxTime':'bf_advr_brake_max_time','brakeMinTimeDiff':'bf_advr_brake_min_time_diff','brakeMaxTimeDiff':'bf_advr_brake_max_time_diff'},";
+    j += "'smooth_steering':{'minTime':'don_bf_modify_steering_min_time','maxTime':'don_bf_modify_steering_max_time','minAmount':'don_bf_modify_steering_min_amount','maxAmount':'don_bf_modify_steering_max_amount','radius':'don_bf_steering_modification_radius','minDiff':'don_bf_modify_steering_min_diff','maxDiff':'don_bf_modify_steering_max_diff'}};";
     j += "var map=m[algo];if(!map||!map[key])return null;return map[key]+vs;}";
 
     // Controller badge
@@ -9203,7 +9404,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2 + Dashboard";
     info.Author = "Skycrafter";
-    info.Version = "2.0";
+    info.Version = "2.1";
     info.Description = "Next generation bruteforce with web dashboard";
     return info;
 }
@@ -9284,6 +9485,13 @@ void Main()
     RegisterVariable("bf_advr_brake_max_time", 0);
     RegisterVariable("bf_advr_brake_min_time_diff", 0);
     RegisterVariable("bf_advr_brake_max_time_diff", 0);
+    RegisterVariable("don_bf_modify_steering_min_time", 0);
+    RegisterVariable("don_bf_modify_steering_max_time", 5);
+    RegisterVariable("don_bf_modify_steering_min_amount", 1);
+    RegisterVariable("don_bf_modify_steering_max_amount", 5);
+    RegisterVariable("don_bf_steering_modification_radius", 0);
+    RegisterVariable("don_bf_modify_steering_min_diff", 1);
+    RegisterVariable("don_bf_modify_steering_max_diff", 10000);
     PreciseFinishBf::Main();
     PreciseCheckpointBf::Main();
     PreciseTriggerBf::Main();
