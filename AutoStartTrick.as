@@ -4,7 +4,7 @@ PluginInfo@ GetPluginInfo()
     info.Author = "Skycrafter";
     info.Name = "Auto Start Trick";
     info.Description = "Automatically detects and optimizes start trick inputs for different booster configurations";
-    info.Version = "1.0";
+    info.Version = "1.4";
     return info;
 }
 
@@ -15,6 +15,7 @@ enum Phase
     SimPrologue,
     SimInit,
     SimSearch,
+    SimReplayBest,
     SimEnd
 }
 
@@ -28,14 +29,15 @@ array<InputCommand> platformInputs;
 
 array<InputCommand> currentInputs; 
 array<InputCommand> bestInputs; 
-float targetSpeedKmh = 0.0f; 
+string bestInputsCommandsText = "";
+double targetSpeedKmh = 0.0; 
 int evaluationTime = 0; 
-float minSpeed = 0.0;
+double minSpeed = 0.0;
 
 uint64 searchStartTime = 0; 
 uint64 searchTimeoutMs = 15000; 
 
-float bestSpeed = 0.0f; 
+double bestSpeed = 0.0; 
 
 SimulationStateFile f;
 bool isInitialized = false;
@@ -56,69 +58,81 @@ void OnRunStep(SimulationManager@ simManager){
             if(raceTime >= 0 && isInitialized) {
                 mainPhase = Phase::SimInit;
                 simManager.SimulationOnly = true;
-                simManager.RewindToState(f.ToState());
+                RewindToBaseState(simManager);
             }
             break;
         case Phase::SimInit:
-            for(uint i = 0; i < currentInputs.Length; i++) {
-                if(currentInputs[i].Timestamp == raceTime) {
-                    simManager.SetInputState(currentInputs[i].Type, currentInputs[i].State);
-
-                }
-            }
+            ApplyInputsAtRaceTime(simManager, raceTime);
             if(raceTime >= evaluationTime) {
-                mainPhase = Phase::SimSearch;
                 bestSpeed = simManager.Dyna.CurrentState.LinearSpeed.Length()*3.6;
 
-                bestInputs = currentInputs; 
-                searchStartTime = Time::get_Now(); 
-                searchTimeoutMs = uint64(Math::Round(GetVariableDouble("sto_bf_timeout_seconds"))*1000);
+                bestInputs = currentInputs;
+                CaptureCurrentInputEventsAsBest(simManager);
+                SaveBestInputsToResultFile();
 
-                MutateInputs();
-                simManager.RewindToState(f.ToState());
-            }
-            break;
-        case Phase::SimSearch:
-            for(uint i = 0; i < currentInputs.Length; i++) {
-                if(currentInputs[i].Timestamp == raceTime) {
-                    simManager.SetInputState(currentInputs[i].Type, currentInputs[i].State);
+                searchStartTime = Time::get_Now();
+                double timeoutMs = GetVariableDouble("sto_bf_timeout_seconds") * 1000.0;
+                if(timeoutMs < 0.0) {
+                    timeoutMs = 0.0;
+                    SetVariable("sto_bf_timeout_seconds", 0.0);
                 }
-            }
-            if(raceTime >= evaluationTime) {
-                float currentSpeed = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
-                if (currentSpeed > bestSpeed && currentSpeed > minSpeed) {
-                    bestSpeed = currentSpeed;
-                    bestInputs = currentInputs;
-                    print("New best speed: " + bestSpeed + " km/h");
-                }
-                CommandList bestList;
-                bestList.Content = simManager.InputEvents.ToCommandsText();
-                bestList.Process(CommandListProcessOption::OnlyParse);
-                bestList.Save(GetVariableString("bf_result_filename"));
+                searchTimeoutMs = uint64(timeoutMs + 0.5);
 
                 if(bestSpeed >= targetSpeedKmh) {
-                    mainPhase = Phase::SimEnd;
-                    print("Target speed of " + targetSpeedKmh + " km/h reached");
+                    print("Target speed of " + targetSpeedKmh + " km/h reached by base inputs");
+                    StartFinalBestReplay(simManager);
                     break;
                 }
 
-                simManager.RewindToState(f.ToState());
+                mainPhase = Phase::SimSearch;
+                currentInputs = bestInputs;
+                MutateInputs();
+                RewindToBaseState(simManager);
+            }
+            break;
+        case Phase::SimSearch:
+            ApplyInputsAtRaceTime(simManager, raceTime);
+            if(raceTime >= evaluationTime) {
+                double currentSpeed = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
+                if (currentSpeed > bestSpeed && currentSpeed > minSpeed) {
+                    bestSpeed = currentSpeed;
+                    bestInputs = currentInputs;
+                    CaptureCurrentInputEventsAsBest(simManager);
+                    SaveBestInputsToResultFile();
+                    print("New best speed: " + bestSpeed + " km/h");
+                }
+
+                if(bestSpeed >= targetSpeedKmh) {
+                    print("Target speed of " + targetSpeedKmh + " km/h reached");
+                    StartFinalBestReplay(simManager);
+                    break;
+                }
+
+                RewindToBaseState(simManager);
                 currentInputs = bestInputs; 
                 MutateInputs();
             }
 
             if (Time::get_Now() - searchStartTime > searchTimeoutMs) {
-                mainPhase = Phase::SimEnd;
                 print("Search timed out");
+                StartFinalBestReplay(simManager);
+            }
+            break;
+        case Phase::SimReplayBest:
+            ApplyInputsAtRaceTime(simManager, raceTime);
+            if(raceTime >= evaluationTime) {
+                bestSpeed = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
+                CaptureCurrentInputEventsAsBest(simManager);
+                SaveBestInputsToResultFile();
+                mainPhase = Phase::SimEnd;
             }
             break;
         case Phase::SimEnd:
+            SaveBestInputsToResultFile();
             simManager.SimulationOnly = false;
             print("Optimization complete! Final speed: " + bestSpeed + " km/h", Severity::Success);
             if(GetVariableBool("sto_bf_auto_load_inputs")) {
-                CommandList list(GetVariableString("bf_result_filename"));
-                list.Process();
-                SetCurrentCommandList(list);
+                LoadBestInputsAsCurrentCommandList();
             }
             mainPhase = Phase::None; 
             break;
@@ -145,6 +159,7 @@ void Renderr(){
 
     if (UI::Button("Detect & Optimize Start Trick")) {
         mainPhase = Phase::SimPrologue;
+        bestInputsCommandsText = "";
         SetCurrentCommandList(null);
         GetSimulationManager().GiveUp();
         isInitialized = false;
@@ -157,6 +172,8 @@ void Renderr(){
             print("\n\n\n\n\n\n===============================\n");
         }
 
+        targetSpeedKmh = GetTargetSpeedForTrick(info.Type, info.TargetSpeedKmh);
+
         string sidePreference = GetVariableString("sto_bf_side_straight");
         bool useRightSide = sidePreference == "right";
 
@@ -164,58 +181,53 @@ void Renderr(){
 
             if(useRightSide) {
                 currentInputs = FlipSteeringInputs(sstInputs);
-                print("Forward Booster detected (RIGHT side)! Target speed: " + info.TargetSpeedKmh + " km/h");
+                print("Forward Booster detected (RIGHT side)! Target speed: " + targetSpeedKmh + " km/h");
             } else {
                 currentInputs = sstInputs;
-                print("Forward Booster detected (LEFT side)! Target speed: " + info.TargetSpeedKmh + " km/h");
+                print("Forward Booster detected (LEFT side)! Target speed: " + targetSpeedKmh + " km/h");
             }
-            targetSpeedKmh = info.TargetSpeedKmh;
-            evaluationTime = info.EvaluationTick*10; 
-            minSpeed = 208.0;
+            evaluationTime = GetEvaluationTimeForTrick(info.Type, int(info.EvaluationTick) * 10); 
+            minSpeed = GetAcceptanceFloorForTrick(info.Type, 208.0);
 
         } 
         else if(info.Type == StartTrickAnalysis::TrickType::LeftBooster){
             currentInputs = leftBoosterInputs;
-            targetSpeedKmh = info.TargetSpeedKmh;
             print("Left Booster detected! Target speed: " + targetSpeedKmh + " km/h");
-            evaluationTime = info.EvaluationTick*10; 
-            minSpeed = 0;
+            evaluationTime = GetEvaluationTimeForTrick(info.Type, int(info.EvaluationTick) * 10); 
+            minSpeed = GetAcceptanceFloorForTrick(info.Type, 0.0);
 
         }
         else if(info.Type == StartTrickAnalysis::TrickType::RightBooster){
             currentInputs = rightBoosterInputs;
-            targetSpeedKmh = info.TargetSpeedKmh;
             print("Right Booster detected! Target speed: " + targetSpeedKmh + " km/h");
-            evaluationTime = info.EvaluationTick*10; 
-            minSpeed = 0;
+            evaluationTime = GetEvaluationTimeForTrick(info.Type, int(info.EvaluationTick) * 10); 
+            minSpeed = GetAcceptanceFloorForTrick(info.Type, 0.0);
 
         }
         else if(info.Type == StartTrickAnalysis::TrickType::DownhillBooster){
 
             if(useRightSide) {
                 currentInputs = FlipSteeringInputs(downhillInputs);
-                print("Downhill Booster detected (RIGHT side)! Target speed: " + info.TargetSpeedKmh + " km/h");
+                print("Downhill Booster detected (RIGHT side)! Target speed: " + targetSpeedKmh + " km/h");
             } else {
                 currentInputs = downhillInputs;
-                print("Downhill Booster detected (LEFT side)! Target speed: " + info.TargetSpeedKmh + " km/h");
+                print("Downhill Booster detected (LEFT side)! Target speed: " + targetSpeedKmh + " km/h");
             }
-            targetSpeedKmh = info.TargetSpeedKmh;
-            evaluationTime = info.EvaluationTick*10; 
-            minSpeed = 216.0;
+            evaluationTime = GetEvaluationTimeForTrick(info.Type, int(info.EvaluationTick) * 10); 
+            minSpeed = GetAcceptanceFloorForTrick(info.Type, 216.0);
 
         }
         else if(info.Type == StartTrickAnalysis::TrickType::PlatformBooster){
 
             if(useRightSide) {
                 currentInputs = FlipSteeringInputs(platformInputs);
-                print("Platform Booster detected (RIGHT side)! Target speed: " + info.TargetSpeedKmh + " km/h");
+                print("Platform Booster detected (RIGHT side)! Target speed: " + targetSpeedKmh + " km/h");
             } else {
                 currentInputs = platformInputs;
-                print("Platform Booster detected (LEFT side)! Target speed: " + info.TargetSpeedKmh + " km/h");
+                print("Platform Booster detected (LEFT side)! Target speed: " + targetSpeedKmh + " km/h");
             }
-            targetSpeedKmh = info.TargetSpeedKmh;
-            evaluationTime = info.EvaluationTick*10; 
-            minSpeed = 224;
+            evaluationTime = GetEvaluationTimeForTrick(info.Type, int(info.EvaluationTick) * 10); 
+            minSpeed = GetAcceptanceFloorForTrick(info.Type, 224.0);
 
         }
     }
@@ -273,6 +285,48 @@ void Renderr(){
     UI::SameLine();
     UI::PushItemWidth(120);
     UI::InputFloatVar("seconds", "sto_bf_timeout_seconds", 0.1);
+    UI::PopItemWidth();
+
+    UI::Dummy(vec2(0, 8));
+    UI::Separator();
+    UI::Dummy(vec2(0, 2));
+    UI::TextWrapped("Target speed threshold mode:");
+    UI::CheckboxVar("Use custom thresholds", "sto_bf_use_custom_thresholds");
+    if(GetVariableBool("sto_bf_use_custom_thresholds")) {
+        UI::TextDimmed("Stored separately for each detected start configuration.");
+
+        UI::Dummy(vec2(0, 3));
+        UI::TextDimmed("Stop search once this speed is reached:");
+        UI::PushItemWidth(120);
+        UI::InputFloatVar("Forward target km/h", "sto_bf_threshold_forward_kmh", 0.1);
+        UI::InputFloatVar("Left side target km/h", "sto_bf_threshold_left_kmh", 0.1);
+        UI::InputFloatVar("Right side target km/h", "sto_bf_threshold_right_kmh", 0.1);
+        UI::InputFloatVar("Downhill target km/h", "sto_bf_threshold_downhill_kmh", 0.1);
+        UI::InputFloatVar("Platform target km/h", "sto_bf_threshold_platform_kmh", 0.1);
+        UI::PopItemWidth();
+
+        UI::Dummy(vec2(0, 5));
+        UI::TextDimmed("Minimum speed required before accepting an improvement:");
+        UI::PushItemWidth(120);
+        UI::InputFloatVar("Forward accept floor km/h", "sto_bf_accept_floor_forward_kmh", 0.1);
+        UI::InputFloatVar("Left side accept floor km/h", "sto_bf_accept_floor_left_kmh", 0.1);
+        UI::InputFloatVar("Right side accept floor km/h", "sto_bf_accept_floor_right_kmh", 0.1);
+        UI::InputFloatVar("Downhill accept floor km/h", "sto_bf_accept_floor_downhill_kmh", 0.1);
+        UI::InputFloatVar("Platform accept floor km/h", "sto_bf_accept_floor_platform_kmh", 0.1);
+        UI::PopItemWidth();
+
+        UI::Dummy(vec2(0, 5));
+        UI::TextDimmed("Race time where threshold and floor speeds are checked:");
+        UI::PushItemWidth(140);
+        UI::InputTimeVar("Forward check time", "sto_bf_check_time_forward_ms", 10, 2100);
+        UI::InputTimeVar("Left side check time", "sto_bf_check_time_left_ms", 10, 2300);
+        UI::InputTimeVar("Right side check time", "sto_bf_check_time_right_ms", 10, 2300);
+        UI::InputTimeVar("Downhill check time", "sto_bf_check_time_downhill_ms", 10, 2300);
+        UI::InputTimeVar("Platform check time", "sto_bf_check_time_platform_ms", 10, 2500);
+        UI::PopItemWidth();
+    } else {
+        UI::TextDimmed("Using automatic thresholds, acceptance floors, and check times for the detected start configuration.");
+    }
 
     UI::Dummy(vec2(0, 15));
     UI::TextDimmed("Credits to the Kackiest Kacky TAS server for the inputs and bruteforce settings");
@@ -306,7 +360,23 @@ void Main()
 
     RegisterVariable("sto_bf_side_straight","left");
     RegisterVariable("sto_bf_auto_load_inputs", true);
-    RegisterVariable("sto_bf_timeout_seconds", 15);
+    RegisterVariable("sto_bf_timeout_seconds", 15.0);
+    RegisterVariable("sto_bf_use_custom_thresholds", false);
+    RegisterVariable("sto_bf_threshold_forward_kmh", 208.7);
+    RegisterVariable("sto_bf_threshold_left_kmh", 169.4);
+    RegisterVariable("sto_bf_threshold_right_kmh", 169.4);
+    RegisterVariable("sto_bf_threshold_downhill_kmh", 217.0);
+    RegisterVariable("sto_bf_threshold_platform_kmh", 224.0);
+    RegisterVariable("sto_bf_accept_floor_forward_kmh", 208.0);
+    RegisterVariable("sto_bf_accept_floor_left_kmh", 169.4);
+    RegisterVariable("sto_bf_accept_floor_right_kmh", 169.4);
+    RegisterVariable("sto_bf_accept_floor_downhill_kmh", 216.0);
+    RegisterVariable("sto_bf_accept_floor_platform_kmh", 224.0);
+    RegisterVariable("sto_bf_check_time_forward_ms", 2100.0);
+    RegisterVariable("sto_bf_check_time_left_ms", 2300.0);
+    RegisterVariable("sto_bf_check_time_right_ms", 2300.0);
+    RegisterVariable("sto_bf_check_time_downhill_ms", 2300.0);
+    RegisterVariable("sto_bf_check_time_platform_ms", 2500.0);
 
     if(GetVariableString("sto_bf_side_straight") == "left"){
         state=-4;
@@ -567,13 +637,196 @@ namespace StartTrickAnalysis {
     }
 }
 
+
+string GetThresholdVariableName(StartTrickAnalysis::TrickType type) {
+    switch(type) {
+        case StartTrickAnalysis::TrickType::ForwardBooster: return "sto_bf_threshold_forward_kmh";
+        case StartTrickAnalysis::TrickType::LeftBooster: return "sto_bf_threshold_left_kmh";
+        case StartTrickAnalysis::TrickType::RightBooster: return "sto_bf_threshold_right_kmh";
+        case StartTrickAnalysis::TrickType::DownhillBooster: return "sto_bf_threshold_downhill_kmh";
+        case StartTrickAnalysis::TrickType::PlatformBooster: return "sto_bf_threshold_platform_kmh";
+    }
+    return "";
+}
+
+string GetAcceptanceFloorVariableName(StartTrickAnalysis::TrickType type) {
+    switch(type) {
+        case StartTrickAnalysis::TrickType::ForwardBooster: return "sto_bf_accept_floor_forward_kmh";
+        case StartTrickAnalysis::TrickType::LeftBooster: return "sto_bf_accept_floor_left_kmh";
+        case StartTrickAnalysis::TrickType::RightBooster: return "sto_bf_accept_floor_right_kmh";
+        case StartTrickAnalysis::TrickType::DownhillBooster: return "sto_bf_accept_floor_downhill_kmh";
+        case StartTrickAnalysis::TrickType::PlatformBooster: return "sto_bf_accept_floor_platform_kmh";
+    }
+    return "";
+}
+
+string GetCheckTimeVariableName(StartTrickAnalysis::TrickType type) {
+    switch(type) {
+        case StartTrickAnalysis::TrickType::ForwardBooster: return "sto_bf_check_time_forward_ms";
+        case StartTrickAnalysis::TrickType::LeftBooster: return "sto_bf_check_time_left_ms";
+        case StartTrickAnalysis::TrickType::RightBooster: return "sto_bf_check_time_right_ms";
+        case StartTrickAnalysis::TrickType::DownhillBooster: return "sto_bf_check_time_downhill_ms";
+        case StartTrickAnalysis::TrickType::PlatformBooster: return "sto_bf_check_time_platform_ms";
+    }
+    return "";
+}
+
+double GetTargetSpeedForTrick(StartTrickAnalysis::TrickType type, double defaultTargetSpeed) {
+    if(!GetVariableBool("sto_bf_use_custom_thresholds")) {
+        return defaultTargetSpeed;
+    }
+
+    string variableName = GetThresholdVariableName(type);
+    if(variableName.IsEmpty()) {
+        return defaultTargetSpeed;
+    }
+
+    double customTargetSpeed = GetVariableDouble(variableName);
+    if(customTargetSpeed < 0.0) {
+        customTargetSpeed = 0.0;
+        SetVariable(variableName, customTargetSpeed);
+    }
+
+    return customTargetSpeed;
+}
+
+double GetAcceptanceFloorForTrick(StartTrickAnalysis::TrickType type, double defaultAcceptanceFloor) {
+    if(!GetVariableBool("sto_bf_use_custom_thresholds")) {
+        return defaultAcceptanceFloor;
+    }
+
+    string variableName = GetAcceptanceFloorVariableName(type);
+    if(variableName.IsEmpty()) {
+        return defaultAcceptanceFloor;
+    }
+
+    double customAcceptanceFloor = GetVariableDouble(variableName);
+    if(customAcceptanceFloor < 0.0) {
+        customAcceptanceFloor = 0.0;
+        SetVariable(variableName, customAcceptanceFloor);
+    }
+
+    return customAcceptanceFloor;
+}
+
+int GetEvaluationTimeForTrick(StartTrickAnalysis::TrickType type, int defaultEvaluationTime) {
+    if(!GetVariableBool("sto_bf_use_custom_thresholds")) {
+        return defaultEvaluationTime;
+    }
+
+    string variableName = GetCheckTimeVariableName(type);
+    if(variableName.IsEmpty()) {
+        return defaultEvaluationTime;
+    }
+
+    double customCheckTimeMs = GetVariableDouble(variableName);
+    if(customCheckTimeMs < 0.0) {
+        customCheckTimeMs = 0.0;
+        SetVariable(variableName, customCheckTimeMs);
+    }
+
+    return int(customCheckTimeMs + 0.5);
+}
+
+void ApplyInputsAtRaceTime(SimulationManager@ simManager, int raceTime) {
+    for(uint i = 0; i < currentInputs.Length; i++) {
+        if(currentInputs[i].Timestamp == raceTime) {
+            simManager.SetInputState(currentInputs[i].Type, currentInputs[i].State);
+        }
+    }
+}
+
+void RewindToBaseState(SimulationManager@ simManager) {
+    simManager.RewindToState(f.ToState());
+    simManager.InputEvents.Clear();
+}
+
+void StartFinalBestReplay(SimulationManager@ simManager) {
+    currentInputs = bestInputs;
+    RewindToBaseState(simManager);
+    mainPhase = Phase::SimReplayBest;
+}
+
+void CaptureCurrentInputEventsAsBest(SimulationManager@ simManager) {
+    bestInputsCommandsText = simManager.InputEvents.ToCommandsText();
+}
+
+bool SaveCommandsTextToResultFile(const string &in commandsText) {
+    if(commandsText.IsEmpty()) {
+        return false;
+    }
+
+    string filename = GetVariableString("bf_result_filename");
+    CommandList list;
+    list.Content = commandsText;
+
+    bool saved = list.Save(filename);
+    if(!saved) {
+        print("Failed to save best inputs to " + filename, Severity::Error);
+    }
+
+    return saved;
+}
+
+bool LoadBestInputsAsCurrentCommandList() {
+    if(bestInputsCommandsText.IsEmpty()) {
+        return false;
+    }
+
+    CommandList list;
+    list.Content = bestInputsCommandsText;
+    list.Process();
+    SetCurrentCommandList(list);
+    return true;
+}
+
+string InputsToCommandsText(const array<InputCommand> &in inputs) {
+    string content = "";
+
+    for(uint i = 0; i < inputs.Length; i++) {
+        InputCommand cmd = inputs[i];
+        if(i > 0) {
+            content += ";";
+        }
+        content += cmd.ToScript(true);
+    }
+
+    return content;
+}
+
+bool SaveInputsToResultFile(const array<InputCommand> &in inputs) {
+    if(inputs.Length == 0) {
+        return false;
+    }
+
+    string filename = GetVariableString("bf_result_filename");
+    CommandList list;
+    list.Content = InputsToCommandsText(inputs);
+    list.Process(CommandListProcessOption::OnlyParse);
+
+    bool saved = list.Save(filename);
+    if(!saved) {
+        print("Failed to save best inputs to " + filename, Severity::Error);
+    }
+
+    return saved;
+}
+
+bool SaveBestInputsToResultFile() {
+    if(!bestInputsCommandsText.IsEmpty()) {
+        return SaveCommandsTextToResultFile(bestInputsCommandsText);
+    }
+
+    return SaveInputsToResultFile(bestInputs);
+}
+
 array<InputCommand> FlipSteeringInputs(const array<InputCommand> &in inputs) {
     array<InputCommand> flippedInputs = {};
 
     for(uint i = 0; i < inputs.Length; i++) {
         InputCommand cmd = inputs[i];
 
-        if(cmd.Type == 4) {
+        if(cmd.Type == InputType::Steer) {
 
             cmd.State = -cmd.State;
         }
@@ -597,7 +850,7 @@ void MutateInputs() {
         int timestampOffset = Math::Rand(-20, 20);
         currentInputs[inputIndex].Timestamp = Math::Max(0, currentInputs[inputIndex].Timestamp + timestampOffset);
 
-        if (currentInputs[inputIndex].Type == 4) {
+        if (currentInputs[inputIndex].Type == InputType::Steer) {
             int steerOffset = Math::Rand(-131072, 131072);
             int newSteerValue = currentInputs[inputIndex].State + steerOffset;
 
